@@ -3,6 +3,9 @@ const nextConfig = {
   reactStrictMode: false,
   compress: true,
   poweredByHeader: false,
+  experimental: {
+    agentUpgrade: 'security',
+  },
   images: {
     unoptimized: true,
   },
