@@ -1,0 +1,45 @@
+{
+  "name": "hood-games",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3007",
+    "build": "next build --webpack",
+    "start": "next start -p 3007",
+    "lint": "eslint",
+    "cap:sync": "cap sync",
+    "android:sync": "cap sync android",
+    "android:open": "cap open android",
+    "build:apk": "npx cap copy android && cd android && ./gradlew assembleDebug && cd .. && cp android/app/build/outputs/apk/debug/app-debug.apk public/download/hood-games.apk && cp android/app/build/outputs/apk/debug/app-debug.apk public/hood-games.apk",
+    "ios:sync": "cap sync ios",
+    "ios:open": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/push-notifications": "^8.1.3",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
+    "bcryptjs": "^3.0.3",
+    "canvas-confetti": "^1.9.4",
+    "firebase-admin": "^14.5.0",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^1.54.0",
+    "mongodb": "^7.7.0",
+    "next": "16.4.0",
+    "nodemailer": "^10.0.16",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.6.1",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.0",
+    "postcss": "^8.5.29",
+    "tailwindcss": "^3.4.17"
+  }
+}

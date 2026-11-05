@@ -1,0 +1,200 @@
+import { NextResponse } from 'next/server';
+import { getDb, toIdQuery } from '@/lib/mongodb';
+import { getSessionUser } from '@/lib/auth';
+import { ensureDbInitialized } from '@/lib/initDb';
+import { notifyPlayer, notifyStaff } from '@/lib/notify';
+
+export async function GET(req) {
+  try {
+    await ensureDbInitialized();
+    const user = await getSessionUser(req);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const db = await getDb();
+    const isStaff = user.role === 'admin' || user.role === 'staff' || user.role === 'superadmin';
+
+    let deposits;
+    if (isStaff) {
+      deposits = await db.collection('deposits').find({}).sort({ createdAt: -1 }).toArray();
+    } else {
+      deposits = await db
+        .collection('deposits')
+        .find({ userId: user.id || user._id.toString() })
+        .sort({ createdAt: -1 })
+        .toArray();
+    }
+
+    return NextResponse.json({ success: true, deposits });
+  } catch (err) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+export async function POST(req) {
+  try {
+    await ensureDbInitialized();
+    const user = await getSessionUser(req);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Please log in to deposit' }, { status: 401 });
+    }
+
+    const { amount, method, senderTag, proofImage, note } = await req.json();
+    const numAmount = Number(amount);
+
+    if (isNaN(numAmount) || numAmount < 5) {
+      return NextResponse.json({ success: false, error: 'Minimum deposit is $5.00' }, { status: 400 });
+    }
+
+    const db = await getDb();
+
+    // Check system bonus settings
+    const settings = await db.collection('system_settings').findOne({ key: 'general' });
+    const userDepositsCount = await db.collection('deposits').countDocuments({
+      userId: user.id || user._id.toString(),
+      status: 'approved',
+    });
+
+    const isFirstDeposit = userDepositsCount === 0;
+    const bonusPercent = isFirstDeposit
+      ? Number(settings?.welcomeBonusPercent ?? 300)
+      : Number(settings?.regularBonusPercent ?? 50);
+
+    const bonusAmount = Number(((numAmount * bonusPercent) / 100).toFixed(2));
+    const totalExpectedSC = Number((numAmount + bonusAmount).toFixed(2));
+
+    const depositDoc = {
+      userId: user.id || user._id.toString(),
+      username: user.username,
+      userEmail: user.email,
+      amount: numAmount,
+      bonusPercent,
+      bonusAmount,
+      totalExpectedSC,
+      method: method || 'Cash App',
+      senderTag: senderTag || '',
+      proofImage: proofImage || null,
+      note: note || '',
+      status: 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const res = await db.collection('deposits').insertOne(depositDoc);
+
+    // Notify staff desk of new incoming deposit!
+    notifyStaff({
+      title: `Incoming $${numAmount} Deposit from ${user.username}`,
+      message: `Method: ${method || 'Cash App'} | Tag: ${senderTag || 'N/A'}`,
+      type: 'deposit_request',
+      data: { depositId: res.insertedId.toString() },
+    });
+
+    return NextResponse.json({
+      success: true,
+      deposit: { ...depositDoc, _id: res.insertedId },
+      message: 'Deposit submitted! Awaiting staff verification.',
+    });
+  } catch (err) {
+    console.error('Deposit error:', err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+// Staff approval or rejection
+export async function PUT(req) {
+  try {
+    await ensureDbInitialized();
+    const user = await getSessionUser(req);
+    if (!user || (user.role !== 'admin' && user.role !== 'staff' && user.role !== 'superadmin')) {
+      return NextResponse.json({ success: false, error: 'Unauthorized: Staff access required' }, { status: 403 });
+    }
+
+    const { depositId, action, rejectionReason } = await req.json();
+    if (!depositId || !action) {
+      return NextResponse.json({ success: false, error: 'Deposit ID and action required' }, { status: 400 });
+    }
+
+    const db = await getDb();
+    const deposit = await db.collection('deposits').findOne(toIdQuery(depositId));
+    if (!deposit) {
+      return NextResponse.json({ success: false, error: 'Deposit not found' }, { status: 404 });
+    }
+
+    if (deposit.status !== 'pending') {
+      return NextResponse.json({ success: false, error: `Deposit is already ${deposit.status}` }, { status: 400 });
+    }
+
+    if (action === 'approve') {
+      const creditAmount = Number(deposit.totalExpectedSC || deposit.amount);
+
+      // Credit player balance
+      await db.collection('users').updateOne(
+        toIdQuery(deposit.userId),
+        { $inc: { balanceSC: creditAmount } }
+      );
+
+      await db.collection('deposits').updateOne(
+        toIdQuery(depositId),
+        {
+          $set: {
+            status: 'approved',
+            approvedBy: user.username,
+            approvedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      // Record in ledger
+      await db.collection('ledger').insertOne({
+        userId: deposit.userId,
+        username: deposit.username,
+        type: 'deposit',
+        amount: creditAmount,
+        currency: 'SC',
+        description: `Deposit via ${deposit.method} (Includes +$${deposit.bonusAmount} match bonus)`,
+        referenceId: depositId,
+        createdAt: new Date(),
+      });
+
+      // Notify player
+      notifyPlayer({
+        userId: deposit.userId,
+        title: '💰 Deposit Approved & Credited!',
+        message: `Your deposit of $${deposit.amount} (+ $${deposit.bonusAmount} bonus) has been credited. +$${creditAmount} SC added to your wallet!`,
+        type: 'deposit_approved',
+      });
+
+      return NextResponse.json({ success: true, message: 'Deposit approved and balance credited!' });
+    } else if (action === 'reject') {
+      await db.collection('deposits').updateOne(
+        toIdQuery(depositId),
+        {
+          $set: {
+            status: 'rejected',
+            rejectionReason: rejectionReason || 'Payment could not be verified on our records.',
+            rejectedBy: user.username,
+            rejectedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      notifyPlayer({
+        userId: deposit.userId,
+        title: '❌ Deposit Not Approved',
+        message: `Deposit of $${deposit.amount} could not be verified. Note: ${rejectionReason || 'Contact live support for assistance.'}`,
+        type: 'deposit_rejected',
+      });
+
+      return NextResponse.json({ success: true, message: 'Deposit rejected' });
+    }
+
+    return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });
+  } catch (err) {
+    console.error('Deposit PUT error:', err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}

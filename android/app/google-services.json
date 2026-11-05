@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "990841046637",
+    "project_id": "playerparadisehub",
+    "storage_bucket": "playerparadisehub.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:990841046637:android:d1a78a0cca8bbfffaca164",
+        "android_client_info": {
+          "package_name": "com.playersparadise.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC1Net-3v6_ElrpBq0HcWCErX-eBtuhrlE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

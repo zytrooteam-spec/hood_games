@@ -1,0 +1,237 @@
+'use client';
+
+import React, { useState } from 'react';
+import Link from 'next/link';
+import {
+  Wallet,
+  User,
+  LogOut,
+  Bell,
+  Sparkles,
+  Gamepad2,
+  Download,
+  MessageSquare,
+  Menu,
+  Coins
+} from 'lucide-react';
+import { playTune } from '@/lib/soundAlerts';
+
+export default function HoodNavbar({
+  user,
+  onOpenAuth,
+  onOpenCashier,
+  onOpenSpinWheel,
+  onOpenChat,
+  onOpenApp,
+  onLogout,
+  activeView,
+  setActiveView,
+  onToggleSidebar,
+}) {
+  const [userDropdown, setUserDropdown] = useState(false);
+
+  return (
+    <header className="sticky top-0 z-40 w-full bg-[#09142a]/95 backdrop-blur-xl border-b border-[#1a3363] shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-4.5 flex items-center justify-between gap-4">
+        {/* Left Side: Mobile Hamburger (Responsive ONLY, hidden on desktop) + Nav Pills */}
+        <div className="flex items-center gap-3">
+          {/* Hamburger Menu: Visible ONLY on mobile/tablet (lg:hidden), NEVER on desktop */}
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="flex lg:hidden items-center justify-center p-2.5 rounded-xl bg-[#070d1e] border border-[#1a3363] text-gray-200 hover:text-white hover:border-[#2cb64e]/50 transition-all shadow-sm"
+            title="Open Menu"
+          >
+            <Menu size={20} />
+          </button>
+
+          {/* Desktop Navigation Links (No redundant logo here since it's already in the sidebar) */}
+          <nav className="hidden lg:flex items-center gap-2">
+            <Link
+              href="/"
+              onClick={() => playTune('click')}
+              className="px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider text-gray-300 hover:text-white hover:bg-[#0c1b38] border border-transparent hover:border-[#1a3363] transition-all"
+            >
+              Home Lobby
+            </Link>
+
+            <Link
+              href="/games"
+              onClick={() => playTune('click')}
+              className="px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 text-gray-300 hover:text-[#2cb64e] hover:bg-[#0c1b38] border border-transparent hover:border-[#1a3363] transition-all"
+            >
+              <Gamepad2 size={16} />
+              <span>Games</span>
+            </Link>
+
+            <Link
+              href="/wheel-spin"
+              onClick={() => playTune('spin')}
+              className="px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider text-amber-300 hover:bg-[#0c1b38] flex items-center gap-2 transition-all border border-amber-500/25 hover:border-amber-500/50"
+            >
+              <Sparkles size={15} className="text-amber-400 animate-pulse" />
+              <span>Wheel Spin</span>
+            </Link>
+
+            <Link
+              href="/cashback"
+              onClick={() => playTune('click')}
+              className="px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider text-emerald-300 hover:bg-[#0c1b38] flex items-center gap-2 transition-all border border-emerald-500/25 hover:border-emerald-500/50"
+            >
+              <Coins size={15} className="text-emerald-400" />
+              <span>Cashback</span>
+            </Link>
+
+            <Link
+              href="/download-app"
+              onClick={() => playTune('click')}
+              className="px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider text-cyan-300 hover:bg-[#0c1b38] flex items-center gap-2 transition-all border border-cyan-500/25 hover:border-cyan-500/50"
+            >
+              <Download size={15} />
+              <span>Download App</span>
+            </Link>
+          </nav>
+        </div>
+
+        {/* Right Side: Balance Pill, Wallet Button, Auth Buttons, Support & Profile */}
+        <div className="flex items-center gap-3">
+          {user ? (
+            <>
+              {/* User Sweeps Balance Pill */}
+              <div
+                onClick={() => {
+                  onOpenCashier('deposit');
+                  playTune('click');
+                }}
+                className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-[#070d1e] border border-[#1a3363] hover:border-[#2cb64e]/50 cursor-pointer transition-all shadow-inner"
+                title="Click to Open Wallet"
+              >
+                <div className="flex flex-col text-right">
+                  <span className="text-[9.5px] uppercase font-bold text-gray-400">Sweeps Balance</span>
+                  <span className="text-sm font-black text-[#2cb64e] font-mono leading-tight">
+                    ${Number(user.balanceSC || 0).toFixed(2)} SC
+                  </span>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-[#2cb64e]/15 border border-[#2cb64e]/30 flex items-center justify-center text-[#2cb64e]">
+                  <Coins size={16} />
+                </div>
+              </div>
+
+              {/* Green Wallet CTA */}
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenCashier('deposit');
+                  playTune('coin');
+                }}
+                className="btn-hood-green px-5 py-2.5 rounded-2xl text-xs flex items-center gap-2 uppercase tracking-wider font-extrabold shadow-[0_4px_18px_rgba(44,182,78,0.4)]"
+              >
+                <Wallet size={15} />
+                <span className="hidden sm:inline">Wallet</span>
+              </button>
+
+              {/* Chat Support Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenChat();
+                  playTune('click');
+                }}
+                className="p-2.5 rounded-2xl bg-[#0c1b38] border border-[#1a3363] text-gray-300 hover:text-white hover:border-[#2cb64e]/50 transition-all shadow-sm"
+                title="Live Support Chat"
+              >
+                <MessageSquare size={17} />
+              </button>
+
+              {/* User Profile Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setUserDropdown(!userDropdown)}
+                  className="flex items-center gap-2 p-1.5 pr-2.5 rounded-2xl bg-[#0c1b38] border border-[#1a3363] hover:border-[#2cb64e]/50 transition-all shadow-sm"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#2cb64e] to-[#12244c] flex items-center justify-center text-xs font-black text-white">
+                    {user.username?.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="hidden sm:inline text-xs font-bold text-gray-200">
+                    {user.username}
+                  </span>
+                </button>
+
+                {userDropdown && (
+                  <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-[#09142a] border border-[#1a3363] shadow-2xl py-1 z-50 animate-in fade-in slide-in-from-top-2">
+                    <div className="px-4 py-2.5 border-b border-[#1a3363]/60">
+                      <p className="text-xs font-bold text-white truncate">{user.username}</p>
+                      <p className="text-[10px] text-gray-400 truncate">{user.email}</p>
+                      <span className="inline-block mt-1 text-[9px] font-black uppercase px-2 py-0.5 rounded bg-[#2cb64e]/20 text-[#2cb64e] border border-[#2cb64e]/30">
+                        {user.role}
+                      </span>
+                    </div>
+
+                    {(user.role === 'admin' || user.role === 'staff' || user.role === 'superadmin') && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setUserDropdown(false)}
+                        className="block px-4 py-2.5 text-xs font-bold text-amber-300 hover:bg-[#0e2042] transition-colors"
+                      >
+                        ⚡ Staff Admin Desk
+                      </Link>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserDropdown(false);
+                        onOpenCashier('withdraw');
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs text-gray-200 hover:bg-[#0e2042] hover:text-[#2cb64e] transition-colors"
+                    >
+                      Redeem / Cashout
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserDropdown(false);
+                        onLogout();
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 transition-colors border-t border-[#1a3363]/60"
+                    >
+                      <LogOut size={13} />
+                      Log Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Guest Action Buttons with proper margins and padding */}
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenAuth('login');
+                  playTune('click');
+                }}
+                className="px-5 py-2.5 rounded-2xl text-xs font-bold text-gray-200 hover:text-white bg-[#0c1b38] border border-[#1a3363] hover:border-[#2cb64e]/40 transition-all shadow-sm"
+              >
+                Sign In
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenAuth('register');
+                  playTune('click');
+                }}
+                className="btn-hood-green px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-[0_4px_18px_rgba(44,182,78,0.4)]"
+              >
+                <span>Register</span>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+}

@@ -1,0 +1,14 @@
+node_modules
+.next
+.DS_Store
+*.log
+.hood_store.json
+android/app/build
+android/.gradle
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.production
+

@@ -1,0 +1,141 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100;200;300;400;500;600;700;800;900&family=Orbitron:wght@500;600;700;800;900&family=Rajdhani:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-outfit: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Outfit', 'Orbitron', -apple-system, sans-serif;
+  --font-body: 'Outfit', -apple-system, sans-serif;
+
+  --hood-bg: #070d1e;
+  --hood-navy: #09142a;
+  --hood-blue: #0c1b38;
+  --hood-blue-light: #12244c;
+  --hood-card: #0e2042;
+  --hood-card-hover: #132a56;
+  --hood-border: #1a3363;
+  --hood-border-light: #254687;
+  --hood-green: #2cb64e;
+  --hood-green-hover: #25a044;
+  --hood-green-dark: #1e8436;
+  --hood-cyan: #00f0ff;
+  --hood-gold: #f59e0b;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+html,
+body,
+input,
+button,
+select,
+textarea {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #070d1e;
+  color: #f1f5f9;
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #070d1e;
+}
+::-webkit-scrollbar-thumb {
+  background: #1a3363;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2cb64e;
+}
+
+/* Hood Green Button Styles */
+.btn-hood-green {
+  background: linear-gradient(135deg, #32c757 0%, #2cb64e 50%, #1e923e 100%);
+  color: #ffffff;
+  font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 18px rgba(44, 182, 78, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.btn-hood-green:hover {
+  background: linear-gradient(135deg, #38d65f 0%, #2cb64e 45%, #229f44 100%);
+  transform: translateY(-1.5px);
+  box-shadow: 0 8px 26px rgba(44, 182, 78, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.btn-hood-green:active {
+  transform: translateY(0.5px);
+  box-shadow: 0 2px 10px rgba(44, 182, 78, 0.4);
+}
+
+/* Secondary Blue Card & Border */
+.hood-card-blue {
+  background: linear-gradient(145deg, rgba(14, 32, 66, 0.85) 0%, rgba(9, 20, 42, 0.95) 100%);
+  border: 1px solid rgba(26, 51, 99, 0.7);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+}
+
+/* Marquee Ticker Track */
+@keyframes ticker-slide {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-slide-track {
+  display: flex;
+  width: max-content;
+  animation: ticker-slide 32s linear infinite;
+}
+
+.ticker-slide-track:hover {
+  animation-play-state: paused;
+}
+
+/* Glassmorphism Input */
+.hood-input {
+  background: rgba(9, 20, 42, 0.85);
+  border: 1px solid rgba(26, 51, 99, 0.8);
+  color: #ffffff;
+  transition: all 0.2s ease;
+}
+.hood-input:focus {
+  outline: none;
+  border-color: #2cb64e;
+  box-shadow: 0 0 0 3px rgba(44, 182, 78, 0.25);
+}
+
+/* Animations */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.03); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s ease-in-out infinite;
+}
