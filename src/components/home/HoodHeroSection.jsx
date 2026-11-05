@@ -16,24 +16,38 @@ import {
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 
+function HeroImage({ src, alt, className, fill, sizes, priority }) {
+  if (src?.startsWith('data:image')) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={src} alt={alt} className={className} />
+    );
+  }
+  return (
+    <Image src={src} alt={alt} fill={fill} sizes={sizes} priority={priority} className={className} />
+  );
+}
+
 export default function HoodHeroSection({
   user,
   onOpenAuth,
   onOpenCashier,
   setActiveView,
   isMobileOnlyHome = false,
+  heroBackgroundUrl = '/images/casino-hero-bg.jpg',
+  jackpotBannerUrl = '/images/jackpot-banner.jpg',
 }) {
   return (
     <div className="relative w-full rounded-3xl overflow-hidden border border-[#1a3363] bg-[#09142a] shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
       {/* 1. Casino Hero Realistic Background Image */}
       <div className="absolute inset-0 z-0">
-        <Image
-          src="/images/casino-hero-bg.jpg"
+        <HeroImage
+          src={heroBackgroundUrl || '/images/casino-hero-bg.jpg'}
           alt="VIP Casino Lounge"
           fill
           priority
           sizes="(max-width: 1280px) 100vw, 1280px"
-          className="object-cover object-center opacity-30 transform scale-105"
+          className="object-cover object-center opacity-30 transform scale-105 absolute inset-0 w-full h-full"
         />
         {/* Deep Blue Gradient Wash Overlay */}
         <div className="absolute inset-0 bg-gradient-to-r from-[#070d1e] via-[#09142a]/90 to-[#070d1e]/85" />
@@ -59,7 +73,7 @@ export default function HoodHeroSection({
 
             {/* Main Headline */}
             <div className="space-y-2">
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-[1.15] tracking-tight">
+              <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-[1.15] tracking-tight">
                 PLAY AMERICA’S #1 SWEEPS & WIN{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2cb64e] via-emerald-300 to-teal-200">
                   REAL CASH
@@ -131,12 +145,12 @@ export default function HoodHeroSection({
 
               {/* 3D Casino Art Frame */}
               <div className="relative w-36 h-36 mx-auto rounded-2xl overflow-hidden border-2 border-[#2cb64e]/50 shadow-[0_0_30px_rgba(44,182,78,0.4)] bg-[#070d1e] mb-4">
-                <Image
-                  src="/images/jackpot-banner.jpg"
+                <HeroImage
+                  src={jackpotBannerUrl || '/images/jackpot-banner.jpg'}
                   alt="Lucky 777 Jackpot"
                   fill
                   sizes="144px"
-                  className="object-cover"
+                  className="object-cover absolute inset-0 w-full h-full"
                 />
               </div>
 

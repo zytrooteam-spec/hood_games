@@ -1,13 +1,32 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { getDb, toObjectId } from '@/lib/mongodb';
-import { signToken, ROLES } from '@/lib/auth';
+import { getDb } from '@/lib/mongodb';
+import { signToken, ROLES, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
+
+const COOKIE_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  path: '/',
+  maxAge: 7 * 24 * 60 * 60,
+};
+
+function attachSessionCookie(response, token, isAdminPortal) {
+  if (isAdminPortal) {
+    response.cookies.set('admin_session', token, COOKIE_OPTS);
+  } else {
+    response.cookies.set('players_session', token, COOKIE_OPTS);
+    response.cookies.set('token', token, COOKIE_OPTS);
+  }
+}
 
 export async function POST(req) {
   try {
     await ensureDbInitialized();
     const { identifier, password, isAdminLogin } = await req.json();
+    const referer = req.headers.get('referer') || '';
+    const isAdminPortal = Boolean(isAdminLogin || referer.includes('/admin'));
 
     if (!identifier || !password) {
       return NextResponse.json({ success: false, error: 'Username/Email and password required' }, { status: 400 });
@@ -16,7 +35,6 @@ export async function POST(req) {
     const cleanId = String(identifier).trim().toLowerCase();
     const db = await getDb();
 
-    // 1. Check against process.env admin credentials dynamically
     const envAdminUser = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
     const envAdminPass = process.env.ADMIN_PASSWORD || 'HoodGamesAdmin@2026!';
     const envAdminEmail = (process.env.ADMIN_EMAIL || 'admin@hoodgames.com').toLowerCase();
@@ -29,6 +47,17 @@ export async function POST(req) {
     const isEnvStaff = (cleanId === envStaffUser || cleanId === envStaffEmail) && password === envStaffPass;
 
     if (isEnvAdmin || isEnvStaff) {
+      if (!isAdminPortal) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Administrator & Staff credentials must be used at the Admin Portal (/admin).',
+            isAdminOnly: true,
+          },
+          { status: 403 }
+        );
+      }
+
       const activeRole = isEnvAdmin ? ROLES.ADMIN : ROLES.STAFF;
       const activeUser = isEnvAdmin ? envAdminUser : envStaffUser;
       const activeEmail = isEnvAdmin ? envAdminEmail : envStaffEmail;
@@ -40,6 +69,7 @@ export async function POST(req) {
       const token = signToken({
         userId: staffUser?._id?.toString() || `${activeUser}_id`,
         username: activeUser,
+        email: activeEmail,
         role: activeRole,
       });
 
@@ -55,23 +85,12 @@ export async function POST(req) {
         },
       });
 
-      response.cookies.set('token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 7 * 24 * 60 * 60,
-      });
-
+      attachSessionCookie(response, token, true);
       return response;
     }
 
-    // 2. Query DB user
     const user = await db.collection('users').findOne({
-      $or: [
-        { email: cleanId },
-        { username: new RegExp(`^${cleanId}$`, 'i') },
-      ],
+      $or: [{ email: cleanId }, { username: new RegExp(`^${cleanId}$`, 'i') }],
     });
 
     if (!user) {
@@ -79,7 +98,10 @@ export async function POST(req) {
     }
 
     if (user.status === 'banned' || user.status === 'suspended') {
-      return NextResponse.json({ success: false, error: 'Your account has been suspended. Please contact support.' }, { status: 403 });
+      return NextResponse.json(
+        { success: false, error: 'Your account has been suspended. Please contact support.' },
+        { status: 403 }
+      );
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -88,18 +110,33 @@ export async function POST(req) {
     }
 
     const roleLower = (user.role || 'player').toLowerCase();
-    const isStaffRole = ['admin', 'superadmin', 'staff', 'coin_manager', 'financial_manager', 'support_admin'].includes(roleLower);
+    const staff = isStaffRole(roleLower);
 
-    if (isAdminLogin && !isStaffRole) {
-      return NextResponse.json({
-        success: false,
-        error: 'Access Denied: Only authorized administrative personnel are permitted.',
-      }, { status: 403 });
+    if (staff && !isAdminPortal) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Staff accounts must log in at /admin. Player login is for players only.',
+          isAdminOnly: true,
+        },
+        { status: 403 }
+      );
+    }
+
+    if (isAdminPortal && !staff) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Access Denied: Only authorized administrative personnel are permitted.',
+        },
+        { status: 403 }
+      );
     }
 
     const token = signToken({
       userId: user._id.toString(),
       username: user.username,
+      email: user.email,
       role: user.role || 'player',
     });
 
@@ -116,14 +153,7 @@ export async function POST(req) {
       },
     });
 
-    response.cookies.set('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60,
-    });
-
+    attachSessionCookie(response, token, isAdminPortal);
     return response;
   } catch (err) {
     console.error('Login error:', err);

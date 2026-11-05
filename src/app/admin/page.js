@@ -21,7 +21,7 @@ export default function AdminPage() {
 
   const fetchSession = async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      const res = await fetch('/api/auth/me?admin=true');
       const data = await res.json();
       if (data?.success && data?.user) {
         const r = (data.user.role || '').toLowerCase();
@@ -85,7 +85,11 @@ export default function AdminPage() {
   };
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isAdminLogout: true }),
+    });
     setUser(null);
     router.push('/');
   };
@@ -126,7 +130,7 @@ export default function AdminPage() {
                 <span>RESTRICTED STAFF TERMINAL</span>
               </div>
 
-              <h1 className="text-2xl font-black text-white tracking-tight">
+              <h1 className="font-heading text-2xl font-black text-white tracking-tight">
                 Hood Games Master Desk
               </h1>
               <p className="text-xs text-gray-400">

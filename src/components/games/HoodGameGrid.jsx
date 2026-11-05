@@ -90,13 +90,22 @@ export default function HoodGameGrid({
 
               {/* Game Visual Icon */}
               <div className="relative w-full h-36 rounded-2xl overflow-hidden bg-[#09142a] border border-[#1a3363] flex items-center justify-center p-3 mb-3 group-hover:scale-[1.02] transition-transform">
-                <Image
-                  src={game.image || '/images/ultra-panda.svg'}
-                  alt={game.title}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 300px"
-                  className="object-contain p-2"
-                />
+                {(game.image || '').startsWith('data:image') ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={game.image}
+                    alt={game.title}
+                    className="absolute inset-0 w-full h-full object-contain p-2"
+                  />
+                ) : (
+                  <Image
+                    src={game.image || '/images/ultra-panda.svg'}
+                    alt={game.title}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 300px"
+                    className="object-contain p-2"
+                  />
+                )}
               </div>
 
               {/* Game Metadata */}

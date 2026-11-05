@@ -74,13 +74,15 @@ export async function POST(req) {
       },
     });
 
-    response.cookies.set('token', token, {
+    const cookieOpts = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
       maxAge: 7 * 24 * 60 * 60,
-    });
+    };
+    response.cookies.set('players_session', token, cookieOpts);
+    response.cookies.set('token', token, cookieOpts);
 
     return response;
   } catch (err) {

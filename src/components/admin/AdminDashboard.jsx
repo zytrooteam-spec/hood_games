@@ -37,6 +37,7 @@ import {
 import { playTune } from '@/lib/soundAlerts';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import { GamesLibraryTab, GatewaysTab, GameLoadsTab, LedgerTab, StaffTab } from './AdminExtraTabs';
+import AdminImageField from './AdminImageField';
 
 export default function AdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -422,16 +423,26 @@ export default function AdminDashboard({ user, onLogout }) {
     playTune('click');
   };
 
+  const siteLogo = settings?.logoUrl || '/logo.png';
+
+  const renderLogo = (padClass) =>
+    siteLogo.startsWith('data:image') ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={siteLogo} alt="Hood Games" className={`w-full h-full object-contain ${padClass}`} />
+    ) : (
+      <Image src={siteLogo} alt="Hood Games" fill className={`object-contain ${padClass}`} />
+    );
+
   return (
-    <div className="min-h-screen bg-[#070d1e] text-gray-100 flex flex-col md:flex-row relative">
+    <div className="font-sans min-h-screen bg-[#070d1e] text-gray-100 flex flex-col md:flex-row relative">
       {/* 1. Mobile Topbar (Strictly visible on screens < md) */}
       <div className="md:hidden sticky top-0 z-40 bg-[#09142a]/95 backdrop-blur-xl border-b border-[#1a3363] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-[#2cb64e]/50 bg-[#070d1e] flex items-center justify-center">
-            <Image src="/logo.png" alt="Hood Games" fill className="object-contain p-0.5" />
+            {renderLogo('p-0.5')}
           </div>
           <div>
-            <h2 className="text-xs font-black text-white">
+            <h2 className="font-heading text-xs font-black text-white">
               HOOD <span className="text-[#2cb64e]">ADMIN</span>
             </h2>
             <span className="text-[9px] text-[#2cb64e] font-mono font-bold uppercase tracking-wider">
@@ -468,10 +479,10 @@ export default function AdminDashboard({ user, onLogout }) {
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-3">
               <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-[#2cb64e]/50 bg-[#070d1e] flex items-center justify-center">
-                <Image src="/logo.png" alt="Hood Games" fill className="object-contain p-1" />
+                {renderLogo('p-1')}
               </div>
               <div>
-                <h2 className="text-sm font-black text-white">
+                <h2 className="font-heading text-sm font-black text-white">
                   HOOD <span className="text-[#2cb64e]">ADMIN</span>
                 </h2>
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
@@ -1358,6 +1369,33 @@ export default function AdminDashboard({ user, onLogout }) {
 
             {/* Settings Form */}
             <form onSubmit={handleSaveSettings} className="space-y-6 max-w-2xl">
+              <div className="p-6 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4">
+                <h4 className="text-sm font-black text-white font-heading">Site Branding &amp; Images</h4>
+                <p className="text-xs text-gray-400">
+                  Upload or paste image URLs — changes appear instantly across the player site (logo, hero, jackpot card).
+                </p>
+                <AdminImageField
+                  label="Site Logo"
+                  value={settings?.logoUrl || '/logo.png'}
+                  onChange={(v) => setSettings({ ...settings, logoUrl: v })}
+                  hint="Navbar, sidebar, admin header"
+                  maxSize={512}
+                />
+                <AdminImageField
+                  label="Hero Background"
+                  value={settings?.heroBackgroundUrl || '/images/casino-hero-bg.jpg'}
+                  onChange={(v) => setSettings({ ...settings, heroBackgroundUrl: v })}
+                  maxSize={1200}
+                  quality={0.55}
+                />
+                <AdminImageField
+                  label="Jackpot Showcase Image"
+                  value={settings?.jackpotBannerUrl || '/images/jackpot-banner.jpg'}
+                  onChange={(v) => setSettings({ ...settings, jackpotBannerUrl: v })}
+                  maxSize={600}
+                />
+              </div>
+
               {/* Cashback Percentage Setting */}
               <div className="p-6 rounded-2xl bg-[#09142a] border border-[#2cb64e]/40 space-y-4">
                 <div className="flex items-center justify-between">

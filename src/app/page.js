@@ -121,13 +121,27 @@ export default function HomePage() {
     fetchUser();
     fetchSiteData();
 
+    const handleUserSync = (e) => {
+      if (e.detail) diffSet(setUser, e.detail);
+      else {
+        diffSet(setUser, null);
+        diffSet(setUserGameAccounts, []);
+      }
+    };
+    window.addEventListener('user-sync', handleUserSync);
+    window.addEventListener('hood-user-sync', handleUserSync);
+
     // Silent background polling every 6s (no loading spinners, no re-render flicker)
     const interval = setInterval(() => {
       fetchUser(true);
       fetchSiteData();
     }, 6000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('user-sync', handleUserSync);
+      window.removeEventListener('hood-user-sync', handleUserSync);
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -142,6 +156,7 @@ export default function HomePage() {
       {/* 1. Player Side Navigation Sidebar (Desktop collapsible & Mobile drawer) */}
       <HoodPlayerSidebar
         user={user}
+        logoUrl={settings?.logoUrl || '/logo.png'}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
         mobileOpen={mobileSidebarOpen}
@@ -189,6 +204,8 @@ export default function HomePage() {
                 onOpenAuth={(tab) => setAuthModal({ open: true, tab })}
                 onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
                 setActiveView={setActiveView}
+                heroBackgroundUrl={settings?.heroBackgroundUrl}
+                jackpotBannerUrl={settings?.jackpotBannerUrl}
               />
 
               {/* Winning of Random Clients Bar (Requirement #5) */}

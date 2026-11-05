@@ -6,7 +6,7 @@ import { ensureDbInitialized } from '@/lib/initDb';
 export async function GET(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
+    const user = await getSessionUser(req, 'admin');
     if (!user || (user.role !== 'admin' && user.role !== 'staff' && user.role !== 'superadmin')) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Staff access required' }, { status: 403 });
     }

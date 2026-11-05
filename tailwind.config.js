@@ -23,7 +23,7 @@ export default {
       },
       fontFamily: {
         sans: ['Outfit', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-        heading: ['Outfit', 'Orbitron', 'sans-serif'],
+        heading: ['Outfit', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
         sub: ['Rajdhani', 'Outfit', 'sans-serif'],
         body: ['Outfit', 'sans-serif'],
       },

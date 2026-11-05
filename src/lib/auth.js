@@ -10,6 +10,15 @@ export const ROLES = {
   PLAYER: 'player',
 };
 
+const STAFF_ROLES = new Set([
+  'admin',
+  'superadmin',
+  'staff',
+  'coin_manager',
+  'financial_manager',
+  'support_admin',
+]);
+
 export function signToken(payload, expiresIn = '7d') {
   return jwt.sign(payload, JWT_SECRET, { expiresIn });
 }
@@ -30,53 +39,94 @@ export async function verifyPassword(plain, hashed) {
   return await bcrypt.compare(plain, hashed);
 }
 
+function parseCookies(cookieHeader) {
+  return Object.fromEntries(
+    cookieHeader.split(';').map((c) => {
+      const [k, ...v] = c.trim().split('=');
+      return [k, decodeURIComponent(v.join('='))];
+    })
+  );
+}
+
+async function loadUserFromToken(decoded) {
+  if (!decoded || !decoded.userId) return null;
+
+  const db = await getDb();
+  const user = await db.collection('users').findOne(toIdQuery(decoded.userId));
+  if (!user) {
+    return {
+      _id: decoded.userId,
+      id: decoded.userId,
+      username: decoded.username,
+      email: decoded.email,
+      role: decoded.role || 'player',
+      balanceSC: 0,
+      balanceGC: 0,
+      isVerified: true,
+      status: 'active',
+    };
+  }
+
+  return {
+    _id: user._id,
+    id: user._id,
+    username: user.username,
+    email: user.email,
+    role: user.role || 'player',
+    balanceSC: Number(user.balanceSC || 0),
+    balanceGC: Number(user.balanceGC || 0),
+    isVerified: Boolean(user.isVerified),
+    status: user.status || 'active',
+  };
+}
+
 /**
- * Get the authenticated user from the Request cookie or Authorization header.
+ * Resolve session from request cookies.
+ * @param {Request} req
+ * @param {'auto'|'admin'|'player'} [preferredType='auto']
+ *   - admin: only admin_session (admin tab)
+ *   - player: only players_session / legacy token (player tab)
+ *   - auto: admin referer → admin cookie; else player first
  */
-export async function getSessionUser(req) {
+export async function getSessionUser(req, preferredType = 'auto') {
   try {
+    const cookieHeader = req.headers.get('cookie') || '';
+    const cookies = parseCookies(cookieHeader);
+    const adminToken = cookies['admin_session'];
+    const playerToken =
+      cookies['players_session'] || cookies['vegas_session'] || cookies['token'] || cookies['hood_token'] || cookies['auth_token'];
+
+    const referer = req.headers.get('referer') || '';
+    const url = req.url || '';
+    const adminContext =
+      preferredType === 'admin' ||
+      referer.includes('/admin') ||
+      url.includes('admin=true');
+
     let token = null;
 
-    // 1. Check Authorization header
-    const authHeader = req.headers.get('authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
-    }
-
-    // 2. Check cookies
-    if (!token) {
-      const cookieHeader = req.headers.get('cookie') || '';
-      const cookies = Object.fromEntries(
-        cookieHeader.split(';').map((c) => {
-          const [k, ...v] = c.trim().split('=');
-          return [k, decodeURIComponent(v.join('='))];
-        })
-      );
-      token = cookies['token'] || cookies['hood_token'] || cookies['auth_token'];
+    if (preferredType === 'admin') {
+      token = adminToken;
+    } else if (preferredType === 'player') {
+      token = playerToken;
+    } else if (adminContext && adminToken) {
+      token = adminToken;
+    } else if (playerToken) {
+      token = playerToken;
+    } else if (adminToken) {
+      token = adminToken;
     }
 
     if (!token) return null;
 
     const decoded = verifyToken(token);
-    if (!decoded || !decoded.userId) return null;
-
-    const db = await getDb();
-    const user = await db.collection('users').findOne(toIdQuery(decoded.userId));
-    if (!user) return null;
-
-    return {
-      _id: user._id,
-      id: user._id,
-      username: user.username,
-      email: user.email,
-      role: user.role || 'player',
-      balanceSC: Number(user.balanceSC || 0),
-      balanceGC: Number(user.balanceGC || 0),
-      isVerified: Boolean(user.isVerified),
-      status: user.status || 'active',
-    };
+    return await loadUserFromToken(decoded);
   } catch (err) {
     console.error('getSessionUser error:', err);
     return null;
   }
+}
+
+export function isStaffRole(role) {
+  return STAFF_ROLES.has(String(role || '').toLowerCase());
 }

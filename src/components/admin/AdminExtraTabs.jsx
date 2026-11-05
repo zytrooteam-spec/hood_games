@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Edit2, X, Search, RefreshCw, Check, Power } from 'lucide-react';
+import AdminImageField from './AdminImageField';
 import { diffSet } from '@/lib/fastDiff';
 import { playTune } from '@/lib/soundAlerts';
 
@@ -129,7 +130,16 @@ export function GamesLibraryTab() {
                 </select>
               </Field>
               <Field label="Play URL"><input className={inputCls} value={editing.playUrl} onChange={(e) => setEditing({ ...editing, playUrl: e.target.value })} placeholder="https://..." /></Field>
-              <Field label="Image URL"><input className={inputCls} value={editing.image} onChange={(e) => setEditing({ ...editing, image: e.target.value })} placeholder="/images/game.svg" /></Field>
+              <div className="sm:col-span-2">
+                <AdminImageField
+                  label="Cover Image"
+                  value={editing.image}
+                  onChange={(v) => setEditing({ ...editing, image: v })}
+                  hint="Upload cover art or use /images/your-game.svg"
+                  maxSize={500}
+                  quality={0.85}
+                />
+              </div>
               <Field label="Badge"><input className={inputCls} value={editing.badge} onChange={(e) => setEditing({ ...editing, badge: e.target.value })} /></Field>
               <Field label="Sort Priority"><input type="number" className={inputCls} value={editing.priority} onChange={(e) => setEditing({ ...editing, priority: e.target.value })} /></Field>
             </div>

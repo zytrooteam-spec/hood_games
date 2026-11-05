@@ -13,6 +13,9 @@ export async function GET(req) {
       success: true,
       settings: settings || {
         siteName: 'Hood Games',
+        logoUrl: '/logo.png',
+        heroBackgroundUrl: '/images/casino-hero-bg.jpg',
+        jackpotBannerUrl: '/images/jackpot-banner.jpg',
         cashbackPercent: 10,
         welcomeBonusPercent: 300,
         regularBonusPercent: 50,
@@ -27,8 +30,8 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
-    if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    const user = await getSessionUser(req, 'admin');
+    if (!user || !['admin', 'superadmin', 'staff'].includes(String(user.role || '').toLowerCase())) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Admin access required' }, { status: 403 });
     }
 

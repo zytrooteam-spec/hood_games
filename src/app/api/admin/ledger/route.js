@@ -10,7 +10,7 @@ const STAFF_ROLES = ['admin', 'superadmin', 'staff'];
 export async function GET(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
+    const user = await getSessionUser(req, 'admin');
     if (!user || !STAFF_ROLES.includes(user.role)) {
       return NextResponse.json({ success: false, error: 'Staff access required' }, { status: 403 });
     }

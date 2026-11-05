@@ -6,7 +6,7 @@ import { ensureDbInitialized } from '@/lib/initDb';
 const STAFF_ROLES = ['admin', 'staff'];
 
 async function requireAdmin(req) {
-  const user = await getSessionUser(req);
+  const user = await getSessionUser(req, 'admin');
   if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) return null;
   return user;
 }

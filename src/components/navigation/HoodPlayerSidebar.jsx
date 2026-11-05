@@ -25,6 +25,7 @@ export default function HoodPlayerSidebar({
   setCollapsed,
   mobileOpen,
   setMobileOpen,
+  logoUrl = '/logo.png',
   onOpenCashier,
   onOpenSpinWheel,
   onOpenApp,
@@ -149,19 +150,24 @@ export default function HoodPlayerSidebar({
               className="flex items-center gap-3 cursor-pointer overflow-hidden"
             >
               <div className="relative w-11 h-11 shrink-0 rounded-2xl overflow-hidden border-2 border-[#2cb64e]/50 shadow-[0_0_18px_rgba(44,182,78,0.35)] bg-[#070d1e] flex items-center justify-center">
-                <Image
-                  src="/logo.png"
-                  alt="Hood Games Logo"
-                  fill
-                  sizes="44px"
-                  className="object-contain p-1"
-                  priority
-                />
+                {logoUrl?.startsWith('data:image') ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="Hood Games Logo" className="w-full h-full object-contain p-1" />
+                ) : (
+                  <Image
+                    src={logoUrl || '/logo.png'}
+                    alt="Hood Games Logo"
+                    fill
+                    sizes="44px"
+                    className="object-contain p-1"
+                    priority
+                  />
+                )}
               </div>
 
               {(!collapsed || mobileOpen) && (
                 <div className="flex flex-col">
-                  <span className="font-black text-sm tracking-wider leading-tight text-white flex items-center gap-1">
+                  <span className="font-heading font-black text-sm tracking-wider leading-tight text-white flex items-center gap-1">
                     HOOD <span className="text-[#2cb64e]">GAMES</span>
                   </span>
                   <span className="text-[9.5px] tracking-widest text-gray-400 font-bold uppercase">

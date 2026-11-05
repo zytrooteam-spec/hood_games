@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb, toIdQuery } from '@/lib/mongodb';
-import { getSessionUser } from '@/lib/auth';
+import { getSessionUser, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { sanitizeGameTitle } from '@/lib/fastDiff';
 
@@ -22,8 +22,8 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
-    if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    const user = await getSessionUser(req, 'admin');
+    if (!user || !isStaffRole(user.role)) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Admin access required' }, { status: 403 });
     }
 
@@ -63,8 +63,8 @@ export async function POST(req) {
 export async function DELETE(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
-    if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    const user = await getSessionUser(req, 'admin');
+    if (!user || !isStaffRole(user.role)) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Admin access required' }, { status: 403 });
     }
     const id = new URL(req.url).searchParams.get('id');
