@@ -1,4 +1,5 @@
 import './globals.css';
+import ClientProviders from '@/components/providers/ClientProviders';
 
 export const metadata = {
   title: 'Hood Games | Premier Online Sweepstakes Platform',
@@ -21,7 +22,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className="font-sans bg-[#070d1e] text-slate-100 antialiased min-h-screen selection:bg-[#2cb64e] selection:text-white">
-        {children}
+        <ClientProviders>{children}</ClientProviders>
       </body>
     </html>
   );

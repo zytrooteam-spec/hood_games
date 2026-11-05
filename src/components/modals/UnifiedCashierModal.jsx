@@ -15,6 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
+import { hoodAlert } from '@/lib/hoodAlert';
 import { diffSet } from '@/lib/fastDiff';
 
 export default function UnifiedCashierModal({
@@ -41,7 +42,7 @@ export default function UnifiedCashierModal({
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) {
-      alert('File size must be under 8MB');
+      hoodAlert.warning('File size must be under 8MB', 'File too large');
       return;
     }
     const reader = new FileReader();
@@ -88,12 +89,12 @@ export default function UnifiedCashierModal({
   const handleDepositSubmit = async (e) => {
     e.preventDefault();
     if (!user) {
-      alert('Please log in first.');
+      hoodAlert.warning('Please log in first.', 'Login required');
       return;
     }
     const num = Number(depositAmount);
     if (isNaN(num) || num < 5) {
-      alert('Minimum deposit is $5.00');
+      hoodAlert.warning('Minimum deposit is $5.00', 'Deposit amount');
       return;
     }
 
@@ -114,14 +115,14 @@ export default function UnifiedCashierModal({
       });
       const data = await res.json();
       if (!data.success) {
-        alert(data.error || 'Deposit failed');
+        hoodAlert.error(data.error || 'Deposit failed', 'Deposit failed');
       } else {
         setDepositSuccess(data.message || 'Deposit submitted successfully!');
         playTune('coin');
         if (onBalanceUpdated) onBalanceUpdated();
       }
     } catch (err) {
-      alert('Network error submitting deposit');
+      hoodAlert.error('Network error submitting deposit');
     } finally {
       setSubmittingDeposit(false);
     }
@@ -131,16 +132,16 @@ export default function UnifiedCashierModal({
   const handleWithdrawSubmit = async (e) => {
     e.preventDefault();
     if (!user) {
-      alert('Please log in first.');
+      hoodAlert.warning('Please log in first.', 'Login required');
       return;
     }
     const num = Number(withdrawAmount);
     if (isNaN(num) || num < 50) {
-      alert('Minimum redemption is $50.00 SC');
+      hoodAlert.warning('Minimum redemption is $50.00 SC', 'Redemption amount');
       return;
     }
     if (!withdrawAddress.trim()) {
-      alert('Please enter your payout destination tag or address.');
+      hoodAlert.warning('Please enter your payout destination tag or address.', 'Payout details');
       return;
     }
 
@@ -159,14 +160,14 @@ export default function UnifiedCashierModal({
       });
       const data = await res.json();
       if (!data.success) {
-        alert(data.error || 'Withdrawal request failed');
+        hoodAlert.error(data.error || 'Withdrawal request failed', 'Withdrawal failed');
       } else {
         setWithdrawSuccess(data.message || 'Cashout request submitted!');
         playTune('win');
         if (onBalanceUpdated) onBalanceUpdated();
       }
     } catch (err) {
-      alert('Network error submitting withdrawal');
+      hoodAlert.error('Network error submitting withdrawal');
     } finally {
       setSubmittingWithdraw(false);
     }

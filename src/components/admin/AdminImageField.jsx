@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Upload, RefreshCw } from 'lucide-react';
 import { compressImageFile } from '@/lib/imageCompress';
+import { hoodAlert } from '@/lib/hoodAlert';
 
 const inputCls = 'hood-input w-full px-3 py-2.5 rounded-xl text-xs font-semibold';
 
@@ -28,7 +29,7 @@ export default function AdminImageField({
       });
       onChange(dataUrl);
     } catch (err) {
-      alert(err?.message || 'Upload failed');
+      hoodAlert.error(err?.message || 'Upload failed', 'Upload failed');
     } finally {
       setUploading(false);
       e.target.value = '';

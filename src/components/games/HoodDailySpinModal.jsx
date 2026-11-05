@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { Sparkles, Trophy, X, Clock, Coins, Flame } from 'lucide-react';
 import { WHEEL_SEGMENTS } from '@/lib/wheelConstants';
 import { playTune } from '@/lib/soundAlerts';
+import { hoodAlert } from '@/lib/hoodAlert';
 
 export default function HoodDailySpinModal({
   isOpen,
@@ -95,7 +96,7 @@ export default function HoodDailySpinModal({
     if (spinning || !canSpin) return;
 
     if (!user) {
-      alert('Please log in to claim your daily free spin!');
+      hoodAlert.warning('Please log in to claim your daily free spin!', 'Login required');
       return;
     }
 
@@ -110,7 +111,7 @@ export default function HoodDailySpinModal({
       const data = await res.json();
 
       if (!data.success) {
-        alert(data.error || 'Spin failed');
+        hoodAlert.error(data.error || 'Spin failed', 'Spin failed');
         setSpinning(false);
         return;
       }

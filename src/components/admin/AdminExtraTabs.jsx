@@ -5,6 +5,7 @@ import { Plus, Trash2, Edit2, X, Search, RefreshCw, Check, Power } from 'lucide-
 import AdminImageField from './AdminImageField';
 import { diffSet } from '@/lib/fastDiff';
 import { playTune } from '@/lib/soundAlerts';
+import { hoodAlert, hoodConfirm } from '@/lib/hoodAlert';
 
 /* ------------------------------------------------------------------ */
 /* Shared UI helpers                                                   */
@@ -73,7 +74,7 @@ export function GamesLibraryTab() {
       const body = { ...editing, priority: Number(editing.priority || 10), active: !!editing.active, isActive: !!editing.active };
       const res = await fetch('/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await res.json();
-      if (!res.ok || !d.success) return alert(d.error || 'Failed to save game (image may be too large — try a smaller file)');
+      if (!res.ok || !d.success) return hoodAlert.error(d.error || 'Failed to save game (image may be too large — try a smaller file)', 'Save failed');
       playTune('coin');
       setEditing(null);
       load();
@@ -86,7 +87,13 @@ export function GamesLibraryTab() {
   };
 
   const remove = async (g) => {
-    if (!confirm(`Delete "${g.title}" permanently?`)) return;
+    const ok = await hoodConfirm({
+      title: 'Delete game platform',
+      message: `Delete "${g.title}" permanently? Players will no longer see this game.`,
+      confirmLabel: 'Delete permanently',
+      cancelLabel: 'Keep game',
+    });
+    if (!ok) return;
     await fetch(`/api/games?id=${g._id}`, { method: 'DELETE' });
     load();
   };
@@ -176,14 +183,20 @@ export function GatewaysTab() {
     e.preventDefault();
     const res = await fetch('/api/payments/methods', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editing) });
     const d = await res.json();
-    if (!d.success) return alert(d.error || 'Failed');
+    if (!d.success) return hoodAlert.error(d.error || 'Failed', 'Gateway save failed');
     playTune('coin');
     setEditing(null);
     load();
   };
 
   const remove = async (m) => {
-    if (!confirm(`Remove ${m.name}?`)) return;
+    const ok = await hoodConfirm({
+      title: 'Remove payment gateway',
+      message: `Remove ${m.name}? Deposits using this method may stop working until you add it again.`,
+      confirmLabel: 'Remove gateway',
+      cancelLabel: 'Cancel',
+    });
+    if (!ok) return;
     await fetch(`/api/payments/methods?id=${m._id}`, { method: 'DELETE' });
     load();
   };
@@ -251,7 +264,7 @@ export function GameLoadsTab() {
   const act = async (id, action) => {
     const res = await fetch('/api/coins/allotment', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action }) });
     const d = await res.json();
-    if (!d.success) alert(d.error || 'Failed');
+    if (!d.success) hoodAlert.error(d.error || 'Failed', 'Load request failed');
     else playTune(action === 'complete' ? 'coin' : 'click');
     load();
   };
@@ -394,7 +407,7 @@ export function StaffTab({ currentUser }) {
     try {
       const res = await fetch('/api/admin/staff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
       const d = await res.json();
-      if (!d.success) return alert(d.error || 'Failed');
+      if (!d.success) return hoodAlert.error(d.error || 'Failed', 'Staff create failed');
       playTune('coin');
       setForm({ username: '', email: '', password: '', role: 'staff' });
       load();
@@ -402,10 +415,16 @@ export function StaffTab({ currentUser }) {
   };
 
   const remove = async (s) => {
-    if (!confirm(`Revoke access for ${s.username}?`)) return;
+    const ok = await hoodConfirm({
+      title: 'Revoke staff access',
+      message: `Revoke access for ${s.username}? They will be logged out and cannot open the admin desk.`,
+      confirmLabel: 'Revoke access',
+      cancelLabel: 'Keep staff',
+    });
+    if (!ok) return;
     const res = await fetch(`/api/admin/staff?id=${s._id}`, { method: 'DELETE' });
     const d = await res.json();
-    if (!d.success) alert(d.error);
+    if (!d.success) hoodAlert.error(d.error, 'Revoke failed');
     load();
   };
 

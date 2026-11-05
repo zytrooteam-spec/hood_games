@@ -46,6 +46,7 @@ import {
   requestDesktopNotificationPermission,
   AVAILABLE_TUNES,
 } from '@/lib/soundAlerts';
+import { hoodAlert, hoodConfirm } from '@/lib/hoodAlert';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import { GamesLibraryTab, GatewaysTab, GameLoadsTab, LedgerTab, StaffTab } from './AdminExtraTabs';
 import AdminImageField from './AdminImageField';
@@ -380,7 +381,7 @@ export default function AdminDashboard({ user, onLogout }) {
       const dataUrl = await compressImageFile(file, { maxSize: 1200, quality: 0.65, maxChars: 140000 });
       setChatAttachImage(dataUrl);
     } catch (err) {
-      alert(err?.message || 'Upload failed');
+      hoodAlert.error(err?.message || 'Upload failed', 'Upload failed');
     } finally {
       setChatAttachUploading(false);
       e.target.value = '';
@@ -406,7 +407,7 @@ export default function AdminDashboard({ user, onLogout }) {
         setThreadMessages((prev) => [...prev, data.message]);
         playTune('coin');
       } else {
-        alert(data.error || 'Failed to send reply');
+        hoodAlert.error(data.error || 'Failed to send reply', 'Reply failed');
         setChatInput(text);
         setChatAttachImage(imageUrl);
       }
@@ -504,13 +505,13 @@ export default function AdminDashboard({ user, onLogout }) {
       });
       const data = await res.json();
       if (data.success) {
-        alert(data.message);
+        hoodAlert.success(data.message, 'Deposit updated');
         fetchAllData();
       } else {
-        alert(data.error);
+        hoodAlert.error(data.error, 'Deposit update failed');
       }
     } catch (e) {
-      alert('Error updating deposit');
+      hoodAlert.error('Error updating deposit');
     }
   };
 
@@ -525,13 +526,13 @@ export default function AdminDashboard({ user, onLogout }) {
       });
       const data = await res.json();
       if (data.success) {
-        alert(data.message);
+        hoodAlert.success(data.message, 'Redemption updated');
         fetchAllData();
       } else {
-        alert(data.error);
+        hoodAlert.error(data.error, 'Redemption update failed');
       }
     } catch (e) {
-      alert('Error updating redemption');
+      hoodAlert.error('Error updating redemption');
     }
   };
 
@@ -550,11 +551,11 @@ export default function AdminDashboard({ user, onLogout }) {
       });
       const data = await res.json();
       if (data.success) {
-        alert('Credentials issued!');
+        hoodAlert.success('Credentials issued!', 'Request approved');
         fetchAllData();
       }
     } catch (e) {
-      alert('Error approving request');
+      hoodAlert.error('Error approving request');
     }
   };
 
@@ -573,11 +574,11 @@ export default function AdminDashboard({ user, onLogout }) {
       });
       const data = await res.json();
       if (data.success) {
-        alert('System settings and 5 Action Cards saved successfully!');
+        hoodAlert.success('System settings and 5 Action Cards saved successfully!', 'Settings saved');
         setSettings(data.settings);
       }
     } catch (e) {
-      alert('Error saving settings');
+      hoodAlert.error('Error saving settings');
     } finally {
       setSavingSettings(false);
     }
@@ -585,7 +586,13 @@ export default function AdminDashboard({ user, onLogout }) {
 
   // Disburse Sunday Cashback to all eligible players in 1-click
   const handleDisburseAllCashback = async () => {
-    if (!confirm('Are you sure you want to disburse Sunday Cashback to all qualified players?')) return;
+    const ok = await hoodConfirm({
+      title: 'Disburse Sunday Cashback',
+      message: 'Are you sure you want to disburse Sunday Cashback to all qualified players? This cannot be undone in one click.',
+      confirmLabel: 'Yes, disburse now',
+      cancelLabel: 'Not yet',
+    });
+    if (!ok) return;
     setDisbursingCashback(true);
     playTune('coin');
     try {
@@ -596,13 +603,13 @@ export default function AdminDashboard({ user, onLogout }) {
       });
       const data = await res.json();
       if (data?.success) {
-        alert(data.message);
+        hoodAlert.success(data.message, 'Cashback disbursed');
         fetchAllData(true);
       } else {
-        alert(data?.error || 'Failed to disburse cashback');
+        hoodAlert.error(data?.error || 'Failed to disburse cashback');
       }
     } catch {
-      alert('Network error disbursing cashback');
+      hoodAlert.error('Network error disbursing cashback');
     } finally {
       setDisbursingCashback(false);
     }
@@ -628,14 +635,14 @@ export default function AdminDashboard({ user, onLogout }) {
       });
       const data = await res.json();
       if (data?.success) {
-        alert(`Player ${selectedPlayerToEdit.username} updated successfully!`);
+        hoodAlert.success(`Player ${selectedPlayerToEdit.username} updated successfully!`, 'Player updated');
         setSelectedPlayerToEdit(null);
         fetchAllData(true);
       } else {
-        alert(data?.error || 'Failed to update player');
+        hoodAlert.error(data?.error || 'Failed to update player');
       }
     } catch {
-      alert('Network error updating player');
+      hoodAlert.error('Network error updating player');
     } finally {
       setSavingPlayer(false);
     }

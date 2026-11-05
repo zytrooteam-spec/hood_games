@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Key, Check, AlertCircle, ArrowRight, Gamepad2 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
+import { hoodAlert } from '@/lib/hoodAlert';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 
 export default function GameRequestModal({
@@ -54,13 +55,13 @@ export default function GameRequestModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!user) {
-      alert('Please log in first.');
+      hoodAlert.warning('Please log in first.', 'Login required');
       return;
     }
 
     const finalGameTitle = sanitizeGameTitle(selectedGameTitle || initialGame?.title || 'Game Platform');
     if (!finalGameTitle) {
-      alert('Please select a game platform.');
+      hoodAlert.warning('Please select a game platform.', 'Select a game');
       return;
     }
 
@@ -80,14 +81,14 @@ export default function GameRequestModal({
       });
       const data = await res.json();
       if (!data.success) {
-        alert(data.error || 'Request failed');
+        hoodAlert.error(data.error || 'Request failed', 'Request failed');
       } else {
         setSuccessMsg(data.message);
         playTune('win');
         if (onSuccess) onSuccess();
       }
     } catch (err) {
-      alert('Network error submitting request');
+      hoodAlert.error('Network error submitting request');
     } finally {
       setSubmitting(false);
     }

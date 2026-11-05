@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
+import { hoodAlert } from '@/lib/hoodAlert';
 import { compressImageFile } from '@/lib/imageCompress';
 import { diffSet } from '@/lib/fastDiff';
 import HoodChatMessageBubble from '@/components/chat/HoodChatMessageBubble';
@@ -90,7 +91,7 @@ export default function HoodChatPageContent({ user, onOpenAuth }) {
       const dataUrl = await compressImageFile(file, { maxSize: 1200, quality: 0.65, maxChars: 140000 });
       setAttachedImage(dataUrl);
     } catch (err) {
-      alert(err?.message || 'Could not attach image');
+      hoodAlert.error(err?.message || 'Could not attach image', 'Attachment failed');
     } finally {
       setUploadingImage(false);
       e.target.value = '';

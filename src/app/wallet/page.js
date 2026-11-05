@@ -16,6 +16,7 @@ import {
   Upload
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
+import { hoodAlert } from '@/lib/hoodAlert';
 import { diffSet } from '@/lib/fastDiff';
 
 export default function WalletPage() {
@@ -36,7 +37,7 @@ export default function WalletPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) {
-      alert('File size must be under 8MB');
+      hoodAlert.warning('File size must be under 8MB', 'File too large');
       return;
     }
     const reader = new FileReader();
@@ -105,12 +106,12 @@ export default function WalletPage() {
   const handleDeposit = async (e, user, fetchUser) => {
     e.preventDefault();
     if (!user) {
-      alert('Please sign in first');
+      hoodAlert.warning('Please sign in first', 'Login required');
       return;
     }
     const num = Number(depositAmount);
     if (isNaN(num) || num < 5) {
-      alert('Minimum deposit is $5.00');
+      hoodAlert.warning('Minimum deposit is $5.00', 'Deposit amount');
       return;
     }
 
@@ -131,7 +132,7 @@ export default function WalletPage() {
       });
       const data = await res.json();
       if (!data.success) {
-        alert(data.error || 'Deposit failed');
+        hoodAlert.error(data.error || 'Deposit failed', 'Deposit failed');
       } else {
         setDepositSuccess(data.message);
         playTune('coin');
@@ -143,7 +144,7 @@ export default function WalletPage() {
         loadPaymentData();
       }
     } catch {
-      alert('Network error submitting deposit');
+      hoodAlert.error('Network error submitting deposit');
     } finally {
       setSubmittingDeposit(false);
     }
@@ -152,16 +153,16 @@ export default function WalletPage() {
   const handleWithdraw = async (e, user, fetchUser) => {
     e.preventDefault();
     if (!user) {
-      alert('Please sign in first');
+      hoodAlert.warning('Please sign in first', 'Login required');
       return;
     }
     const num = Number(withdrawAmount);
     if (isNaN(num) || num < 50) {
-      alert('Minimum redemption is $50.00 SC');
+      hoodAlert.warning('Minimum redemption is $50.00 SC', 'Redemption amount');
       return;
     }
     if (!withdrawAddress.trim()) {
-      alert('Please provide your payout address or cashtag');
+      hoodAlert.warning('Please provide your payout address or cashtag', 'Payout details');
       return;
     }
 
@@ -180,14 +181,14 @@ export default function WalletPage() {
       });
       const data = await res.json();
       if (!data.success) {
-        alert(data.error || 'Withdrawal failed');
+        hoodAlert.error(data.error || 'Withdrawal failed', 'Withdrawal failed');
       } else {
         setWithdrawSuccess(data.message);
         playTune('win');
         if (fetchUser) fetchUser();
       }
     } catch {
-      alert('Network error submitting redemption');
+      hoodAlert.error('Network error submitting redemption');
     } finally {
       setSubmittingWithdraw(false);
     }
