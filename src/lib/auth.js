@@ -113,9 +113,8 @@ export async function getSessionUser(req, preferredType = 'auto') {
       token = adminToken;
     } else if (playerToken) {
       token = playerToken;
-    } else if (adminToken) {
-      token = adminToken;
     }
+    // Never fall back to admin_session on player routes — keeps admin + player tabs independent
 
     if (!token) return null;
 

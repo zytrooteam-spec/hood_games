@@ -17,6 +17,7 @@ import {
   Gift
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
+import { broadcastPlayerSession } from '@/lib/sessionClient';
 
 export default function AuthModal({
   isOpen,
@@ -50,7 +51,7 @@ export default function AuthModal({
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier: identifier.trim(), password }),
+          body: JSON.stringify({ identifier: identifier.trim(), password, isAdminLogin: false }),
         });
         const data = await res.json();
         if (!data.success) {
@@ -60,6 +61,7 @@ export default function AuthModal({
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('user-sync', { detail: data.user }));
             window.dispatchEvent(new CustomEvent('hood-user-sync', { detail: data.user }));
+            broadcastPlayerSession(data.user);
           }
           if (onSuccess) onSuccess(data.user);
           onClose();
@@ -83,6 +85,7 @@ export default function AuthModal({
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('user-sync', { detail: data.user }));
             window.dispatchEvent(new CustomEvent('hood-user-sync', { detail: data.user }));
+            broadcastPlayerSession(data.user);
           }
           if (onSuccess) onSuccess(data.user);
           onClose();

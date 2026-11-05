@@ -26,7 +26,7 @@ export async function POST(req) {
     await ensureDbInitialized();
     const { identifier, password, isAdminLogin } = await req.json();
     const referer = req.headers.get('referer') || '';
-    const isAdminPortal = Boolean(isAdminLogin || referer.includes('/admin'));
+    const isAdminPortal = isAdminLogin === true || (isAdminLogin !== false && referer.includes('/admin'));
 
     if (!identifier || !password) {
       return NextResponse.json({ success: false, error: 'Username/Email and password required' }, { status: 400 });

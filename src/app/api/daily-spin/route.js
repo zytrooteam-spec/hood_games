@@ -7,7 +7,7 @@ import { WHEEL_SEGMENTS } from '@/lib/wheelConstants';
 export async function GET(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
+    const user = await getSessionUser(req, 'player');
     if (!user) {
       return NextResponse.json({ success: true, canSpin: false, reason: 'Login required' });
     }
@@ -44,7 +44,7 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
+    const user = await getSessionUser(req, 'player');
     if (!user) {
       return NextResponse.json({ success: false, error: 'Please log in to spin the wheel' }, { status: 401 });
     }

@@ -1,19 +1,21 @@
 import { NextResponse } from 'next/server';
 import { getDb, toIdQuery } from '@/lib/mongodb';
-import { getSessionUser } from '@/lib/auth';
+import { getSessionUser, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 
 export async function GET(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
+    const player = await getSessionUser(req, 'player');
+    const admin = await getSessionUser(req, 'admin');
+    const user = player || (admin && isStaffRole(admin.role) ? admin : null);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const db = await getDb();
-    const isStaff = user.role === 'admin' || user.role === 'staff' || user.role === 'superadmin';
+    const isStaff = isStaffRole(user.role) && !player;
 
     let deposits;
     if (isStaff) {
@@ -35,12 +37,21 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
+    const user = await getSessionUser(req, 'player');
     if (!user) {
-      return NextResponse.json({ success: false, error: 'Please log in to deposit' }, { status: 401 });
+      return NextResponse.json(
+        { success: false, error: 'Please log in with your player account to deposit (admin desk uses Finance tab).' },
+        { status: 401 }
+      );
+    }
+    if (isStaffRole(user.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Staff session detected. Open the site in a player tab with a player login to deposit.' },
+        { status: 403 }
+      );
     }
 
-    const { amount, method, senderTag, proofImage, note } = await req.json();
+    const { amount, method, senderTag, proofImage, note, gameTitle, gameAccountUsername } = await req.json();
     const numAmount = Number(amount);
 
     if (isNaN(numAmount) || numAmount < 5) {
@@ -76,6 +87,8 @@ export async function POST(req) {
       senderTag: senderTag || '',
       proofImage: proofImage || null,
       note: note || '',
+      gameTitle: (gameTitle || '').trim() || null,
+      gameAccountUsername: (gameAccountUsername || '').trim() || null,
       status: 'pending',
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -86,7 +99,7 @@ export async function POST(req) {
     // Notify staff desk of new incoming deposit!
     notifyStaff({
       title: `Incoming $${numAmount} Deposit from ${user.username}`,
-      message: `Method: ${method || 'Cash App'} | Tag: ${senderTag || 'N/A'}`,
+      message: `Method: ${method || 'Cash App'} | Game: ${gameTitle || 'Wallet'} | Tag: ${senderTag || 'N/A'}`,
       type: 'deposit_request',
       data: { depositId: res.insertedId.toString() },
     });
@@ -106,8 +119,8 @@ export async function POST(req) {
 export async function PUT(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
-    if (!user || (user.role !== 'admin' && user.role !== 'staff' && user.role !== 'superadmin')) {
+    const user = await getSessionUser(req, 'admin');
+    if (!user || !isStaffRole(user.role)) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Staff access required' }, { status: 403 });
     }
 

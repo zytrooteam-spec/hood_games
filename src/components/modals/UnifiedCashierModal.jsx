@@ -16,7 +16,9 @@ import {
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { hoodAlert } from '@/lib/hoodAlert';
-import { diffSet } from '@/lib/fastDiff';
+import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
+import HoodCashierGameSelect from '@/components/wallet/HoodCashierGameSelect';
+import { getAvailableGamePlatforms } from '@/lib/gamePlatforms';
 
 export default function UnifiedCashierModal({
   isOpen,
@@ -57,6 +59,35 @@ export default function UnifiedCashierModal({
   const [withdrawAddress, setWithdrawAddress] = useState('');
   const [submittingWithdraw, setSubmittingWithdraw] = useState(false);
   const [withdrawSuccess, setWithdrawSuccess] = useState(null);
+  const [adminGames, setAdminGames] = useState([]);
+  const [userGameAccounts, setUserGameAccounts] = useState([]);
+  const [selectedGame, setSelectedGame] = useState('');
+  const [selectedGameWithdraw, setSelectedGameWithdraw] = useState('');
+
+  const loadGamesAndAccounts = () => {
+    fetch('/api/games', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success && Array.isArray(d.games)) {
+          const list = d.games.map((g) => ({ ...g, title: sanitizeGameTitle(g.title) }));
+          diffSet(setAdminGames, list);
+          const names = getAvailableGamePlatforms(list, userGameAccounts);
+          if (!selectedGame && names[0]) setSelectedGame(names[0]);
+          if (!selectedGameWithdraw && names[0]) setSelectedGameWithdraw(names[0]);
+        }
+      })
+      .catch(() => {});
+    if (user?.email) {
+      fetch(`/api/game-accounts?email=${encodeURIComponent(user.email)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d?.success && Array.isArray(d.gameAccounts)) {
+            diffSet(setUserGameAccounts, d.gameAccounts);
+          }
+        })
+        .catch(() => {});
+    }
+  };
 
   // Load payment gateways
   useEffect(() => {
@@ -64,6 +95,7 @@ export default function UnifiedCashierModal({
     setActiveTab(initialTab);
     setDepositSuccess(null);
     setWithdrawSuccess(null);
+    loadGamesAndAccounts();
 
     fetch('/api/payments/methods')
       .then((r) => r.json())
@@ -75,7 +107,14 @@ export default function UnifiedCashierModal({
         }
       })
       .catch(() => {});
-  }, [isOpen, initialTab]);
+  }, [isOpen, initialTab, user?.email]);
+
+  useEffect(() => {
+    if (!isOpen || adminGames.length === 0) return;
+    const names = getAvailableGamePlatforms(adminGames, userGameAccounts);
+    if (names[0] && !selectedGame) setSelectedGame(names[0]);
+    if (names[0] && !selectedGameWithdraw) setSelectedGameWithdraw(names[0]);
+  }, [adminGames, userGameAccounts, isOpen, selectedGame, selectedGameWithdraw]);
 
   const handleCopyTag = (text) => {
     if (!text) return;
@@ -101,6 +140,10 @@ export default function UnifiedCashierModal({
     setSubmittingDeposit(true);
     playTune('click');
 
+    const linked = userGameAccounts.find(
+      (a) => (a.gameTitle || '').toLowerCase().trim() === (selectedGame || '').toLowerCase().trim()
+    );
+
     try {
       const res = await fetch('/api/payments/deposit', {
         method: 'POST',
@@ -111,6 +154,8 @@ export default function UnifiedCashierModal({
           senderTag: senderTag.trim(),
           proofImage: proofImage || null,
           note: depositNote.trim(),
+          gameTitle: selectedGame,
+          gameAccountUsername: linked?.username || '',
         }),
       });
       const data = await res.json();
@@ -156,6 +201,7 @@ export default function UnifiedCashierModal({
           amount: num,
           method: selectedMethod?.name || 'Cash App',
           payoutAddress: withdrawAddress.trim(),
+          gameTitle: selectedGameWithdraw,
         }),
       });
       const data = await res.json();
@@ -181,7 +227,7 @@ export default function UnifiedCashierModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-      <div className="relative w-full max-w-xl rounded-3xl bg-gradient-to-b from-[#0c1b38] via-[#09142a] to-[#070d1e] border-2 border-[#1a3363] p-5 sm:p-7 shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl bg-gradient-to-b from-[#0c1b38] via-[#09142a] to-[#070d1e] border-2 border-[#1a3363] p-5 sm:p-7 shadow-2xl">
         {/* Close Button */}
         <button
           type="button"
@@ -260,6 +306,13 @@ export default function UnifiedCashierModal({
               </div>
             ) : (
               <form onSubmit={handleDepositSubmit} className="space-y-4">
+                <HoodCashierGameSelect
+                  adminGames={adminGames}
+                  userGameAccounts={userGameAccounts}
+                  selectedGame={selectedGame}
+                  onSelectGame={setSelectedGame}
+                />
+
                 {/* 1. Payment Gateway Selection */}
                 <div>
                   <label className="text-xs font-bold text-gray-300 block mb-1.5">
@@ -442,6 +495,14 @@ export default function UnifiedCashierModal({
                   <Clock size={16} className="text-blue-400 shrink-0" />
                   <span>Redemptions are processed within 15–30 minutes directly to your account.</span>
                 </div>
+
+                <HoodCashierGameSelect
+                  adminGames={adminGames}
+                  userGameAccounts={userGameAccounts}
+                  selectedGame={selectedGameWithdraw}
+                  onSelectGame={setSelectedGameWithdraw}
+                  label="Redeem winnings from game"
+                />
 
                 {/* Gateway Selection */}
                 <div>

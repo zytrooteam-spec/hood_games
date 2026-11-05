@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import AdminDashboard from '@/components/admin/AdminDashboard';
 import { ShieldCheck, Lock, User, Eye, EyeOff, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
+import { broadcastAdminSession } from '@/lib/sessionClient';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -70,6 +71,7 @@ export default function AdminPage() {
         const r = (data.user.role || '').toLowerCase();
         if (['admin', 'superadmin', 'staff', 'coin_manager', 'financial_manager', 'support_admin'].includes(r)) {
           setUser(data.user);
+          broadcastAdminSession(data.user);
           playTune('win');
         } else {
           setLoginError('Access Denied: Your account does not have administrative permissions.');
@@ -205,7 +207,10 @@ export default function AdminPage() {
             </form>
 
             {/* Security Warning Notice */}
-            <div className="p-3 rounded-2xl bg-[#070d1e]/80 border border-[#1a3363] text-center space-y-1">
+            <div className="p-3 rounded-2xl bg-[#0e2042]/60 border border-[#2cb64e]/25 text-center space-y-1">
+              <span className="text-[10px] font-bold text-[#2cb64e] block">
+                Dual session: admin here + player login in another tab stays separate
+              </span>
               <span className="text-[10px] font-mono font-bold text-gray-500 block">
                 🔒 Protected by End-to-End Session Encryption
               </span>

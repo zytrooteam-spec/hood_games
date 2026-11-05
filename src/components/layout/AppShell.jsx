@@ -14,6 +14,7 @@ import { unlockAudioContext } from '@/lib/soundAlerts';
 import { Headphones } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { diffSet, areEqual } from '@/lib/fastDiff';
+import { broadcastPlayerSession, subscribePlayerSession } from '@/lib/sessionClient';
 
 export const AppShellContext = createContext({
   user: null,
@@ -45,7 +46,7 @@ export default function AppShell({ children }) {
 
   const fetchUser = async (isSilent = false) => {
     try {
-      const res = await fetch('/api/auth/me');
+      const res = await fetch('/api/auth/me', { cache: 'no-store' });
       const data = await res.json();
       if (data?.success && data?.user) {
         diffSet(setUser, data.user);
@@ -90,20 +91,30 @@ export default function AppShell({ children }) {
     };
     window.addEventListener('user-sync', handleUserSync);
     window.addEventListener('hood-user-sync', handleUserSync);
+    const unsubPlayer = subscribePlayerSession((detail) => {
+      if (detail === undefined) fetchUser(true);
+      else diffSet(setUser, detail);
+    });
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('user-sync', handleUserSync);
       window.removeEventListener('hood-user-sync', handleUserSync);
+      unsubPlayer();
     };
   }, []);
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isAdminLogout: false }),
+    });
     diffSet(setUser, null);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('user-sync', { detail: null }));
       window.dispatchEvent(new CustomEvent('hood-user-sync', { detail: null }));
+      broadcastPlayerSession(null);
     }
     playTune('click');
     router.push('/');

@@ -7,7 +7,7 @@ import { sanitizeGameTitle } from '@/lib/fastDiff';
 export async function GET(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
+    const user = await getSessionUser(req, 'player');
     const { searchParams } = new URL(req.url);
     const queryEmail = searchParams.get('email');
 

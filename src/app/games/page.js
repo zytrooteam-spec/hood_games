@@ -86,7 +86,28 @@ function GamesContent() {
         </Link>
       </div>
 
-      {/* 2. REQUIREMENT #3 PART A: FreeSpin Daily Wheel Section */}
+      {/* 2. All games first (Player Paradise: platforms visible at top of Games tab) */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Gamepad2 size={20} className="text-[#2cb64e]" />
+            <h3 className="text-lg font-black text-white">All Sweepstakes Platforms ({games.length})</h3>
+          </div>
+          <span className="text-xs text-gray-400 hidden sm:inline">Tap a game to request ID or load credits</span>
+        </div>
+
+        <HoodGameGrid
+          games={games}
+          userGameAccounts={userGameAccounts}
+          onRequestGame={(game) => {
+            if (!user) openAuth('login');
+            else setRequestModal({ open: true, game });
+          }}
+          onOpenCashier={() => {}}
+        />
+      </div>
+
+      {/* 3. FreeSpin Daily Wheel Section */}
       <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#0c1b38] via-[#09142a] to-[#070d1e] border-2 border-[#2cb64e]/50 shadow-[0_0_35px_rgba(44,182,78,0.25)] flex flex-col sm:flex-row items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-[#2cb64e]/20 border border-[#2cb64e]/40 flex items-center justify-center text-[#2cb64e] shrink-0 shadow-inner">
@@ -121,32 +142,11 @@ function GamesContent() {
         </div>
       </div>
 
-      {/* 3. REQUIREMENT #3 PART B: Sunday Cashback Calculator */}
+      {/* 4. Sunday Cashback Calculator */}
       <HoodCashbackCalculator
         user={user}
         onOpenCashier={() => {}}
       />
-
-      {/* 4. REQUIREMENT #3 PART C: Master Games List */}
-      <div className="space-y-3 pt-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Gamepad2 size={20} className="text-[#2cb64e]" />
-            <h3 className="text-lg font-black text-white">All Sweepstakes Platforms ({games.length})</h3>
-          </div>
-          <span className="text-xs text-gray-400">Direct Portal Access & Instant Credentials</span>
-        </div>
-
-        <HoodGameGrid
-          games={games}
-          userGameAccounts={userGameAccounts}
-          onRequestGame={(game) => {
-            if (!user) openAuth('login');
-            else setRequestModal({ open: true, game });
-          }}
-          onOpenCashier={() => {}}
-        />
-      </div>
 
       {/* Modals */}
       <GameRequestModal

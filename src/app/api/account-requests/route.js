@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb, toIdQuery } from '@/lib/mongodb';
-import { getSessionUser } from '@/lib/auth';
+import { getSessionUser, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { sanitizeGameTitle } from '@/lib/fastDiff';
@@ -8,13 +8,15 @@ import { sanitizeGameTitle } from '@/lib/fastDiff';
 export async function GET(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
+    const player = await getSessionUser(req, 'player');
+    const admin = await getSessionUser(req, 'admin');
+    const user = player || (admin && isStaffRole(admin.role) ? admin : null);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const db = await getDb();
-    const isStaff = user.role === 'admin' || user.role === 'staff' || user.role === 'superadmin';
+    const isStaff = isStaffRole(user.role) && !player;
 
     let requests;
     if (isStaff) {
@@ -36,7 +38,7 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
+    const user = await getSessionUser(req, 'player');
     if (!user) {
       return NextResponse.json({ success: false, error: 'Please log in to request game accounts' }, { status: 401 });
     }
@@ -100,8 +102,8 @@ export async function POST(req) {
 export async function PUT(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
-    if (!user || (user.role !== 'admin' && user.role !== 'staff' && user.role !== 'superadmin')) {
+    const user = await getSessionUser(req, 'admin');
+    if (!user || !isStaffRole(user.role)) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Staff access required' }, { status: 403 });
     }
 

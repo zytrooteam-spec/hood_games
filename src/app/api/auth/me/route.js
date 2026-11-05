@@ -9,11 +9,12 @@ export async function GET(req) {
     const referer = req.headers.get('referer') || '';
     const isAdminQuery = searchParams.get('admin') === 'true' || referer.includes('/admin');
 
-    const user = await getSessionUser(req, isAdminQuery ? 'admin' : 'player');
+    const sessionType = isAdminQuery ? 'admin' : 'player';
+    const user = await getSessionUser(req, sessionType);
     if (!user) {
-      return NextResponse.json({ success: false, user: null }, { status: 401 });
+      return NextResponse.json({ success: false, user: null, sessionType }, { status: 401 });
     }
-    return NextResponse.json({ success: true, user });
+    return NextResponse.json({ success: true, user, sessionType });
   } catch (err) {
     return NextResponse.json({ success: false, user: null }, { status: 500 });
   }

@@ -17,7 +17,26 @@ import {
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { hoodAlert } from '@/lib/hoodAlert';
-import { diffSet } from '@/lib/fastDiff';
+import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
+import HoodCashierGameSelect from '@/components/wallet/HoodCashierGameSelect';
+import { getAvailableGamePlatforms } from '@/lib/gamePlatforms';
+
+function WalletAccountSync({ user, onAccounts }) {
+  useEffect(() => {
+    if (!user?.email) {
+      onAccounts([]);
+      return;
+    }
+    fetch(`/api/game-accounts?email=${encodeURIComponent(user.email)}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success && Array.isArray(d.gameAccounts)) onAccounts(d.gameAccounts);
+        else onAccounts([]);
+      })
+      .catch(() => onAccounts([]));
+  }, [user?.email, onAccounts]);
+  return null;
+}
 
 export default function WalletPage() {
   const [activeTab, setActiveTab] = useState('deposit');
@@ -32,6 +51,10 @@ export default function WalletPage() {
   const [proofImage, setProofImage] = useState('');
   const [submittingDeposit, setSubmittingDeposit] = useState(false);
   const [depositSuccess, setDepositSuccess] = useState(null);
+  const [adminGames, setAdminGames] = useState([]);
+  const [userGameAccounts, setUserGameAccounts] = useState([]);
+  const [selectedGame, setSelectedGame] = useState('');
+  const [selectedGameWithdraw, setSelectedGameWithdraw] = useState('');
 
   const handleProofChange = (e) => {
     const file = e.target.files?.[0];
@@ -90,10 +113,24 @@ export default function WalletPage() {
 
   useEffect(() => {
     loadPaymentData();
-    // Silent background poll every 6s so payment confirmations update automatically without flicker
+    fetch('/api/games', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success && Array.isArray(d.games)) {
+          const list = d.games.map((g) => ({ ...g, title: sanitizeGameTitle(g.title) }));
+          diffSet(setAdminGames, list);
+        }
+      })
+      .catch(() => {});
     const interval = setInterval(loadPaymentData, 6000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const names = getAvailableGamePlatforms(adminGames, userGameAccounts);
+    if (names[0] && !selectedGame) setSelectedGame(names[0]);
+    if (names[0] && !selectedGameWithdraw) setSelectedGameWithdraw(names[0]);
+  }, [adminGames, userGameAccounts, selectedGame, selectedGameWithdraw]);
 
   const handleCopyTag = (text) => {
     if (!text) return;
@@ -118,6 +155,10 @@ export default function WalletPage() {
     setSubmittingDeposit(true);
     playTune('click');
 
+    const linked = userGameAccounts.find(
+      (a) => (a.gameTitle || '').toLowerCase().trim() === (selectedGame || '').toLowerCase().trim()
+    );
+
     try {
       const res = await fetch('/api/payments/deposit', {
         method: 'POST',
@@ -128,6 +169,8 @@ export default function WalletPage() {
           senderTag: senderTag.trim(),
           proofImage: proofImage || null,
           note: depositNote.trim(),
+          gameTitle: selectedGame,
+          gameAccountUsername: linked?.username || '',
         }),
       });
       const data = await res.json();
@@ -177,6 +220,7 @@ export default function WalletPage() {
           amount: num,
           method: selectedMethod?.name || 'Cash App',
           payoutAddress: withdrawAddress.trim(),
+          gameTitle: selectedGameWithdraw,
         }),
       });
       const data = await res.json();
@@ -202,6 +246,7 @@ export default function WalletPage() {
     <AppShell>
       {({ user, fetchUser, openAuth }) => (
         <div className="space-y-8 animate-in fade-in max-w-4xl mx-auto">
+          <WalletAccountSync user={user} onAccounts={setUserGameAccounts} />
           {/* Header Card */}
           <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#0c1b38] via-[#09142a] to-[#070d1e] border-2 border-[#1a3363] shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
             <div className="space-y-1">
@@ -289,6 +334,13 @@ export default function WalletPage() {
                 </div>
               ) : (
                 <form onSubmit={(e) => handleDeposit(e, user, fetchUser)} className="space-y-5">
+                  <HoodCashierGameSelect
+                    adminGames={adminGames}
+                    userGameAccounts={userGameAccounts}
+                    selectedGame={selectedGame}
+                    onSelectGame={setSelectedGame}
+                  />
+
                   {/* Gateway selector */}
                   <div>
                     <label className="text-xs font-bold text-gray-300 block mb-2">
@@ -467,6 +519,14 @@ export default function WalletPage() {
                     <Clock size={16} className="text-blue-400 shrink-0" />
                     <span>Redemptions are settled within 15–30 minutes directly to your account.</span>
                   </div>
+
+                  <HoodCashierGameSelect
+                    adminGames={adminGames}
+                    userGameAccounts={userGameAccounts}
+                    selectedGame={selectedGameWithdraw}
+                    onSelectGame={setSelectedGameWithdraw}
+                    label="Redeem winnings from game"
+                  />
 
                   <div>
                     <label className="text-xs font-bold text-gray-300 block mb-2">
