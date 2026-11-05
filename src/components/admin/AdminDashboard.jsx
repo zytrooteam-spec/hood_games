@@ -34,7 +34,14 @@ import {
   UserCheck,
   Eye
 } from 'lucide-react';
-import { playTune } from '@/lib/soundAlerts';
+import {
+  playTune,
+  unlockAudioContext,
+  updateFaviconBadge,
+  sendDesktopNotification,
+  requestDesktopNotificationPermission,
+  AVAILABLE_TUNES,
+} from '@/lib/soundAlerts';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import { GamesLibraryTab, GatewaysTab, GameLoadsTab, LedgerTab, StaffTab } from './AdminExtraTabs';
 import AdminImageField from './AdminImageField';
@@ -80,6 +87,187 @@ export default function AdminDashboard({ user, onLogout }) {
   const prevAdminMessageCount = React.useRef(0);
   const lastActiveThreadUser = React.useRef(null);
 
+  const [audioAlertsEnabled, setAudioAlertsEnabled] = useState(true);
+  const [alertTune, setAlertTune] = useState('chaching');
+  const [alertVolume, setAlertVolume] = useState(0.75);
+  const [desktopNotifPerm, setDesktopNotifPerm] = useState('default');
+  const alertsInitializedRef = React.useRef(false);
+  const seenDepositIdsRef = React.useRef(new Set());
+  const seenRedemptionIdsRef = React.useRef(new Set());
+  const seenGameIdReqRef = React.useRef(new Set());
+  const seenLoadReqRef = React.useRef(new Set());
+  const seenChatKeysRef = React.useRef(new Set());
+
+  const playAdminChime = React.useCallback(
+    (overrideTune = null) => {
+      if (!audioAlertsEnabled || typeof window === 'undefined') return;
+      unlockAudioContext();
+      playTune(overrideTune || alertTune, alertVolume);
+    },
+    [audioAlertsEnabled, alertTune, alertVolume]
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const enabled = localStorage.getItem('hood_admin_alert_enabled');
+    if (enabled !== null) setAudioAlertsEnabled(enabled !== 'false');
+    const tune = localStorage.getItem('hood_admin_alert_tune');
+    if (tune) setAlertTune(tune);
+    const vol = localStorage.getItem('hood_admin_alert_volume');
+    if (vol) setAlertVolume(parseFloat(vol) || 0.75);
+    if ('Notification' in window) setDesktopNotifPerm(Notification.permission);
+
+    const onUnlock = () => unlockAudioContext();
+    window.addEventListener('click', onUnlock, { capture: true });
+    window.addEventListener('keydown', onUnlock, { capture: true });
+
+    let bc;
+    try {
+      bc = new BroadcastChannel('hood_staff_alerts');
+      bc.onmessage = (ev) => {
+        if (ev?.data?.silent) return;
+        playAdminChime(ev?.data?.tune);
+      };
+    } catch {
+      bc = null;
+    }
+
+    return () => {
+      window.removeEventListener('click', onUnlock, { capture: true });
+      window.removeEventListener('keydown', onUnlock, { capture: true });
+      bc?.close();
+    };
+  }, [playAdminChime]);
+
+  const syncAdminAlerts = React.useCallback(
+    (depList, redList, reqList, threadList) => {
+      const pendingDeps = (depList || []).filter((d) => (d.status || '').toLowerCase() === 'pending');
+      const pendingReds = (redList || []).filter((r) => (r.status || '').toLowerCase() === 'pending');
+      const pendingReqs = (reqList || []).filter((r) => (r.status || '').toLowerCase() === 'pending');
+      const pendingLoads = pendingReqs.filter((r) => Number(r.transferAmount || 0) > 0);
+      const pendingGameIds = pendingReqs.filter((r) => Number(r.transferAmount || 0) <= 0);
+      const unreadChat = (threadList || []).reduce((s, t) => s + Number(t.unreadCount || 0), 0);
+
+      const totalPending =
+        pendingDeps.length +
+        pendingReds.length +
+        pendingReqs.length +
+        unreadChat;
+
+      updateFaviconBadge(totalPending);
+      if (typeof document !== 'undefined') {
+        document.title =
+          totalPending > 0 ? `(${totalPending > 99 ? '99+' : totalPending}) Hood Admin` : 'Hood Games Admin';
+      }
+
+      const broadcast = (payload) => {
+        try {
+          const ch = new BroadcastChannel('hood_staff_alerts');
+          ch.postMessage(payload);
+          ch.close();
+        } catch {
+          /* ignore */
+        }
+      };
+
+      const notifyNew = (title, body, tab, tune = 'chaching') => {
+        playAdminChime(tune);
+        sendDesktopNotification(title, body, '/admin');
+        broadcast({ title, tune });
+      };
+
+      const track = (items, seenSet, onNew) => {
+        items.forEach((item) => {
+          const id = String(item._id || item.id || item.userId || '');
+          if (!id) return;
+          if (!seenSet.has(id)) {
+            seenSet.add(id);
+            if (alertsInitializedRef.current) onNew(item);
+          }
+        });
+      };
+
+      if (!alertsInitializedRef.current) {
+        pendingDeps.forEach((d) => seenDepositIdsRef.current.add(String(d._id)));
+        pendingReds.forEach((r) => seenRedemptionIdsRef.current.add(String(r._id)));
+        pendingGameIds.forEach((r) => seenGameIdReqRef.current.add(String(r._id)));
+        pendingLoads.forEach((r) => seenLoadReqRef.current.add(String(r._id)));
+        (threadList || []).forEach((t) => {
+          if (Number(t.unreadCount || 0) > 0) {
+            seenChatKeysRef.current.add(`${t.userId}:${t.lastMessage?.createdAt || t.updatedAt || ''}`);
+          }
+        });
+        alertsInitializedRef.current = true;
+        return;
+      }
+
+      track(pendingDeps, seenDepositIdsRef.current, (d) =>
+        notifyNew('💰 New Deposit', `$${Number(d.amount || 0).toFixed(2)} from ${d.username || 'player'}`, 'finance', 'chaching')
+      );
+      track(pendingReds, seenRedemptionIdsRef.current, (r) =>
+        notifyNew('💸 Cashout Request', `$${Number(r.amount || 0).toFixed(2)} — review in Finance`, 'finance', 'bell')
+      );
+      track(pendingGameIds, seenGameIdReqRef.current, (r) =>
+        notifyNew('🎮 Game ID Request', `${r.username || 'Player'} — ${r.gameTitle || 'platform'}`, 'requests', 'marimba')
+      );
+      track(pendingLoads, seenLoadReqRef.current, (r) =>
+        notifyNew('🪙 Coin Load', `${r.username} loaded $${Number(r.transferAmount || 0).toFixed(2)}`, 'game_loads', 'arcade')
+      );
+
+      (threadList || []).forEach((t) => {
+        if (Number(t.unreadCount || 0) <= 0) return;
+        const key = `${t.userId}:${t.lastMessage?.createdAt || t.updatedAt || Date.now()}`;
+        if (!seenChatKeysRef.current.has(key)) {
+          seenChatKeysRef.current.add(key);
+          notifyNew('💬 Live Chat', `New message from ${t.username || 'player'}`, 'chat', 'bell');
+        }
+      });
+    },
+    [playAdminChime]
+  );
+
+  const enableDesktopNotifications = async () => {
+    unlockAudioContext();
+    const perm = await requestDesktopNotificationPermission();
+    setDesktopNotifPerm(perm);
+    if (perm === 'granted') {
+      playAdminChime('bell');
+      sendDesktopNotification(
+        '🔔 Hood Admin Alerts On',
+        'Sound + badge alerts for deposits, cashouts, game requests & chat.',
+        '/admin'
+      );
+    }
+  };
+
+  const pendingFinanceCount =
+    (deposits || []).filter((d) => (d.status || '').toLowerCase() === 'pending').length +
+    (redemptions || []).filter((r) => (r.status || '').toLowerCase() === 'pending').length;
+  const pendingGameIdCount = (accountRequests || []).filter(
+    (r) => (r.status || '').toLowerCase() === 'pending' && Number(r.transferAmount || 0) <= 0
+  ).length;
+  const pendingLoadCount = (accountRequests || []).filter(
+    (r) => (r.status || '').toLowerCase() === 'pending' && Number(r.transferAmount || 0) > 0
+  ).length;
+  const unreadChatCount = (chatThreads || []).reduce((s, t) => s + Number(t.unreadCount || 0), 0);
+
+  const NavCountBadge = ({ count, tone = 'amber' }) => {
+    if (!count || count <= 0) return null;
+    const tones = {
+      amber: 'bg-amber-500 text-black',
+      blue: 'bg-blue-500 text-white',
+      green: 'bg-[#2cb64e] text-black',
+      rose: 'bg-rose-500 text-white',
+    };
+    return (
+      <span
+        className={`min-w-[1.25rem] h-5 px-1 rounded-full text-[10px] font-black flex items-center justify-center ${tones[tone] || tones.amber}`}
+      >
+        {count > 99 ? '99+' : count}
+      </span>
+    );
+  };
+
   // Fetch all admin data (silent polling does not trigger loading indicator)
   const fetchAllData = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
@@ -114,6 +302,15 @@ export default function AdminDashboard({ user, onLogout }) {
       if (usrRes.success && Array.isArray(usrRes.users)) diffSet(setUsersList, usrRes.users);
       if (payRes.success && Array.isArray(payRes.methods)) diffSet(setGateways, payRes.methods);
       if (cbRes.success) diffSet(setCashbackReport, cbRes);
+
+      const depList = depRes.success && Array.isArray(depRes.deposits) ? depRes.deposits : [];
+      const redList = redRes.success && Array.isArray(redRes.redemptions) ? redRes.redemptions : [];
+      const reqList =
+        reqRes.success && Array.isArray(reqRes.requests)
+          ? reqRes.requests.map((r) => ({ ...r, gameTitle: sanitizeGameTitle(r.gameTitle) }))
+          : [];
+      const threadList = chatRes.success && Array.isArray(chatRes.threads) ? chatRes.threads : [];
+      syncAdminAlerts(depList, redList, reqList, threadList);
     } catch (err) {
       console.error(err);
     } finally {
@@ -527,11 +724,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 <Wallet size={16} />
                 <span>Finance & Cashier</span>
               </div>
-              {(stats?.pendingDeposits > 0 || stats?.pendingRedemptions > 0) && (
-                <span className="w-5 h-5 rounded-full bg-amber-500 text-black text-[10px] font-black flex items-center justify-center">
-                  {(stats?.pendingDeposits || 0) + (stats?.pendingRedemptions || 0)}
-                </span>
-              )}
+              <NavCountBadge count={pendingFinanceCount} tone="amber" />
             </button>
 
             <button
@@ -558,9 +751,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 <Coins size={16} />
                 <span>Game Credit Loads</span>
               </div>
-              <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-[#2cb64e] text-[9px] font-black">
-                Coins
-              </span>
+              <NavCountBadge count={pendingLoadCount} tone="green" />
             </button>
 
             <button
@@ -575,11 +766,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 <Key size={16} />
                 <span>Game ID Requests</span>
               </div>
-              {stats?.pendingAccountRequests > 0 && (
-                <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-black flex items-center justify-center">
-                  {stats.pendingAccountRequests}
-                </span>
-              )}
+              <NavCountBadge count={pendingGameIdCount} tone="blue" />
             </button>
 
             <button
@@ -594,9 +781,13 @@ export default function AdminDashboard({ user, onLogout }) {
                 <MessageSquare size={16} />
                 <span>Support (Labels/Notes)</span>
               </div>
-              <span className="px-2 py-0.5 rounded-md bg-[#2cb64e]/20 text-[#2cb64e] text-[9px] font-black uppercase">
-                Live
-              </span>
+              {unreadChatCount > 0 ? (
+                <NavCountBadge count={unreadChatCount} tone="rose" />
+              ) : (
+                <span className="px-2 py-0.5 rounded-md bg-[#2cb64e]/20 text-[#2cb64e] text-[9px] font-black uppercase">
+                  Live
+                </span>
+              )}
             </button>
 
             <button
@@ -675,6 +866,31 @@ export default function AdminDashboard({ user, onLogout }) {
 
         {/* Bottom User Station */}
         <div className="pt-4 border-t border-[#1a3363] space-y-2">
+          <button
+            type="button"
+            onClick={enableDesktopNotifications}
+            className="w-full py-2 rounded-xl bg-[#12244c] text-[10px] font-black uppercase text-cyan-300 hover:text-white border border-cyan-500/30 flex items-center justify-center gap-1.5"
+          >
+            🔔 {desktopNotifPerm === 'granted' ? 'Alerts Enabled' : 'Enable Sound & Desktop Alerts'}
+          </button>
+          <div className="flex items-center gap-2 px-1">
+            <label className="text-[10px] text-gray-400 font-bold shrink-0">Alert sound</label>
+            <select
+              value={alertTune}
+              onChange={(e) => {
+                setAlertTune(e.target.value);
+                localStorage.setItem('hood_admin_alert_tune', e.target.value);
+                playAdminChime(e.target.value);
+              }}
+              className="hood-input flex-1 py-1 px-2 rounded-lg text-[10px] font-bold"
+            >
+              {AVAILABLE_TUNES.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.icon} {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <Link
             href="/"
             className="w-full py-2 rounded-xl bg-[#070d1e] text-xs font-bold text-gray-300 hover:text-white flex items-center justify-center gap-1.5 border border-[#1a3363]"

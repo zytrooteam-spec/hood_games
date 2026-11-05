@@ -10,6 +10,8 @@ import AuthModal from '@/components/modals/AuthModal';
 import HoodDailySpinModal from '@/components/games/HoodDailySpinModal';
 import HoodLiveChatModal from '@/components/chat/HoodLiveChatModal';
 import HoodAppModal from '@/components/modals/HoodAppModal';
+import HoodNotificationsModal from '@/components/modals/HoodNotificationsModal';
+import { unlockAudioContext } from '@/lib/soundAlerts';
 import { Headphones } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { diffSet, areEqual } from '@/lib/fastDiff';
@@ -40,6 +42,8 @@ export default function AppShell({ children }) {
   const [spinModalOpen, setSpinModalOpen] = useState(false);
   const [chatModalOpen, setChatModalOpen] = useState(false);
   const [appModalOpen, setAppModalOpen] = useState(false);
+  const [notifsOpen, setNotifsOpen] = useState(false);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
 
   const fetchUser = async (isSilent = false) => {
     try {
@@ -49,17 +53,34 @@ export default function AppShell({ children }) {
         diffSet(setUser, data.user);
       } else {
         diffSet(setUser, null);
+        setUnreadNotifs(0);
       }
     } catch {
       if (!isSilent) diffSet(setUser, null);
     }
   };
 
+  const fetchUnreadNotifs = async () => {
+    try {
+      const res = await fetch('/api/notifications', { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.notifications) && !notifsOpen) {
+        const unread = data.notifications.filter((n) => !n.read).length;
+        setUnreadNotifs(unread);
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
   useEffect(() => {
+    unlockAudioContext();
     fetchUser();
+    fetchUnreadNotifs();
     // Silent background poll every 6s so balance & status stay in sync without flicker
     const interval = setInterval(() => {
       fetchUser(true);
+      fetchUnreadNotifs();
     }, 6000);
 
     const handleUserSync = (e) => {
@@ -127,6 +148,8 @@ export default function AppShell({ children }) {
           {/* Top Navbar */}
           <HoodNavbar
             user={user}
+            unreadNotifications={unreadNotifs}
+            onOpenNotifications={() => setNotifsOpen(true)}
             onOpenAuth={(tab) => setAuthModal({ open: true, tab })}
             onOpenCashier={() => router.push('/wallet')}
             onOpenSpinWheel={() => router.push('/wheel-spin')}
@@ -195,6 +218,13 @@ export default function AppShell({ children }) {
           isOpen={chatModalOpen}
           onClose={() => setChatModalOpen(false)}
           user={user}
+        />
+
+        <HoodNotificationsModal
+          isOpen={notifsOpen}
+          onClose={() => setNotifsOpen(false)}
+          user={user}
+          onAllRead={() => setUnreadNotifs(0)}
         />
       </div>
     </AppShellContext.Provider>

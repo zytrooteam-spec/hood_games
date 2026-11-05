@@ -18,6 +18,8 @@ import { playTune } from '@/lib/soundAlerts';
 
 export default function HoodNavbar({
   user,
+  unreadNotifications = 0,
+  onOpenNotifications,
   onOpenAuth,
   onOpenCashier,
   onOpenSpinWheel,
@@ -128,6 +130,23 @@ export default function HoodNavbar({
               >
                 <Wallet size={15} />
                 <span className="hidden sm:inline">Wallet</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenNotifications?.();
+                  playTune('bell', 0.55);
+                }}
+                className="relative p-2.5 rounded-2xl bg-[#0c1b38] border border-[#1a3363] text-gray-300 hover:text-white hover:border-amber-500/50 transition-all shadow-sm"
+                title="Notifications"
+              >
+                <Bell size={17} />
+                {unreadNotifications > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-[#09142a]">
+                    {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                  </span>
+                )}
               </button>
 
               {/* Chat Support Button */}

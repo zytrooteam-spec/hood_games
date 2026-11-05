@@ -26,6 +26,8 @@ import HoodDailySpinModal from '@/components/games/HoodDailySpinModal';
 import HoodLiveChatModal from '@/components/chat/HoodLiveChatModal';
 import HoodAppModal from '@/components/modals/HoodAppModal';
 import GameRequestModal from '@/components/modals/GameRequestModal';
+import HoodNotificationsModal from '@/components/modals/HoodNotificationsModal';
+import { unlockAudioContext } from '@/lib/soundAlerts';
 
 import {
   Sparkles,
@@ -66,6 +68,8 @@ export default function HomePage() {
   const [chatModalOpen, setChatModalOpen] = useState(false);
   const [appModalOpen, setAppModalOpen] = useState(false);
   const [requestModal, setRequestModal] = useState({ open: false, game: null });
+  const [notifsOpen, setNotifsOpen] = useState(false);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
 
   // Load Session User
   const fetchUser = async (isSilent = false) => {
@@ -117,9 +121,23 @@ export default function HomePage() {
     }
   };
 
+  const fetchUnreadNotifs = async () => {
+    try {
+      const res = await fetch('/api/notifications', { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.notifications) && !notifsOpen) {
+        setUnreadNotifs(data.notifications.filter((n) => !n.read).length);
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
   useEffect(() => {
+    unlockAudioContext();
     fetchUser();
     fetchSiteData();
+    fetchUnreadNotifs();
 
     const handleUserSync = (e) => {
       if (e.detail) diffSet(setUser, e.detail);
@@ -135,6 +153,7 @@ export default function HomePage() {
     const interval = setInterval(() => {
       fetchUser(true);
       fetchSiteData();
+      fetchUnreadNotifs();
     }, 6000);
 
     return () => {
@@ -180,6 +199,8 @@ export default function HomePage() {
         {/* Top Navbar */}
         <HoodNavbar
           user={user}
+          unreadNotifications={unreadNotifs}
+          onOpenNotifications={() => setNotifsOpen(true)}
           activeView={activeView}
           setActiveView={setActiveView}
           onOpenAuth={(tab) => setAuthModal({ open: true, tab })}
@@ -440,6 +461,13 @@ export default function HomePage() {
       <HoodAppModal
         isOpen={appModalOpen}
         onClose={() => setAppModalOpen(false)}
+      />
+
+      <HoodNotificationsModal
+        isOpen={notifsOpen}
+        onClose={() => setNotifsOpen(false)}
+        user={user}
+        onAllRead={() => setUnreadNotifs(0)}
       />
 
       <GameRequestModal

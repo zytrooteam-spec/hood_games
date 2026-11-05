@@ -6,7 +6,7 @@ import { ensureDbInitialized } from '@/lib/initDb';
 export async function GET(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
+    const user = await getSessionUser(req, 'player');
     if (!user) {
       return NextResponse.json({ success: true, notifications: [] });
     }
@@ -35,7 +35,7 @@ export async function GET(req) {
 export async function PUT(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req);
+    const user = await getSessionUser(req, 'player');
     if (!user) return NextResponse.json({ success: false }, { status: 401 });
 
     const { id } = await req.json();

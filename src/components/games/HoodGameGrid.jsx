@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { Gamepad2, Search, Sparkles, Key, Play, Star, Flame } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
+import HoodGameBadge from '@/components/games/HoodGameBadge';
 
 export default function HoodGameGrid({
   games = [],
@@ -79,9 +80,7 @@ export default function HoodGameGrid({
             >
               {/* Top Banner Tag */}
               <div className="flex items-center justify-between mb-3 z-10">
-                <span className="px-2 py-0.5 rounded-md bg-[#2cb64e]/20 text-[#2cb64e] border border-[#2cb64e]/40 text-[9px] font-black uppercase tracking-wider">
-                  {game.badge || 'HOT'}
-                </span>
+                <HoodGameBadge badge={game.badge || 'HOT'} />
                 <div className="flex items-center gap-1 text-[11px] font-bold text-amber-300">
                   <Star size={12} className="fill-amber-400 text-amber-400" />
                   <span>{game.rating || '4.9'}</span>
