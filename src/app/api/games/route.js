@@ -3,17 +3,53 @@ import { getDb, toIdQuery } from '@/lib/mongodb';
 import { getSessionUser, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { sanitizeGameTitle } from '@/lib/fastDiff';
+import { compressDataUrlIfNeeded } from '@/lib/serverImageCompress';
+
+async function resolveStoredImage(raw) {
+  if (!raw || typeof raw !== 'string') return raw || '';
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('data:image')) {
+    return compressDataUrlIfNeeded(trimmed, { maxChars: 100_000, maxSize: 640, quality: 78 });
+  }
+  return trimmed;
+}
+
+function mapGameForClient(g) {
+  const image = g.image || g.thumbnail || g.imageUrl || '';
+  return {
+    ...g,
+    title: sanitizeGameTitle(g.title),
+    image,
+    thumbnail: image,
+    imageUrl: image,
+    active: g.active !== false && g.isActive !== false,
+    isActive: g.isActive !== false && g.active !== false,
+  };
+}
 
 export async function GET(req) {
   try {
     await ensureDbInitialized();
+    const { searchParams } = new URL(req.url);
+    const all = searchParams.get('all') === 'true';
+    const user = await getSessionUser(req, 'admin');
+    const isAdmin = user && isStaffRole(user.role);
+
     const db = await getDb();
-    const games = await db.collection('games').find({}).sort({ priority: 1, title: 1 }).toArray();
-    const sanitized = games.map((g) => ({
-      ...g,
-      title: sanitizeGameTitle(g.title),
-    }));
-    return NextResponse.json({ success: true, games: sanitized });
+    const query = isAdmin && all ? {} : { isActive: { $ne: false }, active: { $ne: false } };
+
+    const games = await db.collection('games').find(query).sort({ priority: 1, title: 1 }).toArray();
+    const sanitized = games.map(mapGameForClient);
+
+    return NextResponse.json(
+      { success: true, games: sanitized },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+      }
+    );
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
@@ -34,32 +70,42 @@ export async function POST(req) {
       body.title = sanitizeGameTitle(body.title);
     }
 
+    const rawImage = body.image || body.thumbnail || body.imageUrl || '';
+    const resolvedImage = await resolveStoredImage(rawImage);
+    if (resolvedImage) {
+      body.image = resolvedImage;
+      body.thumbnail = resolvedImage;
+      body.imageUrl = resolvedImage;
+    }
+
+    if (body.active !== undefined) body.isActive = Boolean(body.active);
+    if (body.isActive !== undefined) body.active = Boolean(body.isActive);
+
     if (body._id) {
       const { _id, ...updateFields } = body;
-      await db.collection('games').updateOne(
-        toIdQuery(_id),
-        { $set: { ...updateFields, updatedAt: new Date() } }
-      );
+      delete updateFields.id;
+      await db.collection('games').updateOne(toIdQuery(_id), { $set: { ...updateFields, updatedAt: new Date() } });
     } else {
       await db.collection('games').insertOne({
         ...body,
         isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
+        active: body.active !== undefined ? Boolean(body.active) : true,
         createdAt: new Date(),
+        updatedAt: new Date(),
       });
     }
 
     const updated = await db.collection('games').find({}).sort({ priority: 1 }).toArray();
-    const sanitizedUpdated = updated.map((g) => ({
-      ...g,
-      title: sanitizeGameTitle(g.title),
-    }));
-    return NextResponse.json({ success: true, games: sanitizedUpdated });
+    return NextResponse.json({
+      success: true,
+      games: updated.map(mapGameForClient),
+    });
   } catch (err) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    console.error('Games POST error:', err);
+    return NextResponse.json({ success: false, error: err.message || 'Failed to save game' }, { status: 500 });
   }
 }
 
-// DELETE /api/games?id=  (admin only)
 export async function DELETE(req) {
   try {
     await ensureDbInitialized();

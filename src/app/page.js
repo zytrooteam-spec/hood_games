@@ -23,7 +23,6 @@ import HoodGameGrid from '@/components/games/HoodGameGrid';
 import UnifiedCashierModal from '@/components/modals/UnifiedCashierModal';
 import AuthModal from '@/components/modals/AuthModal';
 import HoodDailySpinModal from '@/components/games/HoodDailySpinModal';
-import HoodLiveChatModal from '@/components/chat/HoodLiveChatModal';
 import HoodAppModal from '@/components/modals/HoodAppModal';
 import GameRequestModal from '@/components/modals/GameRequestModal';
 import HoodNotificationsModal from '@/components/modals/HoodNotificationsModal';
@@ -65,7 +64,6 @@ export default function HomePage() {
   const [cashierModal, setCashierModal] = useState({ open: false, tab: 'deposit' });
   const [authModal, setAuthModal] = useState({ open: false, tab: 'login' });
   const [spinModalOpen, setSpinModalOpen] = useState(false);
-  const [chatModalOpen, setChatModalOpen] = useState(false);
   const [appModalOpen, setAppModalOpen] = useState(false);
   const [requestModal, setRequestModal] = useState({ open: false, game: null });
   const [notifsOpen, setNotifsOpen] = useState(false);
@@ -103,7 +101,7 @@ export default function HomePage() {
     try {
       const [setRes, gamesRes] = await Promise.all([
         fetch('/api/admin/settings').then((r) => r.json()).catch(() => ({})),
-        fetch('/api/games').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/games', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
       ]);
 
       if (setRes?.success && setRes?.settings) {
@@ -185,7 +183,7 @@ export default function HomePage() {
         onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
         onOpenSpinWheel={() => setSpinModalOpen(true)}
         onOpenApp={() => setAppModalOpen(true)}
-        onOpenChat={() => setChatModalOpen(true)}
+        onOpenChat={() => router.push('/chat')}
         onOpenAuth={(tab) => setAuthModal({ open: true, tab })}
         onLogout={handleLogout}
       />
@@ -206,7 +204,7 @@ export default function HomePage() {
           onOpenAuth={(tab) => setAuthModal({ open: true, tab })}
           onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
           onOpenSpinWheel={() => setSpinModalOpen(true)}
-          onOpenChat={() => setChatModalOpen(true)}
+          onOpenChat={() => router.push('/chat')}
           onOpenApp={() => setAppModalOpen(true)}
           onLogout={handleLogout}
           onToggleSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
@@ -407,14 +405,14 @@ export default function HomePage() {
         setActiveView={setActiveView}
         onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
         onOpenApp={() => setAppModalOpen(true)}
-        onOpenChat={() => setChatModalOpen(true)}
+        onOpenChat={() => router.push('/chat')}
       />
 
       {/* Floating Support Chat Trigger for Desktop */}
       <button
         type="button"
         onClick={() => {
-          setChatModalOpen(true);
+          router.push('/chat');
           playTune('click');
         }}
         className="hidden md:flex fixed bottom-6 right-6 z-40 p-4 rounded-full btn-hood-green text-white shadow-[0_6px_25px_rgba(44,182,78,0.5)] items-center gap-2 hover:scale-105 transition-transform"
@@ -450,12 +448,6 @@ export default function HomePage() {
         onClose={() => setSpinModalOpen(false)}
         user={user}
         onSuccess={fetchUser}
-      />
-
-      <HoodLiveChatModal
-        isOpen={chatModalOpen}
-        onClose={() => setChatModalOpen(false)}
-        user={user}
       />
 
       <HoodAppModal

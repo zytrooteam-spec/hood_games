@@ -32,8 +32,12 @@ import {
   Coins,
   FileSpreadsheet,
   UserCheck,
-  Eye
+  Eye,
+  Paperclip,
+  RefreshCw as RefreshIcon,
 } from 'lucide-react';
+import { compressImageFile } from '@/lib/imageCompress';
+import HoodChatMessageBubble from '@/components/chat/HoodChatMessageBubble';
 import {
   playTune,
   unlockAudioContext,
@@ -62,6 +66,9 @@ export default function AdminDashboard({ user, onLogout }) {
   const [threadMessages, setThreadMessages] = useState([]);
   const [threadMeta, setThreadMeta] = useState({ labels: [], staffNotes: [] });
   const [chatInput, setChatInput] = useState('');
+  const [chatAttachImage, setChatAttachImage] = useState(null);
+  const [chatAttachUploading, setChatAttachUploading] = useState(false);
+  const adminChatFileRef = React.useRef(null);
   const [newLabelInput, setNewLabelInput] = useState('');
   const [newNoteInput, setNewNoteInput] = useState('');
   const [usersList, setUsersList] = useState([]);
@@ -365,22 +372,43 @@ export default function AdminDashboard({ user, onLogout }) {
   }, [threadMessages, selectedThreadUser]);
 
   // Staff sends reply in chat
+  const handleStaffChatFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setChatAttachUploading(true);
+    try {
+      const dataUrl = await compressImageFile(file, { maxSize: 1200, quality: 0.65, maxChars: 140000 });
+      setChatAttachImage(dataUrl);
+    } catch (err) {
+      alert(err?.message || 'Upload failed');
+    } finally {
+      setChatAttachUploading(false);
+      e.target.value = '';
+    }
+  };
+
   const handleSendReply = async (e) => {
     e.preventDefault();
-    if (!chatInput.trim() || !selectedThreadUser) return;
+    if ((!chatInput.trim() && !chatAttachImage) || !selectedThreadUser) return;
     const text = chatInput.trim();
+    const imageUrl = chatAttachImage;
     setChatInput('');
+    setChatAttachImage(null);
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, userId: selectedThreadUser }),
+        body: JSON.stringify({ text, imageUrl, userId: selectedThreadUser }),
       });
       const data = await res.json();
       if (data?.success) {
         setThreadMessages((prev) => [...prev, data.message]);
         playTune('coin');
+      } else {
+        alert(data.error || 'Failed to send reply');
+        setChatInput(text);
+        setChatAttachImage(imageUrl);
       }
     } catch (e) {
       console.error(e);
@@ -1231,43 +1259,53 @@ export default function AdminDashboard({ user, onLogout }) {
               </div>
 
               <div ref={adminChatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#070d1e]/80">
-                {threadMessages.map((m, idx) => {
-                  const isStaff = m.senderRole === 'staff';
-                  return (
-                    <div
-                      key={m._id || idx}
-                      className={`flex flex-col ${isStaff ? 'items-end' : 'items-start'}`}
-                    >
-                      <span className="text-[9.5px] text-gray-400 mb-0.5">
-                        {m.username} ({m.senderRole})
-                      </span>
-                      <div
-                        className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs ${
-                          isStaff
-                            ? 'btn-hood-green text-white rounded-br-none'
-                            : 'bg-[#12244c] text-white border border-[#1a3363] rounded-bl-none'
-                        }`}
-                      >
-                        {m.text}
-                      </div>
-                    </div>
-                  );
-                })}
+                {threadMessages.map((m, idx) => (
+                  <HoodChatMessageBubble
+                    key={m._id || idx}
+                    message={m}
+                    isMine={m.senderRole === 'staff'}
+                  />
+                ))}
               </div>
 
               {selectedThreadUser && (
-                <form onSubmit={handleSendReply} className="p-2.5 bg-[#0c1b38] border-t border-[#1a3363] flex gap-2">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    className="hood-input flex-1 px-3 py-2 rounded-xl text-xs"
-                    placeholder="Reply as Hood Staff..."
-                  />
-                  <button type="submit" className="btn-hood-green px-4 py-2 rounded-xl text-white text-xs font-bold">
-                    <Send size={14} />
-                  </button>
-                </form>
+                <>
+                  {chatAttachImage ? (
+                    <div className="px-3 py-2 border-t border-[#1a3363] bg-[#0c1b38] flex items-center gap-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={chatAttachImage} alt="" className="h-12 w-12 rounded-lg object-cover border border-[#2cb64e]/40" />
+                      <span className="text-[10px] text-gray-400 flex-1">Attachment ready</span>
+                      <button type="button" onClick={() => setChatAttachImage(null)} className="text-rose-400 text-xs font-bold">
+                        Remove
+                      </button>
+                    </div>
+                  ) : null}
+                  <form onSubmit={handleSendReply} className="p-2.5 bg-[#0c1b38] border-t border-[#1a3363] flex gap-2">
+                    <input ref={adminChatFileRef} type="file" accept="image/*" className="hidden" onChange={handleStaffChatFile} />
+                    <button
+                      type="button"
+                      onClick={() => adminChatFileRef.current?.click()}
+                      disabled={chatAttachUploading}
+                      className="p-2 rounded-xl bg-[#070d1e] border border-[#1a3363] text-gray-300 hover:text-[#2cb64e]"
+                    >
+                      {chatAttachUploading ? <RefreshIcon size={14} className="animate-spin" /> : <Paperclip size={14} />}
+                    </button>
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      className="hood-input flex-1 px-3 py-2 rounded-xl text-xs"
+                      placeholder="Reply as Hood Staff..."
+                    />
+                    <button
+                      type="submit"
+                      disabled={!chatInput.trim() && !chatAttachImage}
+                      className="btn-hood-green px-4 py-2 rounded-xl text-white text-xs font-bold disabled:opacity-50"
+                    >
+                      <Send size={14} />
+                    </button>
+                  </form>
+                </>
               )}
             </div>
 

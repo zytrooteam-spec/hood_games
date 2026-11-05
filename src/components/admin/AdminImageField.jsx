@@ -24,7 +24,7 @@ export default function AdminImageField({
       const dataUrl = await compressImageFile(file, {
         maxSize,
         quality,
-        maxChars: 180000,
+        maxChars: 100000,
       });
       onChange(dataUrl);
     } catch (err) {

@@ -8,7 +8,6 @@ import HoodMobileBottomNav from '@/components/navigation/HoodMobileBottomNav';
 import UnifiedCashierModal from '@/components/modals/UnifiedCashierModal';
 import AuthModal from '@/components/modals/AuthModal';
 import HoodDailySpinModal from '@/components/games/HoodDailySpinModal';
-import HoodLiveChatModal from '@/components/chat/HoodLiveChatModal';
 import HoodAppModal from '@/components/modals/HoodAppModal';
 import HoodNotificationsModal from '@/components/modals/HoodNotificationsModal';
 import { unlockAudioContext } from '@/lib/soundAlerts';
@@ -40,7 +39,6 @@ export default function AppShell({ children }) {
   const [cashierModal, setCashierModal] = useState({ open: false, tab: 'deposit' });
   const [authModal, setAuthModal] = useState({ open: false, tab: 'login' });
   const [spinModalOpen, setSpinModalOpen] = useState(false);
-  const [chatModalOpen, setChatModalOpen] = useState(false);
   const [appModalOpen, setAppModalOpen] = useState(false);
   const [notifsOpen, setNotifsOpen] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
@@ -116,7 +114,7 @@ export default function AppShell({ children }) {
     fetchUser,
     openAuth: (tab) => setAuthModal({ open: true, tab: tab || 'login' }),
     openCashier: (tab) => router.push('/wallet'),
-    openChat: () => setChatModalOpen(true),
+    openChat: () => router.push('/chat'),
     openSpin: () => router.push('/wheel-spin'),
     openApp: () => router.push('/download-app'),
   };
@@ -134,7 +132,7 @@ export default function AppShell({ children }) {
           onOpenCashier={() => router.push('/wallet')}
           onOpenSpinWheel={() => router.push('/wheel-spin')}
           onOpenApp={() => router.push('/download-app')}
-          onOpenChat={() => setChatModalOpen(true)}
+          onOpenChat={() => router.push('/chat')}
           onOpenAuth={(tab) => setAuthModal({ open: true, tab })}
           onLogout={handleLogout}
         />
@@ -153,7 +151,7 @@ export default function AppShell({ children }) {
             onOpenAuth={(tab) => setAuthModal({ open: true, tab })}
             onOpenCashier={() => router.push('/wallet')}
             onOpenSpinWheel={() => router.push('/wheel-spin')}
-            onOpenChat={() => setChatModalOpen(true)}
+            onOpenChat={() => router.push('/chat')}
             onOpenApp={() => router.push('/download-app')}
             onLogout={handleLogout}
             onToggleSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
@@ -186,14 +184,14 @@ export default function AppShell({ children }) {
         <HoodMobileBottomNav
           onOpenCashier={() => router.push('/wallet')}
           onOpenApp={() => router.push('/download-app')}
-          onOpenChat={() => setChatModalOpen(true)}
+          onOpenChat={() => router.push('/chat')}
         />
 
         {/* Floating Support Chat Trigger for Desktop */}
         <button
           type="button"
           onClick={() => {
-            setChatModalOpen(true);
+            router.push('/chat');
             playTune('click');
           }}
           className="hidden md:flex fixed bottom-6 right-6 z-40 p-4 rounded-full btn-hood-green text-white shadow-[0_6px_25px_rgba(44,182,78,0.5)] items-center gap-2 hover:scale-105 transition-transform"
@@ -212,12 +210,6 @@ export default function AppShell({ children }) {
             setUser(u);
             fetchUser();
           }}
-        />
-
-        <HoodLiveChatModal
-          isOpen={chatModalOpen}
-          onClose={() => setChatModalOpen(false)}
-          user={user}
         />
 
         <HoodNotificationsModal

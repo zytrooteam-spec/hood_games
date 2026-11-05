@@ -89,20 +89,19 @@ export default function HoodMobileBottomNav({
         </Link>
 
         {/* 5. Chat Support */}
-        <button
-          type="button"
-          onClick={() => {
-            if (onOpenChat) onOpenChat();
-            playTune('click');
-          }}
-          className="flex flex-col items-center justify-center py-1 text-gray-400 hover:text-gray-200 transition-all active:scale-95 relative"
+        <Link
+          href="/chat"
+          onClick={() => playTune('click')}
+          className={`flex flex-col items-center justify-center py-1 transition-all active:scale-95 relative ${
+            pathname === '/chat' ? 'text-[#2cb64e] scale-105' : 'text-gray-400 hover:text-gray-200'
+          }`}
         >
           <div className="relative">
             <MessageSquare size={20} />
             <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[#2cb64e] animate-pulse" />
           </div>
           <span className="text-[10px] font-black mt-1 tracking-tight">Support</span>
-        </button>
+        </Link>
       </div>
     </div>
   );

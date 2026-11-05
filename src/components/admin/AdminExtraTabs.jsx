@@ -59,7 +59,10 @@ export function GamesLibraryTab() {
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
-    fetch('/api/games').then((r) => r.json()).then((d) => d?.success && diffSet(setGames, d.games || [])).catch(() => {});
+    fetch('/api/games?all=true', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => d?.success && diffSet(setGames, d.games || []))
+      .catch(() => {});
   }, []);
   useEffect(() => { load(); const i = setInterval(load, 8000); return () => clearInterval(i); }, [load]);
 
@@ -70,7 +73,7 @@ export function GamesLibraryTab() {
       const body = { ...editing, priority: Number(editing.priority || 10), active: !!editing.active, isActive: !!editing.active };
       const res = await fetch('/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await res.json();
-      if (!d.success) return alert(d.error || 'Failed to save game');
+      if (!res.ok || !d.success) return alert(d.error || 'Failed to save game (image may be too large — try a smaller file)');
       playTune('coin');
       setEditing(null);
       load();

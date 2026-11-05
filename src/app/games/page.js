@@ -19,7 +19,7 @@ function GamesContent() {
   const [spinModalOpen, setSpinModalOpen] = useState(false);
 
   const loadGames = () => {
-    fetch('/api/games')
+    fetch('/api/games', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
         if (d?.success && Array.isArray(d?.games)) {
