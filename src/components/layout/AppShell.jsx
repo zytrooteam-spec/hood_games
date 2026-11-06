@@ -132,7 +132,7 @@ export default function AppShell({ children }) {
 
   return (
     <AppShellContext.Provider value={contextValue}>
-      <div className="min-h-screen bg-[#070d1e] text-slate-100 flex flex-col">
+      <div className="min-h-screen bg-[#0a1628] text-slate-100 flex flex-col">
         {/* 1. Player Navigation Sidebar with All Handwritten Items Navigating to Dedicated Routes */}
         <HoodPlayerSidebar
           user={user}
@@ -217,6 +217,9 @@ export default function AppShell({ children }) {
           isOpen={authModal.open}
           initialTab={authModal.tab}
           onClose={() => setAuthModal({ open: false, tab: 'login' })}
+          onOpenCashier={(tab) => {
+            router.push(`/wallet?tab=${encodeURIComponent(tab || 'withdraw')}`);
+          }}
           onSuccess={(u) => {
             setUser(u);
             fetchUser();

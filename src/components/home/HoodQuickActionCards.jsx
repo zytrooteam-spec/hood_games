@@ -27,6 +27,7 @@ const ICON_MAP = {
 
 export default function HoodQuickActionCards({
   customCards = [],
+  landingMode = false,
   onOpenCashier,
   onOpenSpinWheel,
   setActiveView,
@@ -100,6 +101,7 @@ export default function HoodQuickActionCards({
 
   const handleCardClick = (card) => {
     playTune('click');
+    if (landingMode) return;
     if (card.tab === 'deposit') {
       if (onOpenCashier) onOpenCashier('deposit');
     } else if (card.tab === 'withdraw') {
@@ -118,20 +120,36 @@ export default function HoodQuickActionCards({
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 my-6">
+    <div
+      className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 my-6 ${landingMode ? 'md:grid' : ''}`}
+    >
       {cardsToRender.map((c, i) => {
         const IconComponent = ICON_MAP[c.icon] || Wallet;
         return (
           <div
             key={c.id || i}
-            onClick={() => handleCardClick(c)}
+            role={landingMode ? undefined : 'button'}
+            tabIndex={landingMode ? undefined : 0}
+            onClick={landingMode ? undefined : () => handleCardClick(c)}
+            onKeyDown={
+              landingMode
+                ? undefined
+                : (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleCardClick(c);
+                    }
+                  }
+            }
             className={`p-4 rounded-2xl bg-gradient-to-br ${
               c.gradient || 'from-[#0c1b38] via-[#09142a] to-[#070d1e]'
             } border ${
               c.border || 'border-[#1a3363] hover:border-[#2cb64e]'
             } ${
               c.glow || 'hover:shadow-[0_10px_30px_rgba(44,182,78,0.3)]'
-            } transition-all duration-300 cursor-pointer shadow-lg group flex flex-col justify-between min-h-[125px] relative overflow-hidden`}
+            } transition-all duration-300 ${
+              landingMode ? 'pointer-events-none select-none opacity-90 max-md:cursor-default' : 'cursor-pointer'
+            } shadow-lg group flex flex-col justify-between min-h-[125px] relative overflow-hidden`}
           >
             {/* Top Row: Icon + Badge */}
             <div className="flex items-center justify-between z-10">
@@ -153,7 +171,9 @@ export default function HoodQuickActionCards({
                 <h4 className="font-extrabold text-sm text-white group-hover:text-[#2cb64e] transition-colors leading-snug">
                   {c.title}
                 </h4>
-                <ArrowUpRight className="w-4 h-4 text-gray-400 group-hover:text-[#2cb64e] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-1" />
+                {!landingMode && (
+                  <ArrowUpRight className="w-4 h-4 text-gray-400 group-hover:text-[#2cb64e] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0 ml-1" />
+                )}
               </div>
               <p className="text-[11px] text-gray-400 font-medium mt-1 leading-snug line-clamp-2">
                 {c.subtitle}

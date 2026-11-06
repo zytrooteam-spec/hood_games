@@ -9,6 +9,7 @@ import {
   Mail,
   Phone,
   ArrowRight,
+  ArrowUpRight,
   ShieldCheck,
   Sparkles,
   Eye,
@@ -18,12 +19,12 @@ import {
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { broadcastPlayerSession } from '@/lib/sessionClient';
-
 export default function AuthModal({
   isOpen,
   initialTab = 'login',
   onClose,
   onSuccess,
+  onOpenCashier,
 }) {
   const [tab, setTab] = useState(initialTab);
   const [identifier, setIdentifier] = useState('');
@@ -36,7 +37,8 @@ export default function AuthModal({
   const [error, setError] = useState('');
 
   React.useEffect(() => {
-    setTab(initialTab);
+    if (initialTab === 'withdraw' || initialTab === 'redeem') setTab('redeem');
+    else setTab(initialTab === 'register' ? 'register' : initialTab === 'login' ? 'login' : 'login');
     setError('');
   }, [isOpen, initialTab]);
 
@@ -47,7 +49,7 @@ export default function AuthModal({
     playTune('click');
 
     try {
-      if (tab === 'login') {
+      if (tab === 'login' || tab === 'redeem') {
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -64,6 +66,7 @@ export default function AuthModal({
             broadcastPlayerSession(data.user);
           }
           if (onSuccess) onSuccess(data.user);
+          if (tab === 'redeem' && onOpenCashier) onOpenCashier('withdraw');
           onClose();
         }
       } else {
@@ -126,22 +129,30 @@ export default function AuthModal({
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#2cb64e]/15 border border-[#2cb64e]/40 text-[#2cb64e] text-xs font-black uppercase tracking-wider">
             <Sparkles size={13} className="text-emerald-400 animate-pulse" />
-            <span>{tab === 'login' ? 'WELCOME BACK PLAYER' : 'INSTANT $5.00 SC BONUS ON SIGNUP'}</span>
+            <span>
+              {tab === 'login'
+                ? 'WELCOME BACK PLAYER'
+                : tab === 'redeem'
+                  ? 'SECURE LOGIN FOR CASHOUT'
+                  : 'INSTANT $5.00 SC BONUS ON SIGNUP'}
+            </span>
           </div>
 
           <h3 className="text-2xl font-black text-white tracking-tight">
-            {tab === 'login' ? 'Log In to Hood Games' : 'Create Free VIP Account'}
+            {tab === 'login' ? 'Log In to Hood Games' : tab === 'redeem' ? 'Log in to redeem' : 'Create Free VIP Account'}
           </h3>
           <p className="text-xs text-gray-400">
             {tab === 'login'
               ? 'Access your sweeps wallet, games catalog, and 24/7 support.'
-              : 'Sign up in 30 seconds to claim free sweeps credits and start playing.'}
+              : tab === 'redeem'
+                ? 'Sign in to verify your account, then we open deposit & redeem in one wallet section.'
+                : 'Sign up in 30 seconds to claim free sweeps credits and start playing.'}
           </p>
         </div>
 
         {/* Tab Toggle Switcher */}
         <div className="flex items-center justify-center mb-6">
-          <div className="p-1 rounded-2xl bg-[#070d1e] border border-[#1a3363] flex items-center gap-1 w-full max-w-xs">
+          <div className="p-1 rounded-2xl bg-[#070d1e] border border-[#1a3363] flex items-center gap-1 w-full max-w-md">
             <button
               type="button"
               onClick={() => {
@@ -155,25 +166,39 @@ export default function AuthModal({
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              Sign In
+              Login
             </button>
             <button
               type="button"
               onClick={() => {
-                setTab('register');
+                setTab('redeem');
                 setError('');
                 playTune('click');
               }}
               className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                tab === 'register'
-                  ? 'btn-hood-green text-white shadow-md'
+                tab === 'redeem'
+                  ? 'bg-blue-600 text-white shadow-md border border-blue-400/50'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              Register
+              Redeem
             </button>
           </div>
         </div>
+        <p className="text-center text-[11px] text-gray-500 -mt-3 mb-4">
+          New here?{' '}
+          <button
+            type="button"
+            onClick={() => {
+              setTab('register');
+              setError('');
+              playTune('click');
+            }}
+            className="text-[#2cb64e] font-bold hover:underline"
+          >
+            Create a free account
+          </button>
+        </p>
 
         {/* Error Alert Banner */}
         {error && (
@@ -185,7 +210,7 @@ export default function AuthModal({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {tab === 'login' ? (
+          {tab === 'login' || tab === 'redeem' ? (
             <>
               <div>
                 <label className="text-xs font-bold text-gray-300 block mb-1.5">
@@ -310,16 +335,24 @@ export default function AuthModal({
           <button
             type="submit"
             disabled={loading}
-            className="w-full btn-hood-green py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_4px_22px_rgba(44,182,78,0.5)] mt-5"
+            className={`w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 mt-5 ${
+              tab === 'redeem'
+                ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg border border-blue-400/40'
+                : tab === 'register'
+                  ? 'btn-hood-green shadow-[0_4px_22px_rgba(44,182,78,0.5)]'
+                  : 'btn-hood-green shadow-[0_4px_22px_rgba(44,182,78,0.5)]'
+            }`}
           >
             <span>
               {loading
                 ? 'Validating Account...'
                 : tab === 'login'
-                ? 'Sign In to Account'
-                : 'Create Account & Claim $5 SC Free'}
+                  ? 'Sign in'
+                  : tab === 'redeem'
+                    ? 'Sign in & open redeem'
+                    : 'Create Account & Claim $5 SC Free'}
             </span>
-            <ArrowRight size={16} />
+            {tab === 'redeem' ? <ArrowUpRight size={16} /> : <ArrowRight size={16} />}
           </button>
         </form>
 

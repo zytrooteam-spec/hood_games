@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import AppShell from '@/components/layout/AppShell';
 import {
   Wallet,
@@ -22,7 +23,7 @@ import HoodCashierGameSelect from '@/components/wallet/HoodCashierGameSelect';
 import { getAvailableGamePlatforms } from '@/lib/gamePlatforms';
 
 function WalletAccountSync({ user, onAccounts }) {
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!user?.email) {
       onAccounts([]);
       return;
@@ -35,10 +36,16 @@ function WalletAccountSync({ user, onAccounts }) {
       })
       .catch(() => onAccounts([]));
   }, [user?.email, onAccounts]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
   return null;
 }
 
-export default function WalletPage() {
+function WalletPageInner() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState('deposit');
   const [methods, setMethods] = useState([]);
   const [selectedMethod, setSelectedMethod] = useState(null);
@@ -110,6 +117,12 @@ export default function WalletPage() {
       })
       .catch(() => {});
   };
+
+  useEffect(() => {
+    const t = (searchParams.get('tab') || '').toLowerCase();
+    if (t === 'withdraw' || t === 'redeem' || t === 'cashout') setActiveTab('withdraw');
+    else if (t === 'deposit') setActiveTab('deposit');
+  }, [searchParams]);
 
   useEffect(() => {
     loadPaymentData();
@@ -573,5 +586,19 @@ export default function WalletPage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+export default function WalletPage() {
+  return (
+    <Suspense
+      fallback={
+        <AppShell>
+          <div className="max-w-4xl mx-auto py-16 text-center text-gray-400 text-sm">Loading wallet…</div>
+        </AppShell>
+      }
+    >
+      <WalletPageInner />
+    </Suspense>
   );
 }

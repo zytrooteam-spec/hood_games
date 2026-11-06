@@ -21,7 +21,7 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body className="font-sans bg-[#070d1e] text-slate-100 antialiased min-h-screen selection:bg-[#2cb64e] selection:text-white">
+      <body className="font-sans bg-[#0a1628] text-slate-100 antialiased min-h-screen selection:bg-[#2cb64e] selection:text-white">
         <ClientProviders>{children}</ClientProviders>
       </body>
     </html>

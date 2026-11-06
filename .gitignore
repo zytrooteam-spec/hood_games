@@ -12,3 +12,7 @@ android/.gradle
 .env.*.local
 .env.production
 
+# Firebase Admin SDK (never commit)
+firebase-service-account.json
+*firebase-adminsdk*.json
+

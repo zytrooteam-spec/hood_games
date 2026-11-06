@@ -9,9 +9,10 @@
   --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
-  --hood-bg: #070d1e;
-  --hood-navy: #09142a;
-  --hood-blue: #0c1b38;
+  /* Deep blue canvas (brand: blue field + green CTAs) */
+  --hood-bg: #0a1628;
+  --hood-navy: #0c1f3d;
+  --hood-blue: #0e2650;
   --hood-blue-light: #12244c;
   --hood-card: #0e2042;
   --hood-card-hover: #132a56;
@@ -43,7 +44,7 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background-color: #070d1e;
+  background-color: var(--hood-bg);
   color: #f1f5f9;
   font-family: var(--font-body);
   overflow-x: hidden;
@@ -67,7 +68,7 @@ h6,
   height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: #070d1e;
+  background: var(--hood-bg);
 }
 ::-webkit-scrollbar-thumb {
   background: #1a3363;

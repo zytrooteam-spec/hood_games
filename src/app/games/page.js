@@ -62,7 +62,7 @@ function GamesContent() {
 
   return (
     <div className="space-y-8 animate-in fade-in">
-      {/* 1. Header */}
+      {/* Page intro (wallet CTA — requirements: wheel → cashback → games on this tab) */}
       <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#0c1b38] via-[#091733] to-[#070d1e] border-2 border-[#1a3363] shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#2cb64e]/15 border border-[#2cb64e]/30 text-[#2cb64e] text-xs font-black uppercase tracking-wider">
@@ -70,10 +70,10 @@ function GamesContent() {
             <span>Verified Sweeps Arcade</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Master Sweepstakes Platforms
+            Games hub
           </h1>
           <p className="text-xs sm:text-sm text-gray-300">
-            Spin the daily wheel, calculate your Sunday cashback, and play verified sweeps platforms.
+            Daily wheel first, then Sunday cashback calculator, then all platforms — same order on mobile bottom nav &quot;Games&quot;.
           </p>
         </div>
 
@@ -82,32 +82,11 @@ function GamesContent() {
           className="btn-hood-green px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg flex items-center gap-2"
         >
           <Zap size={15} />
-          <span>Deposit & Load Credits</span>
+          <span>Deposit &amp; redeem</span>
         </Link>
       </div>
 
-      {/* 2. All games first (Player Paradise: platforms visible at top of Games tab) */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Gamepad2 size={20} className="text-[#2cb64e]" />
-            <h3 className="text-lg font-black text-white">All Sweepstakes Platforms ({games.length})</h3>
-          </div>
-          <span className="text-xs text-gray-400 hidden sm:inline">Tap a game to request ID or load credits</span>
-        </div>
-
-        <HoodGameGrid
-          games={games}
-          userGameAccounts={userGameAccounts}
-          onRequestGame={(game) => {
-            if (!user) openAuth('login');
-            else setRequestModal({ open: true, game });
-          }}
-          onOpenCashier={() => {}}
-        />
-      </div>
-
-      {/* 3. FreeSpin Daily Wheel Section */}
+      {/* 1. FreeSpin Daily Wheel (first) */}
       <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#0c1b38] via-[#09142a] to-[#070d1e] border-2 border-[#2cb64e]/50 shadow-[0_0_35px_rgba(44,182,78,0.25)] flex flex-col sm:flex-row items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-[#2cb64e]/20 border border-[#2cb64e]/40 flex items-center justify-center text-[#2cb64e] shrink-0 shadow-inner">
@@ -142,11 +121,32 @@ function GamesContent() {
         </div>
       </div>
 
-      {/* 4. Sunday Cashback Calculator */}
+      {/* 2. Sunday Cashback Calculator */}
       <HoodCashbackCalculator
         user={user}
         onOpenCashier={() => {}}
       />
+
+      {/* 3. All platforms grid (last) */}
+      <div className="space-y-3 pt-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Gamepad2 size={20} className="text-[#2cb64e]" />
+            <h3 className="text-lg font-black text-white">All sweepstakes platforms ({games.length})</h3>
+          </div>
+          <span className="text-xs text-gray-400 hidden sm:inline">Request credentials or load credits</span>
+        </div>
+
+        <HoodGameGrid
+          games={games}
+          userGameAccounts={userGameAccounts}
+          onRequestGame={(game) => {
+            if (!user) openAuth('login');
+            else setRequestModal({ open: true, game });
+          }}
+          onOpenCashier={() => {}}
+        />
+      </div>
 
       {/* Modals */}
       <GameRequestModal

@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "990841046637",
-    "project_id": "playerparadisehub",
-    "storage_bucket": "playerparadisehub.firebasestorage.app"
+    "project_number": "951019321706",
+    "project_id": "hood-games-29b07",
+    "storage_bucket": "hood-games-29b07.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:990841046637:android:d1a78a0cca8bbfffaca164",
+        "mobilesdk_app_id": "1:951019321706:android:266c541abb2d80acbe8d13",
         "android_client_info": {
-          "package_name": "com.playersparadise.app"
+          "package_name": "com.hoodgames.app"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyC1Net-3v6_ElrpBq0HcWCErX-eBtuhrlE"
+          "current_key": "AIzaSyBZZ_BDeRzHxlLNgIfW-3obqxJgmlbqb00"
         }
       ],
       "services": {

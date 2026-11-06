@@ -50,6 +50,15 @@ export default function HomePage() {
 
   // Navigation view: 'home' or 'games'
   const [activeView, setActiveView] = useState('home');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
 
   // Sidebar state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -186,7 +195,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#070d1e] text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-[#0a1628] text-slate-100 flex flex-col">
       {/* 1. Player Side Navigation Sidebar (Desktop collapsible & Mobile drawer) */}
       <HoodPlayerSidebar
         user={user}
@@ -242,18 +251,28 @@ export default function HomePage() {
                 setActiveView={setActiveView}
                 heroBackgroundUrl={settings?.heroBackgroundUrl}
                 jackpotBannerUrl={settings?.jackpotBannerUrl}
+                isMobileOnlyHome={isMobile && activeView === 'home'}
               />
 
               {/* Winning of Random Clients Bar (Requirement #5) */}
               <HoodWinnersTicker />
 
-              {/* 5 Quick Action Boxes Under Ticker (Requirement #6) */}
               <HoodQuickActionCards
                 customCards={settings?.quickActionCards || []}
+                landingMode={isMobile && activeView === 'home'}
                 onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
                 onOpenSpinWheel={() => setSpinModalOpen(true)}
                 setActiveView={setActiveView}
               />
+              {isMobile && activeView === 'home' && (
+                <div className="md:hidden p-4 rounded-2xl bg-[#0c1f3d]/80 border border-[#1a3363] text-center -mt-2">
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    Use the bottom bar: <strong className="text-gray-200">Games</strong> for wheel &amp; catalog,{' '}
+                    <strong className="text-gray-200">Wallet</strong> for deposit &amp; redeem,{' '}
+                    <strong className="text-gray-200">Support</strong> for live chat.
+                  </p>
+                </div>
+              )}
 
               {/* Explanatory Cards: What Hood Games Offers */}
               <div className="pt-2 space-y-5">
@@ -302,8 +321,8 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Informational CTA to Explore Games */}
-                <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#0c1b38] via-[#0e2042] to-[#0c1b38] border-2 border-[#1a3363] flex flex-col sm:flex-row items-center justify-between gap-5 mt-4 shadow-xl">
+                {/* Informational CTA — desktop/tablet only (mobile Home stays non-operational) */}
+                <div className="hidden md:flex p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#0c1b38] via-[#0e2042] to-[#0c1b38] border-2 border-[#1a3363] flex-col sm:flex-row items-center justify-between gap-5 mt-4 shadow-xl">
                   <div className="space-y-1">
                     <h4 className="text-lg sm:text-xl font-black text-white">
                       Ready to Explore the Games & Wheel?
@@ -418,8 +437,6 @@ export default function HomePage() {
 
       {/* 2. Mobile Bottom Navigation Bar (Requirement #3) */}
       <HoodMobileBottomNav
-        activeView={activeView}
-        setActiveView={setActiveView}
         onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
         onOpenApp={() => setAppModalOpen(true)}
         onOpenChat={() => router.push('/chat')}
@@ -454,6 +471,7 @@ export default function HomePage() {
         isOpen={authModal.open}
         initialTab={authModal.tab}
         onClose={() => setAuthModal({ open: false, tab: 'login' })}
+        onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'withdraw' })}
         onSuccess={(u) => {
           setUser(u);
           fetchUser();
