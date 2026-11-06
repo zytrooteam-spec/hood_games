@@ -26,7 +26,16 @@ export async function POST(req) {
     await ensureDbInitialized();
     const { identifier, password, isAdminLogin } = await req.json();
     const referer = req.headers.get('referer') || '';
-    const isAdminPortal = isAdminLogin === true || (isAdminLogin !== false && referer.includes('/admin'));
+    let pathname = '';
+    try {
+      pathname = new URL(referer || 'http://local').pathname || '';
+    } catch {
+      pathname = '';
+    }
+    const isExplicitPlayer = isAdminLogin === false;
+    const isAdminPortal =
+      isAdminLogin === true ||
+      (!isExplicitPlayer && (referer.includes('/admin') || pathname.startsWith('/admin')));
 
     if (!identifier || !password) {
       return NextResponse.json({ success: false, error: 'Username/Email and password required' }, { status: 400 });

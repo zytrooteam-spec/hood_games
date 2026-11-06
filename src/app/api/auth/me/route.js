@@ -7,7 +7,20 @@ export async function GET(req) {
     await ensureDbInitialized();
     const { searchParams } = new URL(req.url);
     const referer = req.headers.get('referer') || '';
-    const isAdminQuery = searchParams.get('admin') === 'true' || referer.includes('/admin');
+    let pathname = '';
+    try {
+      pathname = new URL(req.url).pathname || '';
+    } catch {
+      pathname = '';
+    }
+    const sessionHint = searchParams.get('session');
+    const forcePlayer =
+      sessionHint === 'player' ||
+      sessionHint === 'players' ||
+      (referer && !referer.includes('/admin') && referer.includes('session=player'));
+    const isAdminQuery =
+      !forcePlayer &&
+      (searchParams.get('admin') === 'true' || referer.includes('/admin') || pathname.startsWith('/admin'));
 
     const sessionType = isAdminQuery ? 'admin' : 'player';
     const user = await getSessionUser(req, sessionType);

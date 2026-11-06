@@ -46,7 +46,7 @@ export default function AppShell({ children }) {
 
   const fetchUser = async (isSilent = false) => {
     try {
-      const res = await fetch('/api/auth/me', { cache: 'no-store' });
+      const res = await fetch('/api/auth/me?session=player', { cache: 'no-store' });
       const data = await res.json();
       if (data?.success && data?.user) {
         diffSet(setUser, data.user);

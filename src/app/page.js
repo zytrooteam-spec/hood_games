@@ -43,6 +43,7 @@ import {
   Coins
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
+import { broadcastPlayerSession, subscribePlayerSession } from '@/lib/sessionClient';
 
 export default function HomePage() {
   const router = useRouter();
@@ -72,7 +73,7 @@ export default function HomePage() {
   // Load Session User
   const fetchUser = async (isSilent = false) => {
     try {
-      const res = await fetch('/api/auth/me');
+      const res = await fetch('/api/auth/me?session=player', { cache: 'no-store' });
       const data = await res.json();
       if (data?.success && data?.user) {
         diffSet(setUser, data.user);
@@ -146,6 +147,14 @@ export default function HomePage() {
     };
     window.addEventListener('user-sync', handleUserSync);
     window.addEventListener('hood-user-sync', handleUserSync);
+    const unsubPlayer = subscribePlayerSession((detail) => {
+      if (detail === undefined) fetchUser(true);
+      else {
+        diffSet(setUser, detail);
+        if (detail?.email) loadUserAccounts(detail.email);
+        else diffSet(setUserGameAccounts, []);
+      }
+    });
 
     // Silent background polling every 6s (no loading spinners, no re-render flicker)
     const interval = setInterval(() => {
@@ -158,13 +167,21 @@ export default function HomePage() {
       clearInterval(interval);
       window.removeEventListener('user-sync', handleUserSync);
       window.removeEventListener('hood-user-sync', handleUserSync);
+      unsubPlayer();
     };
   }, []);
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isAdminLogout: false }),
+    });
     diffSet(setUser, null);
     diffSet(setUserGameAccounts, []);
+    if (typeof window !== 'undefined') {
+      broadcastPlayerSession(null);
+    }
     playTune('click');
   };
 

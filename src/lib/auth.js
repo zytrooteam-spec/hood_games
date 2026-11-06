@@ -98,9 +98,16 @@ export async function getSessionUser(req, preferredType = 'auto') {
 
     const referer = req.headers.get('referer') || '';
     const url = req.url || '';
+    let pathname = '';
+    try {
+      pathname = new URL(url).pathname || '';
+    } catch {
+      pathname = '';
+    }
     const adminContext =
       preferredType === 'admin' ||
       referer.includes('/admin') ||
+      pathname.startsWith('/admin') ||
       url.includes('admin=true');
 
     let token = null;

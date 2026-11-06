@@ -26,6 +26,9 @@ import {
   LogOut,
   RefreshCw,
   Search,
+  Inbox,
+  User,
+  Mail,
   Menu,
   Edit2,
   CreditCard,
@@ -72,6 +75,8 @@ export default function AdminDashboard({ user, onLogout }) {
   const adminChatFileRef = React.useRef(null);
   const [newLabelInput, setNewLabelInput] = useState('');
   const [newNoteInput, setNewNoteInput] = useState('');
+  const [chatThreadQuery, setChatThreadQuery] = useState('');
+  const [threadPlayerDetail, setThreadPlayerDetail] = useState(null);
   const [usersList, setUsersList] = useState([]);
   const [gateways, setGateways] = useState([]);
   const [cashbackReport, setCashbackReport] = useState(null);
@@ -140,9 +145,22 @@ export default function AdminDashboard({ user, onLogout }) {
       bc = null;
     }
 
+    const onStorage = (e) => {
+      if (e.key === 'hood_staff_event' && e.newValue) {
+        try {
+          const p = JSON.parse(e.newValue);
+          if (!p?.silent) playAdminChime(p?.tune);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
     return () => {
       window.removeEventListener('click', onUnlock, { capture: true });
       window.removeEventListener('keydown', onUnlock, { capture: true });
+      window.removeEventListener('storage', onStorage);
       bc?.close();
     };
   }, [playAdminChime]);
@@ -173,6 +191,13 @@ export default function AdminDashboard({ user, onLogout }) {
           const ch = new BroadcastChannel('hood_staff_alerts');
           ch.postMessage(payload);
           ch.close();
+        } catch {
+          /* ignore */
+        }
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('hood_staff_event', JSON.stringify({ ...payload, t: Date.now() }));
+          }
         } catch {
           /* ignore */
         }
@@ -259,6 +284,27 @@ export default function AdminDashboard({ user, onLogout }) {
   ).length;
   const unreadChatCount = (chatThreads || []).reduce((s, t) => s + Number(t.unreadCount || 0), 0);
 
+  const filteredChatThreads = React.useMemo(() => {
+    const q = chatThreadQuery.trim().toLowerCase();
+    if (!q) return chatThreads;
+    return (chatThreads || []).filter((t) => {
+      const name = (t.username || '').toLowerCase();
+      const email = (t.userEmail || '').toLowerCase();
+      const last = (t.lastMessage || '').toLowerCase();
+      return name.includes(q) || email.includes(q) || last.includes(q);
+    });
+  }, [chatThreads, chatThreadQuery]);
+
+  const formatThreadTime = (d) => {
+    if (!d) return '';
+    try {
+      const date = new Date(d);
+      return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
+
   const NavCountBadge = ({ count, tone = 'amber' }) => {
     if (!count || count <= 0) return null;
     const tones = {
@@ -337,13 +383,18 @@ export default function AdminDashboard({ user, onLogout }) {
 
   // Fetch individual chat conversation (supports silent sync)
   const loadConversation = async (userId, isSilent = false) => {
-    if (!isSilent) setSelectedThreadUser(userId);
+    if (!isSilent) {
+      setSelectedThreadUser(userId);
+      setThreadPlayerDetail(null);
+    }
     try {
-      const res = await fetch(`/api/chat?userId=${userId}`);
+      const res = await fetch(`/api/chat?userId=${encodeURIComponent(userId)}`);
       const data = await res.json();
       if (data?.success) {
         diffSet(setThreadMessages, data.messages || []);
         diffSet(setThreadMeta, data.threadMeta || { labels: [], staffNotes: [] });
+        if (data.player) diffSet(setThreadPlayerDetail, data.player);
+        else if (!isSilent) setThreadPlayerDetail(null);
       }
     } catch (e) {
       console.error(e);
@@ -1212,210 +1263,320 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* 3. CHAT SUPPORT WITH LABELS & NOTES (KEY REQUIREMENT #9) */}
         {/* ======================================================== */}
         {activeTab === 'chat' && (
-          <div className="h-[700px] grid grid-cols-1 lg:grid-cols-12 gap-4 pt-6">
-            {/* Left 4 cols: Conversations List */}
-            <div className="lg:col-span-4 rounded-2xl bg-[#09142a] border border-[#1a3363] flex flex-col overflow-hidden">
-              <div className="p-3.5 bg-[#0c1b38] border-b border-[#1a3363]">
-                <h4 className="text-xs font-black uppercase text-white tracking-wider">
-                  Support Threads ({chatThreads.length})
-                </h4>
+          <div className="pt-6 space-y-4">
+            <div className="rounded-3xl border border-[#2cb64e]/25 bg-gradient-to-r from-[#0c1b38]/95 via-[#09142a] to-[#070d1e] p-5 sm:p-6 shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div className="space-y-1.5">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#2cb64e]/15 border border-[#2cb64e]/35 text-[#2cb64e] text-[10px] font-black uppercase tracking-wider">
+                    <MessageSquare size={14} />
+                    <span>VIP Concierge Desk</span>
+                  </div>
+                  <h3 className="font-heading text-xl sm:text-2xl font-black text-white tracking-tight">Support chat</h3>
+                  <p className="text-xs text-gray-400 max-w-xl leading-relaxed">
+                    Left: inbox (unread badge). Center: live thread — green bubbles = staff, gray = player. Right:
+                    internal CRM — labels players see in chat; notes are staff-only.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  {unreadChatCount > 0 && (
+                    <span className="px-3 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-[11px] font-bold">
+                      {unreadChatCount} unread player message{unreadChatCount === 1 ? '' : 's'}
+                    </span>
+                  )}
+                  <span className="px-3 py-1.5 rounded-xl bg-[#070d1e] border border-[#1a3363] text-gray-300 text-[11px] font-bold">
+                    {chatThreads.length} thread{chatThreads.length === 1 ? '' : 's'}
+                  </span>
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto divide-y divide-[#1a3363]">
-                {chatThreads.map((t) => (
-                  <div
-                    key={t.userId}
-                    onClick={() => loadConversation(t.userId)}
-                    className={`p-3 cursor-pointer transition-colors ${
-                      selectedThreadUser === t.userId ? 'bg-[#12244c]' : 'hover:bg-[#0e2042]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-white">{t.username}</span>
-                      {t.unreadCount > 0 && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-[#2cb64e] text-black text-[9px] font-black">
-                          {t.unreadCount}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-gray-400 truncate mt-0.5">{t.lastMessage}</p>
+            </div>
 
-                    {/* Display Labels */}
-                    {t.labels && t.labels.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {t.labels.map((lbl, idx) => (
-                          <span
-                            key={idx}
-                            className="px-1.5 py-0.5 rounded bg-[#2cb64e]/20 text-[#2cb64e] text-[9px] font-bold"
-                          >
-                            {lbl}
-                          </span>
-                        ))}
-                      </div>
+            <div className="min-h-[620px] lg:min-h-[700px] grid grid-cols-1 xl:grid-cols-12 gap-4">
+              {/* Left: inbox */}
+              <div className="xl:col-span-3 rounded-2xl bg-[#09142a] border border-[#1a3363] flex flex-col overflow-hidden shadow-lg">
+                <div className="p-3 bg-[#0c1b38] border-b border-[#1a3363] space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-xs font-black uppercase text-white tracking-wider flex items-center gap-1.5">
+                      <Inbox size={14} className="text-[#2cb64e]" />
+                      Inbox
+                    </h4>
+                    {unreadChatCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-[#2cb64e] text-black text-[9px] font-black">{unreadChatCount}</span>
                     )}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Middle 5 cols: Conversation messages & reply */}
-            <div className="lg:col-span-5 rounded-2xl bg-[#09142a] border border-[#1a3363] flex flex-col overflow-hidden">
-              <div className="p-3.5 bg-[#0c1b38] border-b border-[#1a3363]">
-                <h4 className="text-xs font-black text-white">
-                  {selectedThreadUser ? `Live Chat with Player` : 'Select a thread to respond'}
-                </h4>
-              </div>
-
-              <div ref={adminChatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#070d1e]/80">
-                {threadMessages.map((m, idx) => (
-                  <HoodChatMessageBubble
-                    key={m._id || idx}
-                    message={m}
-                    isMine={m.senderRole === 'staff'}
-                  />
-                ))}
-              </div>
-
-              {selectedThreadUser && (
-                <>
-                  {chatAttachImage ? (
-                    <div className="px-3 py-2 border-t border-[#1a3363] bg-[#0c1b38] flex items-center gap-2">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={chatAttachImage} alt="" className="h-12 w-12 rounded-lg object-cover border border-[#2cb64e]/40" />
-                      <span className="text-[10px] text-gray-400 flex-1">Attachment ready</span>
-                      <button type="button" onClick={() => setChatAttachImage(null)} className="text-rose-400 text-xs font-bold">
-                        Remove
-                      </button>
-                    </div>
-                  ) : null}
-                  <form onSubmit={handleSendReply} className="p-2.5 bg-[#0c1b38] border-t border-[#1a3363] flex gap-2">
-                    <input ref={adminChatFileRef} type="file" accept="image/*" className="hidden" onChange={handleStaffChatFile} />
-                    <button
-                      type="button"
-                      onClick={() => adminChatFileRef.current?.click()}
-                      disabled={chatAttachUploading}
-                      className="p-2 rounded-xl bg-[#070d1e] border border-[#1a3363] text-gray-300 hover:text-[#2cb64e]"
-                    >
-                      {chatAttachUploading ? <RefreshIcon size={14} className="animate-spin" /> : <Paperclip size={14} />}
-                    </button>
+                  <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input
-                      type="text"
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      className="hood-input flex-1 px-3 py-2 rounded-xl text-xs"
-                      placeholder="Reply as Hood Staff..."
+                      type="search"
+                      value={chatThreadQuery}
+                      onChange={(e) => setChatThreadQuery(e.target.value)}
+                      placeholder="Search name, email, message..."
+                      className="hood-input w-full pl-8 pr-2 py-2 rounded-xl text-[11px]"
                     />
-                    <button
-                      type="submit"
-                      disabled={!chatInput.trim() && !chatAttachImage}
-                      className="btn-hood-green px-4 py-2 rounded-xl text-white text-xs font-bold disabled:opacity-50"
-                    >
-                      <Send size={14} />
-                    </button>
-                  </form>
-                </>
-              )}
-            </div>
-
-            {/* Right 3 cols: LABELS & STAFF NOTES (Requirement #9) */}
-            <div className="lg:col-span-3 rounded-2xl bg-[#09142a] border border-[#1a3363] p-4 flex flex-col gap-5 overflow-y-auto">
-              <div>
-                <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5 mb-2.5">
-                  <Tag size={13} className="text-[#2cb64e]" />
-                  <span>Player Labels / Tags</span>
-                </h4>
-
-                {/* Assigned Labels */}
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {threadMeta.labels?.length > 0 ? (
-                    threadMeta.labels.map((lbl, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[#2cb64e]/20 text-[#2cb64e] border border-[#2cb64e]/40 text-xs font-bold"
-                      >
-                        <span>{lbl}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveLabel(lbl)}
-                          className="hover:text-white"
-                        >
-                          <X size={11} />
-                        </button>
-                      </span>
-                    ))
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto divide-y divide-[#1a3363]">
+                  {filteredChatThreads.length === 0 ? (
+                    <div className="p-6 text-center text-[11px] text-gray-500">
+                      {chatThreads.length === 0 ? 'No conversations yet.' : 'No threads match your search.'}
+                    </div>
                   ) : (
-                    <span className="text-[11px] text-gray-500">No labels assigned yet.</span>
+                    filteredChatThreads.map((t) => (
+                      <button
+                        key={t.userId}
+                        type="button"
+                        onClick={() => loadConversation(t.userId)}
+                        className={`w-full text-left p-3 transition-colors ${
+                          selectedThreadUser === t.userId ? 'bg-[#12244c] ring-1 ring-inset ring-[#2cb64e]/35' : 'hover:bg-[#0e2042]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-white truncate">{t.username}</span>
+                              {t.unreadCount > 0 && (
+                                <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-[#2cb64e] text-black text-[9px] font-black">
+                                  {t.unreadCount}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-gray-500 truncate mt-0.5">{t.userEmail || '—'}</p>
+                            <p className="text-[11px] text-gray-400 truncate mt-1">{t.lastMessage || '…'}</p>
+                            {t.labels && t.labels.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {t.labels.slice(0, 3).map((lbl, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="px-1.5 py-0.5 rounded bg-[#2cb64e]/20 text-[#2cb64e] text-[9px] font-bold"
+                                  >
+                                    {lbl}
+                                  </span>
+                                ))}
+                                {t.labels.length > 3 && (
+                                  <span className="text-[9px] text-gray-500">+{t.labels.length - 3}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-[9px] text-gray-500 shrink-0">{formatThreadTime(t.lastMessageAt)}</span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Center: conversation */}
+              <div className="xl:col-span-6 rounded-2xl bg-[#09142a] border border-[#1a3363] flex flex-col overflow-hidden shadow-lg min-h-[480px]">
+                <div className="p-3.5 bg-[#0c1b38] border-b border-[#1a3363] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-black text-white truncate">
+                      {selectedThreadUser ? threadPlayerDetail?.username || 'Player' : 'Pick a thread'}
+                    </h4>
+                    {selectedThreadUser && threadPlayerDetail?.email && (
+                      <p className="text-[10px] text-gray-400 flex items-center gap-1 truncate">
+                        <Mail size={11} className="shrink-0 text-gray-500" />
+                        {threadPlayerDetail.email}
+                      </p>
+                    )}
+                  </div>
+                  {selectedThreadUser && threadPlayerDetail && (
+                    <div className="flex flex-wrap gap-2 text-[10px]">
+                      <span className="px-2 py-1 rounded-lg bg-[#070d1e] border border-[#1a3363] text-gray-300 font-mono font-bold">
+                        SC ${Number(threadPlayerDetail.balanceSC ?? 0).toFixed(2)}
+                      </span>
+                      <span className="px-2 py-1 rounded-lg bg-[#070d1e] border border-[#1a3363] text-gray-300 font-mono font-bold">
+                        GC {Number(threadPlayerDetail.balanceGC ?? 0).toLocaleString()}
+                      </span>
+                    </div>
                   )}
                 </div>
 
-                {/* Add Label */}
+                <div ref={adminChatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-gradient-to-b from-[#070d1e]/90 to-[#070d1e] min-h-[320px]">
+                  {!selectedThreadUser ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12 text-gray-500">
+                      <MessageSquare size={40} className="text-[#2cb64e]/40 mb-3" />
+                      <p className="text-sm font-bold text-gray-400">Select a player on the left</p>
+                      <p className="text-[11px] mt-1 max-w-xs">
+                        Unread counts show how many player messages need a reply. Attach screenshots with the paperclip.
+                      </p>
+                    </div>
+                  ) : threadMessages.length === 0 ? (
+                    <p className="text-center text-[11px] text-gray-500 py-8">No messages in this thread yet.</p>
+                  ) : (
+                    threadMessages.map((m, idx) => (
+                      <HoodChatMessageBubble key={m._id || idx} message={m} isMine={m.senderRole === 'staff'} />
+                    ))
+                  )}
+                </div>
+
                 {selectedThreadUser && (
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={newLabelInput}
-                      onChange={(e) => setNewLabelInput(e.target.value)}
-                      placeholder="e.g. VIP, Risky, High Roller"
-                      className="hood-input flex-1 px-2.5 py-1.5 rounded-lg text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddLabel}
-                      className="px-2.5 py-1.5 rounded-lg bg-[#2cb64e] text-white text-xs font-bold"
-                    >
-                      Add
-                    </button>
-                  </div>
+                  <>
+                    {chatAttachImage ? (
+                      <div className="px-3 py-2 border-t border-[#1a3363] bg-[#0c1b38] flex items-center gap-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={chatAttachImage}
+                          alt=""
+                          className="h-12 w-12 rounded-lg object-cover border border-[#2cb64e]/40"
+                        />
+                        <span className="text-[10px] text-gray-400 flex-1">Image attached — player will see this in chat</span>
+                        <button
+                          type="button"
+                          onClick={() => setChatAttachImage(null)}
+                          className="text-rose-400 text-xs font-bold"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : null}
+                    <form onSubmit={handleSendReply} className="p-3 bg-[#0c1b38] border-t border-[#1a3363] flex gap-2">
+                      <input
+                        ref={adminChatFileRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleStaffChatFile}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => adminChatFileRef.current?.click()}
+                        disabled={chatAttachUploading}
+                        className="p-2.5 rounded-xl bg-[#070d1e] border border-[#1a3363] text-gray-300 hover:text-[#2cb64e] shrink-0"
+                        title="Attach image"
+                      >
+                        {chatAttachUploading ? <RefreshIcon size={15} className="animate-spin" /> : <Paperclip size={15} />}
+                      </button>
+                      <input
+                        type="text"
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        className="hood-input flex-1 px-3 py-2.5 rounded-xl text-xs min-h-[44px]"
+                        placeholder="Type reply… (player sees this)"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!chatInput.trim() && !chatAttachImage}
+                        className="btn-hood-green px-5 py-2.5 rounded-xl text-white text-xs font-black disabled:opacity-50 shrink-0 flex items-center gap-1.5"
+                      >
+                        <Send size={15} />
+                        <span className="hidden sm:inline">Send</span>
+                      </button>
+                    </form>
+                  </>
                 )}
               </div>
 
-              {/* Staff Internal Notes */}
-              <div className="border-t border-[#1a3363] pt-4 flex-1 flex flex-col">
-                <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5 mb-2.5">
-                  <FileText size={13} className="text-amber-400" />
-                  <span>Staff Internal Notes</span>
-                </h4>
+              {/* Right: labels + notes */}
+              <div className="xl:col-span-3 rounded-2xl bg-[#09142a] border border-[#1a3363] p-4 flex flex-col gap-5 overflow-y-auto shadow-lg min-h-[320px]">
+                <div className="rounded-xl bg-[#070d1e]/80 border border-[#1a3363] p-3">
+                  <p className="text-[10px] text-gray-400 leading-relaxed">
+                    <strong className="text-[#2cb64e]">Labels</strong> help you filter VIP / risk — they can appear on the player
+                    thread. <strong className="text-amber-300">Notes</strong> are internal only (player never sees them).
+                  </p>
+                </div>
 
-                <div className="space-y-2 flex-1 overflow-y-auto mb-3">
-                  {threadMeta.staffNotes?.length > 0 ? (
-                    threadMeta.staffNotes.map((n) => (
-                      <div
-                        key={n.id}
-                        className="p-2.5 rounded-xl bg-[#070d1e] border border-[#1a3363] text-xs relative group"
-                      >
-                        <p className="text-gray-200 text-[11px]">{n.text}</p>
-                        <div className="flex items-center justify-between text-[9px] text-gray-500 mt-1">
-                          <span>By {n.author || 'Staff'}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteNote(n.id)}
-                            className="text-rose-400 hover:text-rose-300 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            Delete
+                <div>
+                  <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5 mb-2.5">
+                    <Tag size={13} className="text-[#2cb64e]" />
+                    <span>Player labels</span>
+                  </h4>
+
+                  <div className="flex flex-wrap gap-1.5 mb-3 min-h-[2rem]">
+                    {threadMeta.labels?.length > 0 ? (
+                      threadMeta.labels.map((lbl, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[#2cb64e]/20 text-[#2cb64e] border border-[#2cb64e]/40 text-xs font-bold"
+                        >
+                          <span>{lbl}</span>
+                          <button type="button" onClick={() => handleRemoveLabel(lbl)} className="hover:text-white">
+                            <X size={11} />
                           </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <span className="text-[11px] text-gray-500">No internal notes for this player.</span>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-[11px] text-gray-500">No labels yet — add below.</span>
+                    )}
+                  </div>
+
+                  {selectedThreadUser && (
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={newLabelInput}
+                        onChange={(e) => setNewLabelInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddLabel())}
+                        placeholder="VIP, High roller…"
+                        className="hood-input flex-1 px-2.5 py-2 rounded-lg text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddLabel}
+                        className="px-3 py-2 rounded-lg bg-[#2cb64e] text-white text-xs font-black shrink-0"
+                      >
+                        Add
+                      </button>
+                    </div>
                   )}
                 </div>
 
-                {selectedThreadUser && (
-                  <form onSubmit={handleAddNote} className="space-y-2">
-                    <textarea
-                      rows={2}
-                      value={newNoteInput}
-                      onChange={(e) => setNewNoteInput(e.target.value)}
-                      placeholder="Add internal note (e.g. Verified Cash App)..."
-                      className="hood-input w-full p-2 rounded-xl text-xs"
-                    />
-                    <button
-                      type="submit"
-                      className="w-full py-1.5 rounded-lg bg-[#12244c] hover:bg-[#1a3363] text-white text-xs font-bold"
-                    >
-                      Save Internal Note
-                    </button>
-                  </form>
+                <div className="border-t border-[#1a3363] pt-4 flex-1 flex flex-col min-h-0">
+                  <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5 mb-2.5">
+                    <FileText size={13} className="text-amber-400" />
+                    <span>Staff-only notes</span>
+                  </h4>
+
+                  <div className="space-y-2 flex-1 overflow-y-auto mb-3 max-h-[220px] xl:max-h-none">
+                    {threadMeta.staffNotes?.length > 0 ? (
+                      threadMeta.staffNotes.map((n) => (
+                        <div
+                          key={n.id}
+                          className="p-2.5 rounded-xl bg-[#070d1e] border border-[#1a3363] text-xs relative group"
+                        >
+                          <p className="text-gray-200 text-[11px] leading-relaxed">{n.text}</p>
+                          <div className="flex items-center justify-between text-[9px] text-gray-500 mt-1">
+                            <span>By {n.author || 'Staff'}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteNote(n.id)}
+                              className="text-rose-400 hover:text-rose-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-[11px] text-gray-500">No notes — use for verification &amp; risk context.</span>
+                    )}
+                  </div>
+
+                  {selectedThreadUser && (
+                    <form onSubmit={handleAddNote} className="space-y-2">
+                      <textarea
+                        rows={3}
+                        value={newNoteInput}
+                        onChange={(e) => setNewNoteInput(e.target.value)}
+                        placeholder="e.g. Matched Cash App $50 — OK to load Panda"
+                        className="hood-input w-full p-2.5 rounded-xl text-xs resize-y min-h-[72px]"
+                      />
+                      <button
+                        type="submit"
+                        className="w-full py-2 rounded-xl bg-[#12244c] hover:bg-[#1a3363] text-white text-xs font-bold border border-[#1a3363]"
+                      >
+                        Save note
+                      </button>
+                    </form>
+                  )}
+                </div>
+
+                {selectedThreadUser && threadPlayerDetail && (
+                  <div className="rounded-xl bg-[#0e2042]/40 border border-[#1a3363] p-3 flex items-center gap-2 text-[10px] text-gray-400">
+                    <User size={14} className="text-gray-500 shrink-0" />
+                    <span>
+                      Player ID: <code className="text-gray-300 font-mono">{String(threadPlayerDetail.id || selectedThreadUser)}</code>
+                    </span>
+                  </div>
                 )}
               </div>
             </div>
