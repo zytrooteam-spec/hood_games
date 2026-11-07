@@ -40,13 +40,15 @@ fi
 
 export JAVA_HOME
 export PATH="$JAVA_HOME/bin:$PATH"
+export CAPACITOR_SERVER_URL="${CAPACITOR_SERVER_URL:-https://hoodgaming.com}"
 echo "Using JAVA_HOME=$JAVA_HOME"
+echo "Capacitor server URL=$CAPACITOR_SERVER_URL"
 java -version
 
 npm run icons:android
 npx cap copy android
 
-# Shrink embedded assets (Players Paradise pattern — remote WebView loads hoodgames.com)
+# Shrink embedded assets (Players Paradise pattern — remote WebView loads hoodgaming.com)
 rm -rf \
   android/app/src/main/assets/public/images \
   android/app/src/main/assets/public/icons \

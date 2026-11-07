@@ -7,7 +7,7 @@ const config: CapacitorConfig = {
   bundledWebRuntime: false,
   server: {
     androidScheme: 'https',
-    url: process.env.CAPACITOR_SERVER_URL || 'https://hoodgames.com',
+    url: process.env.CAPACITOR_SERVER_URL || 'https://hoodgaming.com',
     cleartext: false,
   },
   plugins: {
