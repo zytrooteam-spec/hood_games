@@ -104,13 +104,13 @@ export default function AuthModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-      <div className="relative w-full max-w-lg rounded-3xl bg-gradient-to-b from-[#0e2042] via-[#09142a] to-[#070d1e] border-2 border-[#1a3363] p-6 sm:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8)] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in overflow-hidden">
+      <div className="relative w-full max-w-lg max-h-[min(92dvh,780px)] sm:max-h-[90vh] overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl bg-gradient-to-b from-[#0e2042] via-[#09142a] to-[#070d1e] border-2 border-[#1a3363] border-b-0 sm:border-b-2 p-4 pt-12 sm:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8)]">
         {/* Close Button */}
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-full bg-[#070d1e] text-gray-400 hover:text-white border border-[#1a3363] hover:border-[#2cb64e]/50 transition-all z-20"
+          className="absolute top-3 right-3 sm:top-5 sm:right-5 p-2 rounded-full bg-[#070d1e] text-gray-400 hover:text-white border border-[#1a3363] hover:border-[#2cb64e]/50 transition-all z-20"
         >
           <X size={16} />
         </button>
@@ -138,7 +138,7 @@ export default function AuthModal({
             </span>
           </div>
 
-          <h3 className="text-2xl font-black text-white tracking-tight">
+          <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight px-1">
             {tab === 'login' ? 'Log In to Hood Games' : tab === 'redeem' ? 'Log in to redeem' : 'Create Free VIP Account'}
           </h3>
           <p className="text-xs text-gray-400">
@@ -151,8 +151,8 @@ export default function AuthModal({
         </div>
 
         {/* Tab Toggle Switcher */}
-        <div className="flex items-center justify-center mb-6">
-          <div className="p-1 rounded-2xl bg-[#070d1e] border border-[#1a3363] flex items-center gap-1 w-full max-w-md">
+        <div className="flex items-center justify-center mb-4 sm:mb-6">
+          <div className="p-1 rounded-2xl bg-[#070d1e] border border-[#1a3363] grid grid-cols-3 gap-1 w-full">
             <button
               type="button"
               onClick={() => {
@@ -160,7 +160,7 @@ export default function AuthModal({
                 setError('');
                 playTune('click');
               }}
-              className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+              className={`py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wide sm:tracking-wider transition-all ${
                 tab === 'login'
                   ? 'btn-hood-green text-white shadow-md'
                   : 'text-gray-400 hover:text-white'
@@ -171,11 +171,26 @@ export default function AuthModal({
             <button
               type="button"
               onClick={() => {
+                setTab('register');
+                setError('');
+                playTune('click');
+              }}
+              className={`py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wide sm:tracking-wider transition-all ${
+                tab === 'register'
+                  ? 'btn-hood-green text-white shadow-md'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Sign Up
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 setTab('redeem');
                 setError('');
                 playTune('click');
               }}
-              className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+              className={`py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wide sm:tracking-wider transition-all ${
                 tab === 'redeem'
                   ? 'bg-blue-600 text-white shadow-md border border-blue-400/50'
                   : 'text-gray-400 hover:text-white'
@@ -185,20 +200,22 @@ export default function AuthModal({
             </button>
           </div>
         </div>
-        <p className="text-center text-[11px] text-gray-500 -mt-3 mb-4">
-          New here?{' '}
-          <button
-            type="button"
-            onClick={() => {
-              setTab('register');
-              setError('');
-              playTune('click');
-            }}
-            className="text-[#2cb64e] font-bold hover:underline"
-          >
-            Create a free account
-          </button>
-        </p>
+        {tab !== 'register' && (
+          <p className="text-center text-[11px] text-gray-500 -mt-1 mb-4">
+            New here?{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setTab('register');
+                setError('');
+                playTune('click');
+              }}
+              className="text-[#2cb64e] font-bold hover:underline"
+            >
+              Create a free account
+            </button>
+          </p>
+        )}
 
         {/* Error Alert Banner */}
         {error && (
@@ -357,19 +374,17 @@ export default function AuthModal({
         </form>
 
         {/* Trust Badges */}
-        <div className="mt-6 pt-4 border-t border-[#1a3363] flex items-center justify-center gap-4 text-[10.5px] text-gray-400">
+        <div className="mt-6 pt-4 border-t border-[#1a3363] flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[10px] sm:text-[10.5px] text-gray-400">
           <div className="flex items-center gap-1.5">
-            <ShieldCheck size={14} className="text-[#2cb64e]" />
+            <ShieldCheck size={14} className="text-[#2cb64e] shrink-0" />
             <span>256-Bit SSL</span>
           </div>
-          <span>•</span>
           <div className="flex items-center gap-1.5">
-            <CheckCircle2 size={14} className="text-[#2cb64e]" />
+            <CheckCircle2 size={14} className="text-[#2cb64e] shrink-0" />
             <span>Instant Auto-Credit</span>
           </div>
-          <span>•</span>
           <div className="flex items-center gap-1.5">
-            <Sparkles size={14} className="text-[#2cb64e]" />
+            <Sparkles size={14} className="text-[#2cb64e] shrink-0" />
             <span>US Certified</span>
           </div>
         </div>

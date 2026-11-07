@@ -114,13 +114,13 @@ export default function AdminPage() {
   // =========================================================================
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#070d1e] flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="min-h-[100dvh] bg-[#070d1e] flex items-center justify-center p-3 sm:p-4 relative overflow-x-hidden overflow-y-auto">
         {/* Ambient Lights */}
         <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-[#2cb64e]/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 w-full max-w-md">
-          <div className="p-7 sm:p-10 rounded-3xl bg-gradient-to-b from-[#0c1b38] via-[#09142a] to-[#070d1e] border-2 border-[#1a3363] shadow-[0_20px_70px_rgba(0,0,0,0.85)] space-y-6">
+        <div className="relative z-10 w-full max-w-md my-6">
+          <div className="p-5 sm:p-10 rounded-2xl sm:rounded-3xl bg-gradient-to-b from-[#0c1b38] via-[#09142a] to-[#070d1e] border-2 border-[#1a3363] shadow-[0_20px_70px_rgba(0,0,0,0.85)] space-y-5 sm:space-y-6 max-h-[min(92dvh,720px)] overflow-y-auto overscroll-contain">
             {/* Header with Logo */}
             <div className="text-center space-y-2">
               <div className="relative w-16 h-16 rounded-2xl bg-[#070d1e] border border-[#2cb64e]/50 p-2 mx-auto shadow-inner">
@@ -208,8 +208,8 @@ export default function AdminPage() {
 
             {/* Security Warning Notice */}
             <div className="p-3 rounded-2xl bg-[#0e2042]/60 border border-[#2cb64e]/25 text-center space-y-1">
-              <span className="text-[10px] font-bold text-[#2cb64e] block">
-                Dual session: admin here + player login in another tab stays separate
+              <span className="text-[10px] font-bold text-[#2cb64e] block leading-relaxed">
+                Player Paradise–style dual session: log in here as admin, then open the main site in another tab and Sign Up / Login as a player — both sessions stay independent in the same browser.
               </span>
               <span className="text-[10px] font-mono font-bold text-gray-500 block">
                 🔒 Protected by End-to-End Session Encryption

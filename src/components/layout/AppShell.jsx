@@ -15,6 +15,7 @@ import { Headphones } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { diffSet, areEqual } from '@/lib/fastDiff';
 import { broadcastPlayerSession, subscribePlayerSession } from '@/lib/sessionClient';
+import { normalizePlayerUser } from '@/lib/playerSession';
 
 export const AppShellContext = createContext({
   user: null,
@@ -49,7 +50,7 @@ export default function AppShell({ children }) {
       const res = await fetch('/api/auth/me?session=player', { cache: 'no-store' });
       const data = await res.json();
       if (data?.success && data?.user) {
-        diffSet(setUser, data.user);
+        diffSet(setUser, normalizePlayerUser(data.user));
       } else {
         diffSet(setUser, null);
         setUnreadNotifs(0);
@@ -84,7 +85,7 @@ export default function AppShell({ children }) {
 
     const handleUserSync = (e) => {
       if (e?.detail) {
-        diffSet(setUser, e.detail);
+        diffSet(setUser, normalizePlayerUser(e.detail));
       } else {
         fetchUser(true);
       }
@@ -93,7 +94,7 @@ export default function AppShell({ children }) {
     window.addEventListener('hood-user-sync', handleUserSync);
     const unsubPlayer = subscribePlayerSession((detail) => {
       if (detail === undefined) fetchUser(true);
-      else diffSet(setUser, detail);
+      else diffSet(setUser, normalizePlayerUser(detail));
     });
 
     return () => {

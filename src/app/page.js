@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { broadcastPlayerSession, subscribePlayerSession } from '@/lib/sessionClient';
+import { normalizePlayerUser } from '@/lib/playerSession';
 
 export default function HomePage() {
   const router = useRouter();
@@ -85,8 +86,9 @@ export default function HomePage() {
       const res = await fetch('/api/auth/me?session=player', { cache: 'no-store' });
       const data = await res.json();
       if (data?.success && data?.user) {
-        diffSet(setUser, data.user);
-        loadUserAccounts(data.user.email);
+        const player = normalizePlayerUser(data.user);
+        diffSet(setUser, player);
+        if (player?.email) loadUserAccounts(player.email);
       } else {
         diffSet(setUser, null);
       }
@@ -148,7 +150,7 @@ export default function HomePage() {
     fetchUnreadNotifs();
 
     const handleUserSync = (e) => {
-      if (e.detail) diffSet(setUser, e.detail);
+      if (e.detail) diffSet(setUser, normalizePlayerUser(e.detail));
       else {
         diffSet(setUser, null);
         diffSet(setUserGameAccounts, []);
@@ -159,8 +161,9 @@ export default function HomePage() {
     const unsubPlayer = subscribePlayerSession((detail) => {
       if (detail === undefined) fetchUser(true);
       else {
-        diffSet(setUser, detail);
-        if (detail?.email) loadUserAccounts(detail.email);
+        const player = normalizePlayerUser(detail);
+        diffSet(setUser, player);
+        if (player?.email) loadUserAccounts(player.email);
         else diffSet(setUserGameAccounts, []);
       }
     });

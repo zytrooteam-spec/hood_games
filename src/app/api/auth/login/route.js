@@ -4,20 +4,20 @@ import { getDb } from '@/lib/mongodb';
 import { signToken, ROLES, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 
-const COOKIE_OPTS = {
+const BASE_COOKIE = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax',
-  path: '/',
   maxAge: 7 * 24 * 60 * 60,
 };
 
+const SESSION_COOKIE_OPTS = { ...BASE_COOKIE, path: '/' };
+
 function attachSessionCookie(response, token, isAdminPortal) {
   if (isAdminPortal) {
-    response.cookies.set('admin_session', token, COOKIE_OPTS);
+    response.cookies.set('admin_session', token, SESSION_COOKIE_OPTS);
   } else {
-    response.cookies.set('players_session', token, COOKIE_OPTS);
-    response.cookies.set('token', token, COOKIE_OPTS);
+    response.cookies.set('players_session', token, SESSION_COOKIE_OPTS);
   }
 }
 

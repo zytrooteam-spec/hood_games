@@ -126,7 +126,17 @@ export async function getSessionUser(req, preferredType = 'auto') {
     if (!token) return null;
 
     const decoded = verifyToken(token);
-    return await loadUserFromToken(decoded);
+    const user = await loadUserFromToken(decoded);
+    if (!user) return null;
+
+    if (preferredType === 'player' && isStaffRole(user.role)) {
+      return null;
+    }
+    if (preferredType === 'admin' && !isStaffRole(user.role)) {
+      return null;
+    }
+
+    return user;
   } catch (err) {
     console.error('getSessionUser error:', err);
     return null;

@@ -59,21 +59,21 @@ export default function HoodHeroSection({
       <div className="absolute -bottom-24 right-1/4 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
 
       {/* 3. Hero Content Container */}
-      <div className="relative z-10 p-6 sm:p-10 lg:p-12">
+      <div className="relative z-10 p-4 sm:p-10 lg:p-12">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           {/* Left Column: Headlines & Explanations */}
           <div className="lg:col-span-7 space-y-6">
             {/* Top Official Tag */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2cb64e]/20 border border-[#2cb64e]/50 text-[#2cb64e] text-xs font-black shadow-[0_0_20px_rgba(44,182,78,0.35)] backdrop-blur-md">
-              <Sparkles size={14} className="text-emerald-400 animate-pulse" />
-              <span>OFFICIAL SWEEPSTAKES PLATFORM</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#2cb64e]" />
+            <div className="inline-flex flex-wrap items-center justify-center sm:justify-start gap-x-2 gap-y-1 max-w-full px-3 sm:px-3.5 py-1.5 rounded-full bg-[#2cb64e]/20 border border-[#2cb64e]/50 text-[#2cb64e] text-[10px] sm:text-xs font-black shadow-[0_0_20px_rgba(44,182,78,0.35)] backdrop-blur-md text-center sm:text-left">
+              <Sparkles size={14} className="text-emerald-400 animate-pulse shrink-0" />
+              <span className="leading-tight">OFFICIAL SWEEPSTAKES PLATFORM</span>
+              <span className="hidden sm:inline w-1.5 h-1.5 rounded-full bg-[#2cb64e]" />
               <span className="text-gray-200">USA 2026</span>
             </div>
 
             {/* Main Headline */}
             <div className="space-y-2">
-              <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-[1.15] tracking-tight">
+              <h1 className="font-heading text-[1.65rem] leading-tight sm:text-4xl lg:text-5xl font-black text-white sm:leading-[1.15] tracking-tight">
                 PLAY AMERICA’S #1 SWEEPS & WIN{' '}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2cb64e] via-emerald-300 to-teal-200">
                   REAL CASH
@@ -84,24 +84,22 @@ export default function HoodHeroSection({
               </p>
             </div>
 
-            {/* Core Feature Badges */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <div className="flex items-center gap-2.5 text-xs font-bold text-gray-200 bg-[#070d1e]/80 backdrop-blur-md p-3 rounded-2xl border border-[#1a3363] hover:border-[#2cb64e]/50 transition-colors shadow-md">
-                <CheckCircle2 size={18} className="text-[#2cb64e] shrink-0" />
-                <span>300% First Deposit Match</span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs font-bold text-gray-200 bg-[#070d1e]/80 backdrop-blur-md p-3 rounded-2xl border border-[#1a3363] hover:border-[#2cb64e]/50 transition-colors shadow-md">
-                <Clock size={18} className="text-[#2cb64e] shrink-0" />
-                <span>15–30 Min Cashout Guarantee</span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs font-bold text-gray-200 bg-[#070d1e]/80 backdrop-blur-md p-3 rounded-2xl border border-[#1a3363] hover:border-[#2cb64e]/50 transition-colors shadow-md">
-                <Trophy size={18} className="text-[#2cb64e] shrink-0" />
-                <span>Weekly Sunday Net Cashback</span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs font-bold text-gray-200 bg-[#070d1e]/80 backdrop-blur-md p-3 rounded-2xl border border-[#1a3363] hover:border-[#2cb64e]/50 transition-colors shadow-md">
-                <ShieldCheck size={18} className="text-[#2cb64e] shrink-0" />
-                <span>100% Legal US Sweeps Model</span>
-              </div>
+            {/* Core Feature Badges — full width on phones, 2-col from sm */}
+            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2.5 sm:gap-3 pt-1 w-full">
+              {[
+                ['300% First Deposit Match', CheckCircle2],
+                ['15–30 Min Cashout Guarantee', Clock],
+                ['Weekly Sunday Net Cashback', Trophy],
+                ['100% Legal US Sweeps Model', ShieldCheck],
+              ].map(([label, Icon]) => (
+                <div
+                  key={label}
+                  className="flex items-start sm:items-center gap-2.5 text-[11px] sm:text-xs font-bold text-gray-200 bg-[#070d1e]/80 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-[#1a3363] hover:border-[#2cb64e]/50 transition-colors shadow-md min-w-0 w-full"
+                >
+                  <Icon size={17} className="text-[#2cb64e] shrink-0 mt-0.5 sm:mt-0" />
+                  <span className="leading-snug break-words">{label}</span>
+                </div>
+              ))}
             </div>
 
             {/* Desktop Action Buttons */}

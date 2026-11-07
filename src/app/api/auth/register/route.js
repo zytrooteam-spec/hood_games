@@ -82,7 +82,6 @@ export async function POST(req) {
       maxAge: 7 * 24 * 60 * 60,
     };
     response.cookies.set('players_session', token, cookieOpts);
-    response.cookies.set('token', token, cookieOpts);
 
     return response;
   } catch (err) {

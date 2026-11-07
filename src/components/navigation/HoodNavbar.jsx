@@ -34,9 +34,9 @@ export default function HoodNavbar({
 
   return (
     <header className="sticky top-0 z-40 w-full bg-[#09142a]/95 backdrop-blur-xl border-b border-[#1a3363] shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-4.5 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-4 flex flex-wrap items-center justify-between gap-x-2 gap-y-2 sm:gap-4">
         {/* Left Side: Mobile Hamburger (Responsive ONLY, hidden on desktop) + Nav Pills */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 sm:flex-initial">
           {/* Hamburger Menu: Visible ONLY on mobile/tablet (lg:hidden), NEVER on desktop */}
           <button
             type="button"
@@ -96,7 +96,7 @@ export default function HoodNavbar({
         </div>
 
         {/* Right Side: Balance Pill, Wallet Button, Auth Buttons, Support & Profile */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 ml-auto">
           {user ? (
             <>
               {/* User Sweeps Balance Pill */}
@@ -105,17 +105,19 @@ export default function HoodNavbar({
                   onOpenCashier('deposit');
                   playTune('click');
                 }}
-                className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-[#070d1e] border border-[#1a3363] hover:border-[#2cb64e]/50 cursor-pointer transition-all shadow-inner"
+                className="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl bg-[#070d1e] border border-[#1a3363] hover:border-[#2cb64e]/50 cursor-pointer transition-all shadow-inner max-w-[11.5rem] sm:max-w-none min-w-0"
                 title="Click to Open Wallet"
               >
-                <div className="flex flex-col text-right">
-                  <span className="text-[9.5px] uppercase font-bold text-gray-400">Sweeps Balance</span>
-                  <span className="text-sm font-black text-[#2cb64e] font-mono leading-tight">
+                <div className="flex flex-col text-right min-w-0 flex-1">
+                  <span className="text-[8px] sm:text-[9.5px] uppercase font-bold text-gray-400 truncate">
+                    Sweeps Balance
+                  </span>
+                  <span className="text-xs sm:text-sm font-black text-[#2cb64e] font-mono leading-tight truncate">
                     ${Number(user.balanceSC || 0).toFixed(2)} SC
                   </span>
                 </div>
-                <div className="w-8 h-8 rounded-xl bg-[#2cb64e]/15 border border-[#2cb64e]/30 flex items-center justify-center text-[#2cb64e]">
-                  <Coins size={16} />
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-[#2cb64e]/15 border border-[#2cb64e]/30 flex items-center justify-center text-[#2cb64e] shrink-0">
+                  <Coins size={15} className="sm:w-4 sm:h-4" />
                 </div>
               </div>
 
@@ -126,10 +128,11 @@ export default function HoodNavbar({
                   onOpenCashier('deposit');
                   playTune('coin');
                 }}
-                className="btn-hood-green px-5 py-2.5 rounded-2xl text-xs flex items-center gap-2 uppercase tracking-wider font-extrabold shadow-[0_4px_18px_rgba(44,182,78,0.4)]"
+                className="btn-hood-green p-2.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs flex items-center gap-2 uppercase tracking-wider font-extrabold shadow-[0_4px_18px_rgba(44,182,78,0.4)]"
+                title="Wallet"
               >
                 <Wallet size={15} />
-                <span className="hidden sm:inline">Wallet</span>
+                <span className="hidden md:inline">Wallet</span>
               </button>
 
               <button
@@ -138,7 +141,7 @@ export default function HoodNavbar({
                   onOpenNotifications?.();
                   playTune('bell', 0.55);
                 }}
-                className="relative p-2.5 rounded-2xl bg-[#0c1b38] border border-[#1a3363] text-gray-300 hover:text-white hover:border-amber-500/50 transition-all shadow-sm"
+                className="relative p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-[#0c1b38] border border-[#1a3363] text-gray-300 hover:text-white hover:border-amber-500/50 transition-all shadow-sm"
                 title="Notifications"
               >
                 <Bell size={17} />
@@ -156,14 +159,14 @@ export default function HoodNavbar({
                   onOpenChat();
                   playTune('click');
                 }}
-                className="p-2.5 rounded-2xl bg-[#0c1b38] border border-[#1a3363] text-gray-300 hover:text-white hover:border-[#2cb64e]/50 transition-all shadow-sm"
+                className="hidden sm:flex p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-[#0c1b38] border border-[#1a3363] text-gray-300 hover:text-white hover:border-[#2cb64e]/50 transition-all shadow-sm"
                 title="Live Support Chat"
               >
                 <MessageSquare size={17} />
               </button>
 
               {/* User Profile Dropdown */}
-              <div className="relative">
+              <div className="relative hidden sm:block">
                 <button
                   type="button"
                   onClick={() => setUserDropdown(!userDropdown)}
@@ -232,7 +235,7 @@ export default function HoodNavbar({
                   onOpenAuth('login');
                   playTune('click');
                 }}
-                className="px-5 py-2.5 rounded-2xl text-xs font-bold text-gray-200 hover:text-white bg-[#0c1b38] border border-[#1a3363] hover:border-[#2cb64e]/40 transition-all shadow-sm"
+                className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-bold text-gray-200 hover:text-white bg-[#0c1b38] border border-[#1a3363] hover:border-[#2cb64e]/40 transition-all shadow-sm"
               >
                 Sign In
               </button>
@@ -243,9 +246,9 @@ export default function HoodNavbar({
                   onOpenAuth('register');
                   playTune('click');
                 }}
-                className="btn-hood-green px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-[0_4px_18px_rgba(44,182,78,0.4)]"
+                className="btn-hood-green px-3 sm:px-6 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-[0_4px_18px_rgba(44,182,78,0.4)]"
               >
-                <span>Register</span>
+                <span className="whitespace-nowrap">Register</span>
               </button>
             </>
           )}
