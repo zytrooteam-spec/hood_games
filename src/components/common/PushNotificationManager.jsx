@@ -212,13 +212,25 @@ export default function PushNotificationManager() {
       navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
     }
 
+    const subscribeWebAlerts = () => {
+      fetch('/api/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ device: 'web_chrome' }),
+      }).catch(() => {});
+    };
+
     // Auto-request Chrome permission if not decided
     if ('Notification' in window) {
-      if (Notification.permission === 'default') {
+      if (Notification.permission === 'granted') {
+        subscribeWebAlerts();
+      } else if (Notification.permission === 'default') {
         const askPermission = () => {
           Notification.requestPermission()
             .then((perm) => {
               if (perm === 'granted') {
+                subscribeWebAlerts();
                 triggerChromeDesktopNotification({
                   title: '🔔 Notifications Enabled!',
                   message: 'You will now receive instant alerts for deposits, cashouts, and bonuses.',
