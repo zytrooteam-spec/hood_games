@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.hoodgaming.official',
+  appId: 'com.hoodgames.app',
   appName: 'Hood Gaming',
   webDir: 'public',
   bundledWebRuntime: false,

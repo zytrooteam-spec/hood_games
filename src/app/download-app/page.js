@@ -88,7 +88,7 @@ function DownloadAppContent() {
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="p-3 rounded-xl bg-[#070d1e] border border-[#1a3363]">
               <span className="text-[10px] uppercase font-bold text-gray-400 block">Package ID</span>
-              <span className="font-mono font-bold text-white">com.hoodgaming.official</span>
+              <span className="font-mono font-bold text-white">com.hoodgames.app</span>
             </div>
             <div className="p-3 rounded-xl bg-[#070d1e] border border-[#1a3363]">
               <span className="text-[10px] uppercase font-bold text-gray-400 block">Version</span>
@@ -126,7 +126,7 @@ function DownloadAppContent() {
                 <span className="w-5 h-5 rounded-full bg-[#12244c] text-white flex items-center justify-center font-bold text-[10px] shrink-0">2</span>
                 <span>
                   Tap the file and tap <strong>Install</strong>. Hood Gaming installs as its{' '}
-                  <strong>own app</strong> (<code>com.hoodgaming.official</code>) — it will{' '}
+                  <strong>own app</strong> (<code>com.hoodgames.app</code>) — it will{' '}
                   <strong>not</strong> update or replace Players Paradise.
                 </span>
               </div>

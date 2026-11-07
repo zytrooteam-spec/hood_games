@@ -129,6 +129,8 @@ export default function PushNotificationManager() {
         }
 
         if (isNative) {
+          // Let WebView finish boot before FCM register (avoids cold-start crash on some devices)
+          await new Promise((r) => setTimeout(r, 1200));
           const { PushNotifications } = await import('@capacitor/push-notifications');
 
           // Explicitly create MAX-importance channel for Android 8.0+ Lockscreen popup
@@ -192,11 +194,15 @@ export default function PushNotificationManager() {
             });
 
             // Register AFTER listeners are attached so the token event is never missed
-            await PushNotifications.register();
+            try {
+              await PushNotifications.register();
+            } catch (regErr) {
+              console.warn('[PUSH] register skipped:', regErr?.message || regErr);
+            }
           }
         }
       } catch (err) {
-        console.warn('Capacitor native push note:', err.message);
+        console.warn('Capacitor native push note:', err?.message || err);
       }
     };
 
