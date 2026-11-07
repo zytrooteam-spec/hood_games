@@ -38,6 +38,9 @@ import {
   Eye,
   Paperclip,
   RefreshCw as RefreshIcon,
+  Megaphone,
+  Gift,
+  Link2,
 } from 'lucide-react';
 import { compressImageFile } from '@/lib/imageCompress';
 import HoodChatMessageBubble from '@/components/chat/HoodChatMessageBubble';
@@ -56,7 +59,15 @@ import {
   generateGameUsername,
 } from '@/lib/gameCredentials';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
-import { GamesLibraryTab, GatewaysTab, GameLoadsTab, LedgerTab, StaffTab } from './AdminExtraTabs';
+import {
+  GamesLibraryTab,
+  GatewaysTab,
+  GameLoadsTab,
+  LedgerTab,
+  StaffTab,
+  PromosTab,
+  AffiliatesTab,
+} from './AdminExtraTabs';
 import AdminImageField from './AdminImageField';
 
 export default function AdminDashboard({ user, onLogout }) {
@@ -118,7 +129,10 @@ export default function AdminDashboard({ user, onLogout }) {
   const seenRedemptionIdsRef = React.useRef(new Set());
   const seenGameIdReqRef = React.useRef(new Set());
   const seenLoadReqRef = React.useRef(new Set());
+  const seenFreeplayReqRef = React.useRef(new Set());
   const seenChatKeysRef = React.useRef(new Set());
+
+  const isPendingReq = (r) => String(r?.status || '').toLowerCase() === 'pending';
 
   const playAdminChime = React.useCallback(
     (overrideTune = null) => {
@@ -178,9 +192,10 @@ export default function AdminDashboard({ user, onLogout }) {
     (depList, redList, reqList, threadList) => {
       const pendingDeps = (depList || []).filter((d) => (d.status || '').toLowerCase() === 'pending');
       const pendingReds = (redList || []).filter((r) => (r.status || '').toLowerCase() === 'pending');
-      const pendingReqs = (reqList || []).filter((r) => (r.status || '').toLowerCase() === 'pending');
-      const pendingLoads = pendingReqs.filter((r) => Number(r.transferAmount || 0) > 0);
-      const pendingGameIds = pendingReqs.filter((r) => Number(r.transferAmount || 0) <= 0);
+      const pendingReqs = (reqList || []).filter(isPendingReq);
+      const pendingFreeplay = pendingReqs.filter((r) => r.freeplayPending);
+      const pendingLoads = pendingReqs.filter((r) => !r.freeplayPending && Number(r.transferAmount || 0) > 0);
+      const pendingGameIds = pendingReqs.filter((r) => !r.freeplayPending && Number(r.transferAmount || 0) <= 0);
       const unreadChat = (threadList || []).reduce((s, t) => s + Number(t.unreadCount || 0), 0);
 
       const totalPending =
@@ -234,6 +249,7 @@ export default function AdminDashboard({ user, onLogout }) {
         pendingReds.forEach((r) => seenRedemptionIdsRef.current.add(String(r._id)));
         pendingGameIds.forEach((r) => seenGameIdReqRef.current.add(String(r._id)));
         pendingLoads.forEach((r) => seenLoadReqRef.current.add(String(r._id)));
+        pendingFreeplay.forEach((r) => seenFreeplayReqRef.current.add(String(r._id)));
         (threadList || []).forEach((t) => {
           if (Number(t.unreadCount || 0) > 0) {
             seenChatKeysRef.current.add(`${t.userId}:${t.lastMessage?.createdAt || t.updatedAt || ''}`);
@@ -253,7 +269,15 @@ export default function AdminDashboard({ user, onLogout }) {
         notifyNew('🎮 Game ID Request', `${r.username || 'Player'} — ${r.gameTitle || 'platform'}`, 'requests', 'marimba')
       );
       track(pendingLoads, seenLoadReqRef.current, (r) =>
-        notifyNew('🪙 Coin Load', `${r.username} loaded $${Number(r.transferAmount || 0).toFixed(2)}`, 'game_loads', 'arcade')
+        notifyNew('🪙 Coin Load', `${r.username || r.userName} loaded $${Number(r.transferAmount || 0).toFixed(2)}`, 'game_loads', 'arcade')
+      );
+      track(pendingFreeplay, seenFreeplayReqRef.current, (r) =>
+        notifyNew(
+          '🎁 Freeplay Task',
+          `${r.userName || r.username || 'Player'} — $${Number(r.freeplayAmount || 0).toFixed(2)} on ${r.gameTitle || 'game'}`,
+          'requests',
+          'marimba'
+        )
       );
 
       (threadList || []).forEach((t) => {
@@ -285,11 +309,12 @@ export default function AdminDashboard({ user, onLogout }) {
   const pendingFinanceCount =
     (deposits || []).filter((d) => (d.status || '').toLowerCase() === 'pending').length +
     (redemptions || []).filter((r) => (r.status || '').toLowerCase() === 'pending').length;
+  const pendingFreeplayCount = (accountRequests || []).filter((r) => isPendingReq(r) && r.freeplayPending).length;
   const pendingGameIdCount = (accountRequests || []).filter(
-    (r) => (r.status || '').toLowerCase() === 'pending' && Number(r.transferAmount || 0) <= 0
+    (r) => isPendingReq(r) && !r.freeplayPending && Number(r.transferAmount || 0) <= 0
   ).length;
   const pendingLoadCount = (accountRequests || []).filter(
-    (r) => (r.status || '').toLowerCase() === 'pending' && Number(r.transferAmount || 0) > 0
+    (r) => isPendingReq(r) && !r.freeplayPending && Number(r.transferAmount || 0) > 0
   ).length;
   const unreadChatCount = (chatThreads || []).reduce((s, t) => s + Number(t.unreadCount || 0), 0);
 
@@ -694,6 +719,55 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   };
 
+  const handleFreeplayWalletCredit = async (requestId, amount) => {
+    const ok = await hoodConfirm({
+      title: 'Credit Freeplay to wallet',
+      message: `Credit $${Number(amount || 0).toFixed(2)} SC to player wallet after screenshot verification?`,
+      confirmLabel: 'Credit SC',
+      pill: 'FREEPLAY DESK',
+    });
+    if (!ok) return;
+    try {
+      const res = await fetch('/api/account-requests', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, action: 'freeplay_wallet' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        hoodAlert.success(data.message, 'Freeplay approved');
+        fetchAllData();
+      } else hoodAlert.error(data.error || 'Failed');
+    } catch {
+      hoodAlert.error('Error crediting freeplay');
+    }
+  };
+
+  const handleRejectAccountRequest = async (requestId) => {
+    const values = await hoodPromptForm({
+      title: 'Reject request',
+      message: 'Reason shown to the player.',
+      variant: 'warning',
+      confirmLabel: 'Reject',
+      fields: [{ name: 'reason', label: 'Reason', required: true, placeholder: 'e.g. Screenshot unclear' }],
+    });
+    if (!values?.reason) return;
+    try {
+      const res = await fetch('/api/account-requests', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, action: 'reject', rejectionReason: values.reason }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        hoodAlert.success('Request rejected', 'Game ID desk');
+        fetchAllData();
+      } else hoodAlert.error(data.error || 'Failed');
+    } catch {
+      hoodAlert.error('Error rejecting request');
+    }
+  };
+
   // Save Settings & 5 Action Cards
   const handleSaveSettings = async (e) => {
     e.preventDefault();
@@ -936,7 +1010,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 <Key size={16} />
                 <span>Game ID Requests</span>
               </div>
-              <NavCountBadge count={pendingGameIdCount} tone="blue" />
+              <NavCountBadge count={pendingGameIdCount + pendingFreeplayCount} tone="blue" />
             </button>
 
             <button
@@ -1006,6 +1080,30 @@ export default function AdminDashboard({ user, onLogout }) {
             >
               <FileSpreadsheet size={16} />
               <span>Financial Ledger / TX</span>
+            </button>
+
+            <button
+              onClick={() => selectNavTab('promos')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'promos'
+                  ? 'btn-hood-green text-white shadow-md'
+                  : 'text-gray-300 hover:bg-[#0e2042]'
+              }`}
+            >
+              <Megaphone size={16} />
+              <span>Promos & Push</span>
+            </button>
+
+            <button
+              onClick={() => selectNavTab('affiliates')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'affiliates'
+                  ? 'btn-hood-green text-white shadow-md'
+                  : 'text-gray-300 hover:bg-[#0e2042]'
+              }`}
+            >
+              <Link2 size={16} />
+              <span>Affiliates</span>
             </button>
 
             <button
@@ -1144,7 +1242,7 @@ export default function AdminDashboard({ user, onLogout }) {
             </div>
 
             {/* Quick Pending Queues */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div
                 onClick={() => setActiveTab('finance')}
                 className="p-5 rounded-2xl bg-[#09142a] border border-amber-500/40 hover:border-amber-400 cursor-pointer shadow-lg"
@@ -1182,6 +1280,39 @@ export default function AdminDashboard({ user, onLogout }) {
                   </span>
                 </div>
                 <p className="text-xs text-gray-400 mt-2">Players requesting Orion, Kirin, or Panda logins.</p>
+              </div>
+
+              <div
+                onClick={() => setActiveTab('game_loads')}
+                className="p-5 rounded-2xl bg-[#09142a] border border-[#2cb64e]/40 hover:border-[#2cb64e] cursor-pointer shadow-lg"
+              >
+                <div className="flex justify-between items-center">
+                  <h4 className="text-sm font-black text-white">Coin Load Queue</h4>
+                  <span className="text-xl font-black text-[#2cb64e] font-mono">{pendingLoadCount}</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">Approved deposits waiting for in-game SC allotment.</p>
+              </div>
+
+              <div
+                onClick={() => setActiveTab('requests')}
+                className="p-5 rounded-2xl bg-[#09142a] border border-pink-500/40 hover:border-pink-400 cursor-pointer shadow-lg"
+              >
+                <div className="flex justify-between items-center">
+                  <h4 className="text-sm font-black text-white">Freeplay Verifications</h4>
+                  <span className="text-xl font-black text-pink-300 font-mono">{pendingFreeplayCount}</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">Inbox screenshot tasks — credit welcome SC from Game ID desk.</p>
+              </div>
+
+              <div
+                onClick={() => setActiveTab('chat')}
+                className="p-5 rounded-2xl bg-[#09142a] border border-rose-500/40 hover:border-rose-400 cursor-pointer shadow-lg"
+              >
+                <div className="flex justify-between items-center">
+                  <h4 className="text-sm font-black text-white">Unread Live Chat</h4>
+                  <span className="text-xl font-black text-rose-300 font-mono">{unreadChatCount}</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">Support threads with labels & staff notes (Hood layout).</p>
               </div>
             </div>
           </div>
@@ -2096,45 +2227,101 @@ export default function AdminDashboard({ user, onLogout }) {
         {activeTab === 'requests' && (
           <div className="space-y-4 pt-6">
             <h3 className="text-base font-black text-white">
-              Player Game Credentials Requests ({accountRequests.length})
+              Player Game Credentials & Freeplay Desk ({accountRequests.length})
             </h3>
+            <p className="text-[11px] text-gray-400">
+              Paradise-style detail: freeplay rows show task ID, bonus amount, and inbox screenshot. Credit wallet only or issue game ID + freeplay SC.
+            </p>
             <div className="overflow-x-auto rounded-2xl border border-[#1a3363] bg-[#09142a]">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-xs min-w-[880px]">
                 <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
                   <tr>
                     <th className="p-3">Player</th>
+                    <th className="p-3">Type</th>
                     <th className="p-3">Game Platform</th>
-                    <th className="p-3">Load Coins</th>
-                    <th className="p-3">Notes</th>
+                    <th className="p-3">Amount</th>
+                    <th className="p-3">Proof / Notes</th>
                     <th className="p-3">Status</th>
                     <th className="p-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#1a3363]">
-                  {accountRequests.map((req) => (
-                    <tr key={req._id} className="hover:bg-[#0e2042]/50">
-                      <td className="p-3 font-bold text-white">{req.username}</td>
-                      <td className="p-3 text-[#2cb64e] font-bold">{req.gameTitle}</td>
-                      <td className="p-3 font-mono">${req.transferAmount || 0}</td>
-                      <td className="p-3 text-gray-400">{req.notes || 'None'}</td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/20 text-amber-300">
-                          {req.status}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right space-x-1">
-                        {req.status === 'pending' && (
-                          <button
-                            type="button"
-                            onClick={() => handleApproveAccountRequest(req._id)}
-                            className="btn-hood-green px-3 py-1 rounded text-white text-[10px] font-bold"
-                          >
-                            Issue Login & PIN
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {accountRequests.map((req) => {
+                    const player = req.userName || req.username || 'Player';
+                    const pending = isPendingReq(req);
+                    const shot = req.freeplayScreenshot || req.screenshot;
+                    return (
+                      <tr key={req._id} className="hover:bg-[#0e2042]/50">
+                        <td className="p-3 font-bold text-white">
+                          {player}
+                          <p className="text-gray-500 font-normal">{req.userEmail || ''}</p>
+                        </td>
+                        <td className="p-3">
+                          {req.freeplayPending ? (
+                            <span className="px-2 py-0.5 rounded bg-pink-500/20 text-pink-200 text-[10px] font-black uppercase">
+                              Freeplay #{req.freeplayTaskId || '—'}
+                            </span>
+                          ) : Number(req.transferAmount || 0) > 0 ? (
+                            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase">Coin load</span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[10px] font-bold uppercase">Game ID</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-[#2cb64e] font-bold">{req.gameTitle}</td>
+                        <td className="p-3 font-mono">
+                          {req.freeplayPending
+                            ? `$${Number(req.freeplayAmount || 0).toFixed(2)} SC`
+                            : `$${Number(req.transferAmount || 0).toFixed(2)}`}
+                        </td>
+                        <td className="p-3 text-gray-400 max-w-xs">
+                          <p className="truncate">{req.notes || '—'}</p>
+                          {shot && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingProof(shot)}
+                              className="mt-1 text-[10px] font-bold text-[#2cb64e] inline-flex items-center gap-1"
+                            >
+                              <Eye size={12} /> View inbox screenshot
+                            </button>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/20 text-amber-300">
+                            {req.status}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right space-x-1 whitespace-nowrap">
+                          {pending && req.freeplayPending && (
+                            <button
+                              type="button"
+                              onClick={() => handleFreeplayWalletCredit(req._id, req.freeplayAmount)}
+                              className="btn-hood-green px-3 py-1 rounded text-white text-[10px] font-bold"
+                            >
+                              Credit Freeplay SC
+                            </button>
+                          )}
+                          {pending && (
+                            <button
+                              type="button"
+                              onClick={() => handleApproveAccountRequest(req._id)}
+                              className="px-3 py-1 rounded bg-[#0e2042] border border-[#2cb64e]/50 text-[#2cb64e] text-[10px] font-bold"
+                            >
+                              Issue Login & PIN
+                            </button>
+                          )}
+                          {pending && (
+                            <button
+                              type="button"
+                              onClick={() => handleRejectAccountRequest(req._id)}
+                              className="px-3 py-1 rounded bg-rose-950/50 text-rose-300 text-[10px] font-bold"
+                            >
+                              Reject
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -2317,6 +2504,10 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {activeTab === 'ledger' && <LedgerTab />}
 
+        {activeTab === 'promos' && <PromosTab />}
+
+        {activeTab === 'affiliates' && <AffiliatesTab />}
+
         {/* ======================================================== */}
         {/* 12. STAFF MANAGEMENT                                     */}
         {/* ======================================================== */}
@@ -2337,7 +2528,7 @@ export default function AdminDashboard({ user, onLogout }) {
               </button>
               <h4 className="text-sm font-black text-white uppercase tracking-wider mb-4 flex items-center gap-2">
                 <Eye size={16} className="text-[#2cb64e]" />
-                <span>Player Deposit Proof / Receipt</span>
+                <span>Deposit / Freeplay screenshot proof</span>
               </h4>
               <div className="overflow-auto max-h-[65vh] w-full flex items-center justify-center rounded-2xl border border-[#1a3363] bg-[#070d1e] p-2">
                 <img

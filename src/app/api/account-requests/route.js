@@ -118,6 +118,86 @@ export async function PUT(req) {
       return NextResponse.json({ success: false, error: 'Request not found' }, { status: 404 });
     }
 
+    const finishFreeplaySideEffects = async (reqDoc, staffUsername, gameTitle) => {
+      await db.collection('users').updateOne(toIdQuery(reqDoc.userId), {
+        $set: {
+          freeplayClaimed: true,
+          freeplayClaimedAt: new Date(),
+          freeplayGameTitle: gameTitle || reqDoc.gameTitle,
+          updatedAt: new Date(),
+        },
+      });
+      await db.collection('freeplay_tasks').updateMany(
+        {
+          $or: [
+            { userId: reqDoc.userId },
+            { email: reqDoc.userEmail },
+          ],
+          status: 'pending',
+        },
+        {
+          $set: {
+            status: 'approved',
+            approvedAt: new Date(),
+            approvedBy: staffUsername,
+          },
+        }
+      );
+    };
+
+    if (action === 'freeplay_wallet') {
+      const amount = Number(reqDoc.freeplayAmount || 0);
+      if (amount <= 0) {
+        return NextResponse.json({ success: false, error: 'Invalid freeplay amount on request' }, { status: 400 });
+      }
+      const player = await db.collection('users').findOne(toIdQuery(reqDoc.userId));
+      if (!player) {
+        return NextResponse.json({ success: false, error: 'Player not found' }, { status: 404 });
+      }
+      const before = Number(player.balanceSC || 0);
+      const after = Number((before + amount).toFixed(2));
+
+      await db.collection('users').updateOne(toIdQuery(reqDoc.userId), {
+        $inc: { balanceSC: amount },
+        $set: { updatedAt: new Date() },
+      });
+
+      await db.collection('ledger').insertOne({
+        userId: reqDoc.userId,
+        username: player.username || reqDoc.username || reqDoc.userName,
+        type: 'freeplay_credit',
+        currency: 'SC',
+        amount,
+        balanceBefore: before,
+        balanceAfter: after,
+        performedBy: user.username,
+        referenceId: String(reqDoc._id),
+        notes: `Freeplay welcome bonus $${amount.toFixed(2)} SC — task ${reqDoc.freeplayTaskId || 'n/a'}`,
+        createdAt: new Date(),
+      });
+
+      await db.collection('accountRequests').updateOne(toIdQuery(requestId), {
+        $set: {
+          status: 'approved',
+          approvedBy: user.username,
+          approvedAt: new Date(),
+          updatedAt: new Date(),
+          freeplayCredited: true,
+        },
+      });
+
+      await finishFreeplaySideEffects(reqDoc, user.username, reqDoc.gameTitle);
+
+      notifyPlayer({
+        userId: reqDoc.userId,
+        title: '🎁 Freeplay Bonus Credited!',
+        message: `Your $${amount.toFixed(2)} SC Freeplay has been added to your Hood wallet. Enjoy ${reqDoc.gameTitle || 'the games'}!`,
+        type: 'freeplay_approved',
+      });
+
+      return NextResponse.json({ success: true, message: `Credited $${amount.toFixed(2)} SC freeplay to player wallet.` });
+    }
+
     if (action === 'approve') {
       if (!gameUsername || !gamePassword) {
         return NextResponse.json({ success: false, error: 'Game username and password required' }, { status: 400 });
@@ -161,10 +241,41 @@ export async function PUT(req) {
         }
       );
 
+      if (reqDoc.freeplayPending) {
+        const fpAmt = Number(reqDoc.freeplayAmount || 0);
+        if (fpAmt > 0) {
+          const player = await db.collection('users').findOne(toIdQuery(reqDoc.userId));
+          if (player) {
+            await db.collection('users').updateOne(toIdQuery(reqDoc.userId), {
+              $inc: { balanceSC: fpAmt },
+              $set: { updatedAt: new Date() },
+            });
+            await db.collection('ledger').insertOne({
+              userId: reqDoc.userId,
+              username: player.username,
+              type: 'freeplay_credit',
+              currency: 'SC',
+              amount: fpAmt,
+              balanceBefore: Number(player.balanceSC || 0),
+              balanceAfter: Number((Number(player.balanceSC || 0) + fpAmt).toFixed(2)),
+              performedBy: user.username,
+              referenceId: String(reqDoc._id),
+              notes: `Freeplay + game ID issued for ${reqDoc.gameTitle}`,
+              createdAt: new Date(),
+            });
+          }
+        }
+        await finishFreeplaySideEffects(reqDoc, user.username, reqDoc.gameTitle);
+      }
+
       notifyPlayer({
         userId: reqDoc.userId,
-        title: `🔑 Your ${reqDoc.gameTitle} Account is Ready!`,
-        message: `Username: ${gameUsername} | Password: ${gamePassword}. Tap to access your game credentials.`,
+        title: reqDoc.freeplayPending
+          ? `🎁 Freeplay + ${reqDoc.gameTitle} ID Ready!`
+          : `🔑 Your ${reqDoc.gameTitle} Account is Ready!`,
+        message: reqDoc.freeplayPending
+          ? `Username: ${gameUsername} | Password: ${gamePassword}. Freeplay SC was added to your wallet.`
+          : `Username: ${gameUsername} | Password: ${gamePassword}. Tap to access your game credentials.`,
         type: 'account_approved',
       });
 
@@ -182,6 +293,23 @@ export async function PUT(req) {
           },
         }
       );
+
+      if (reqDoc.freeplayPending) {
+        await db.collection('freeplay_tasks').updateMany(
+          {
+            $or: [{ userId: reqDoc.userId }, { email: reqDoc.userEmail }],
+            status: 'pending',
+          },
+          {
+            $set: {
+              status: 'rejected',
+              rejectedAt: new Date(),
+              rejectedBy: user.username,
+              rejectionReason: rejectionReason || 'Staff rejected freeplay verification',
+            },
+          }
+        );
+      }
 
       notifyPlayer({
         userId: reqDoc.userId,

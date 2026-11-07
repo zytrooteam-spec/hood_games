@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Edit2, X, Search, RefreshCw, Check, Power } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Search, RefreshCw, Check, Power, Megaphone, Gift, Link2, DollarSign } from 'lucide-react';
 import AdminImageField from './AdminImageField';
 import { diffSet } from '@/lib/fastDiff';
 import { playTune } from '@/lib/soundAlerts';
@@ -490,6 +490,212 @@ export function StaffTab({ currentUser }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* 6. PROMOTIONS & PUSH BROADCAST                                     */
+/* ------------------------------------------------------------------ */
+const EMPTY_PROMO = { title: '', badge: 'HOT', description: '', matchPercent: 50, category: 'bonus', active: true, priority: 10 };
+
+export function PromosTab() {
+  const [promos, setPromos] = useState([]);
+  const [form, setForm] = useState(EMPTY_PROMO);
+  const [saving, setSaving] = useState(false);
+  const [pushTitle, setPushTitle] = useState('');
+  const [pushBody, setPushBody] = useState('');
+  const [pushDispatching, setPushDispatching] = useState(false);
+
+  const load = useCallback(() => {
+    fetch('/api/promotions?admin=true', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => d?.success && diffSet(setPromos, d.promotions || []))
+      .catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const createPromo = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const res = await fetch('/api/promotions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      const d = await res.json();
+      if (!d.success) return hoodAlert.error(d.error || 'Failed', 'Promotion');
+      hoodAlert.success('Promotion saved', 'Promos');
+      setForm(EMPTY_PROMO);
+      load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleActive = async (p) => {
+    await fetch('/api/promotions', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p._id, active: !p.active }) });
+    load();
+  };
+
+  const remove = async (id) => {
+    const ok = await hoodConfirm({ title: 'Delete promotion?', message: 'Players will no longer see this promo banner.', confirmLabel: 'Delete' });
+    if (!ok) return;
+    await fetch('/api/promotions', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    load();
+  };
+
+  const dispatchPush = async () => {
+    if (!pushTitle.trim() || !pushBody.trim()) return;
+    setPushDispatching(true);
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ title: pushTitle.trim(), message: pushBody.trim(), channel: 'push', target: 'all' }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        hoodAlert.success(d.message || 'Push sent', 'Broadcast');
+        setPushTitle('');
+        setPushBody('');
+      } else hoodAlert.error(d.error || 'Push failed');
+    } finally {
+      setPushDispatching(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 pt-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <form onSubmit={createPromo} className={`${cardCls} p-5 space-y-3`}>
+          <h3 className="text-sm font-black text-white flex items-center gap-2"><Gift size={16} className="text-[#2cb64e]" /> Create site promotion</h3>
+          <Field label="Title"><input required className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
+          <Field label="Badge"><input className={inputCls} value={form.badge} onChange={(e) => setForm({ ...form, badge: e.target.value })} /></Field>
+          <Field label="Description"><textarea required className={`${inputCls} min-h-[80px]`} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Match %"><input type="number" className={inputCls} value={form.matchPercent} onChange={(e) => setForm({ ...form, matchPercent: Number(e.target.value) })} /></Field>
+            <Field label="Priority"><input type="number" className={inputCls} value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} /></Field>
+          </div>
+          <button disabled={saving} className="w-full btn-hood-green py-2.5 rounded-xl text-xs font-black uppercase">{saving ? 'Saving...' : 'Publish promotion'}</button>
+        </form>
+
+        <div className={`${cardCls} p-5 space-y-3`}>
+          <h3 className="text-sm font-black text-white flex items-center gap-2"><Megaphone size={16} className="text-amber-300" /> Player push broadcast</h3>
+          <p className="text-[10px] text-gray-500">All subscribed APK / browser devices (same flow as Players Paradise).</p>
+          <input className={inputCls} placeholder="Push title" value={pushTitle} onChange={(e) => setPushTitle(e.target.value)} />
+          <textarea className={`${inputCls} min-h-[72px]`} placeholder="Push message" value={pushBody} onChange={(e) => setPushBody(e.target.value)} />
+          <button type="button" disabled={pushDispatching} onClick={dispatchPush} className="w-full btn-hood-green py-2.5 rounded-xl text-xs font-black uppercase">
+            {pushDispatching ? 'Sending...' : 'Send push to all players'}
+          </button>
+        </div>
+      </div>
+
+      <div className={`overflow-x-auto ${cardCls}`}>
+        <table className="w-full text-left text-xs min-w-[600px]">
+          <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
+            <tr><th className="p-3">Title</th><th className="p-3">Badge</th><th className="p-3">Match</th><th className="p-3">Status</th><th className="p-3 text-right">Actions</th></tr>
+          </thead>
+          <tbody className="divide-y divide-[#1a3363]">
+            {promos.map((p) => (
+              <tr key={p._id} className="hover:bg-[#0e2042]/50">
+                <td className="p-3 font-bold text-white">{p.title}<p className="text-gray-500 font-normal mt-0.5 max-w-xs truncate">{p.description}</p></td>
+                <td className="p-3 text-amber-300 font-bold">{p.badge}</td>
+                <td className="p-3 font-mono">{p.matchPercent}%</td>
+                <td className="p-3"><StatusBadge status={p.active ? 'active' : 'inactive'} /></td>
+                <td className="p-3 text-right space-x-1">
+                  <button type="button" onClick={() => toggleActive(p)} className="px-2 py-1 rounded bg-[#070d1e] border border-[#1a3363] text-[10px] font-bold"><Power size={10} className="inline" /> Toggle</button>
+                  <button type="button" onClick={() => remove(p._id)} className="px-2 py-1 rounded bg-rose-950/40 text-rose-300 text-[10px] font-bold"><Trash2 size={10} className="inline" /> Del</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* 7. AFFILIATES & COMMISSIONS                                        */
+/* ------------------------------------------------------------------ */
+export function AffiliatesTab() {
+  const [rows, setRows] = useState([]);
+  const [totals, setTotals] = useState({ partners: 0, unpaid: 0, earned: 0 });
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    fetch('/api/affiliates?mode=admin', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success) {
+          diffSet(setRows, d.affiliates || []);
+          setTotals(d.totals || { partners: 0, unpaid: 0, earned: 0 });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { load(); const i = setInterval(load, 15000); return () => clearInterval(i); }, [load]);
+
+  const payout = async (userId, username, amount) => {
+    const ok = await hoodConfirm({
+      title: 'Pay affiliate commission',
+      message: `Pay $${Number(amount).toFixed(2)} SC unpaid commission to ${username}?`,
+      confirmLabel: 'Pay to wallet',
+    });
+    if (!ok) return;
+    const res = await fetch('/api/affiliates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, action: 'payout' }) });
+    const d = await res.json();
+    if (d.success) hoodAlert.success(d.message, 'Affiliate');
+    else hoodAlert.error(d.error || 'Payout failed');
+    load();
+  };
+
+  return (
+    <div className="space-y-4 pt-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className={`${cardCls} p-4`}><span className="text-[10px] text-gray-400 uppercase font-bold">Partners</span><p className="text-2xl font-black text-white font-mono">{totals.partners}</p></div>
+        <div className={`${cardCls} p-4`}><span className="text-[10px] text-gray-400 uppercase font-bold">Unpaid SC</span><p className="text-2xl font-black text-amber-300 font-mono">${totals.unpaid?.toFixed?.(2) ?? Number(totals.unpaid || 0).toFixed(2)}</p></div>
+        <div className={`${cardCls} p-4`}><span className="text-[10px] text-gray-400 uppercase font-bold">Lifetime earned</span><p className="text-2xl font-black text-[#2cb64e] font-mono">${totals.earned?.toFixed?.(2) ?? Number(totals.earned || 0).toFixed(2)}</p></div>
+      </div>
+
+      <h3 className="text-sm font-black text-white flex items-center gap-2"><Link2 size={16} className="text-[#2cb64e]" /> Affiliate partners</h3>
+      {loading ? <p className="text-xs text-gray-500">Loading affiliates...</p> : (
+        <div className={`overflow-x-auto ${cardCls}`}>
+          <table className="w-full text-left text-xs min-w-[720px]">
+            <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
+              <tr>
+                <th className="p-3">Partner</th>
+                <th className="p-3">Code</th>
+                <th className="p-3">Referrals</th>
+                <th className="p-3">Deposits gen.</th>
+                <th className="p-3">Unpaid</th>
+                <th className="p-3">Earned</th>
+                <th className="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#1a3363]">
+              {rows.map((a) => (
+                <tr key={a.userId} className="hover:bg-[#0e2042]/50">
+                  <td className="p-3 font-bold text-white">{a.username}<p className="text-gray-500 font-normal">{a.email}</p></td>
+                  <td className="p-3 font-mono text-[#2cb64e]">{a.referralCode}</td>
+                  <td className="p-3">{a.totalReferrals}</td>
+                  <td className="p-3 font-mono">${Number(a.totalDepositsGenerated || 0).toFixed(2)}</td>
+                  <td className="p-3 font-mono text-amber-300">${Number(a.commissionsUnpaid || 0).toFixed(2)}</td>
+                  <td className="p-3 font-mono">${Number(a.commissionsEarned || 0).toFixed(2)}</td>
+                  <td className="p-3 text-right">
+                    {a.commissionsUnpaid > 0 && (
+                      <button type="button" onClick={() => payout(a.userId, a.username, a.commissionsUnpaid)} className="btn-hood-green px-3 py-1 rounded text-[10px] font-bold inline-flex items-center gap-1"><DollarSign size={10} /> Pay wallet</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr><td colSpan={7} className="p-6 text-center text-gray-500">No affiliate activity yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
