@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Hood Games</string>
-    <string name="title_activity_main">Hood Games</string>
+    <string name="app_name">Hood Gaming</string>
+    <string name="title_activity_main">Hood Gaming</string>
     <string name="package_name">com.hoodgames.app</string>
     <string name="custom_url_scheme">com.hoodgames.app</string>
 </resources>

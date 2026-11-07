@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.hoodgames.app',
-  appName: 'Hood Games',
+  appName: 'Hood Gaming',
   webDir: 'public',
   bundledWebRuntime: false,
   server: {
@@ -19,7 +19,7 @@ const config: CapacitorConfig = {
       launchAutoHide: true,
       backgroundColor: '#09142a',
       androidSplashResourceName: 'splash',
-      androidScaleType: 'CENTER_CROP',
+      androidScaleType: 'FIT_CENTER',
       showSpinner: false,
     },
     StatusBar: {
