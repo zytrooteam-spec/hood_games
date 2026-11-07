@@ -1,10 +1,15 @@
-export const WHEEL_SEGMENTS = [
-  { id: 1, label: '$1.00 SC', type: 'SC', value: 1.0, color: '#09142a', text: '#2cb64e' },
-  { id: 2, label: '5,000 GC', type: 'GC', value: 5000, color: '#0c1b38', text: '#f59e0b' },
-  { id: 3, label: '$2.50 SC', type: 'SC', value: 2.5, color: '#09142a', text: '#00f0ff' },
-  { id: 4, label: '10,000 GC', type: 'GC', value: 10000, color: '#0c1b38', text: '#f59e0b' },
-  { id: 5, label: '$5.00 SC', type: 'SC', value: 5.0, color: '#09142a', text: '#2cb64e' },
-  { id: 6, label: '25,000 GC', type: 'GC', value: 25000, color: '#0c1b38', text: '#f59e0b' },
-  { id: 7, label: '$10.00 SC', type: 'SC', value: 10.0, color: '#09142a', text: '#ec4899' },
-  { id: 8, label: '50,000 GC', type: 'GC', value: 50000, color: '#0c1b38', text: '#f59e0b' },
+// Daily spin wheel — same prize labels & values as Players Paradise (depositor spins).
+// Colors tuned for Hood Games UI (#09142a / #2cb64e theme).
+export const WHEEL_SLICES = [
+  { label: '$1', value: 1, color: '#12244c', text: '#2cb64e' },
+  { label: 'Bad Luck', value: 0, color: '#334155', text: '#94a3b8', isBadLuck: true },
+  { label: '$2', value: 2, color: '#0c3d2e', text: '#34d399' },
+  { label: '$3', value: 3, color: '#3b2f0a', text: '#fbbf24' },
+  { label: '$1', value: 1, color: '#0e2042', text: '#2cb64e' },
+  { label: 'Try Again', value: 0, color: '#1e293b', text: '#94a3b8', isBadLuck: true },
+  { label: '$2', value: 2, color: '#134e4a', text: '#2dd4bf' },
+  { label: '$1', value: 1, color: '#312e4a', text: '#a78bfa' },
 ];
+
+/** @deprecated use WHEEL_SLICES — kept for older imports */
+export const WHEEL_SEGMENTS = WHEEL_SLICES;

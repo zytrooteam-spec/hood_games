@@ -145,7 +145,7 @@ export async function PUT(req) {
       // Credit player balance
       await db.collection('users').updateOne(
         toIdQuery(deposit.userId),
-        { $inc: { balanceSC: creditAmount } }
+        { $inc: { balanceSC: creditAmount, availableSpins: 2 } }
       );
 
       await db.collection('deposits').updateOne(

@@ -2,109 +2,173 @@ import { NextResponse } from 'next/server';
 import { getDb, toIdQuery } from '@/lib/mongodb';
 import { getSessionUser } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
-import { WHEEL_SEGMENTS } from '@/lib/wheelConstants';
+import { WHEEL_SLICES } from '@/lib/wheelConstants';
 
+export const runtime = 'nodejs';
+
+// GET: depositor free-spin balance (2 spins per approved deposit — same as Players Paradise)
 export async function GET(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req, 'player');
-    if (!user) {
-      return NextResponse.json({ success: true, canSpin: false, reason: 'Login required' });
+    const session = await getSessionUser(req, 'player');
+    if (!session) {
+      return NextResponse.json({
+        success: true,
+        authenticated: false,
+        canSpin: false,
+        availableSpins: 0,
+        slices: WHEEL_SLICES,
+        message: 'Please log in to spin.',
+      });
     }
 
     const db = await getDb();
-    const userId = user.id || user._id.toString();
-
-    // Find latest spin
-    const lastSpin = await db
-      .collection('daily_spins')
-      .findOne({ userId }, { sort: { createdAt: -1 } });
-
-    if (!lastSpin) {
-      return NextResponse.json({ success: true, canSpin: true, nextSpinAvailable: null });
+    const userId = session.userId || session.id;
+    const user = await db.collection('users').findOne(toIdQuery(userId));
+    if (!user) {
+      return NextResponse.json({
+        success: true,
+        authenticated: false,
+        canSpin: false,
+        availableSpins: 0,
+        slices: WHEEL_SLICES,
+        message: 'User not found',
+      });
     }
 
-    const lastTime = new Date(lastSpin.createdAt).getTime();
-    const now = Date.now();
-    const cooldownMs = 24 * 60 * 60 * 1000;
-    const canSpin = now - lastTime >= cooldownMs;
-    const nextSpinAvailable = canSpin ? null : new Date(lastTime + cooldownMs).toISOString();
+    const availableSpins = Math.max(0, Number(user.availableSpins || 0));
+    const canSpin = availableSpins > 0;
 
     return NextResponse.json({
       success: true,
+      authenticated: true,
       canSpin,
-      nextSpinAvailable,
-      lastPrize: lastSpin.prize,
+      availableSpins,
+      slices: WHEEL_SLICES,
+      lastDailySpin: user.lastDailySpin || null,
+      balanceSC: Number(user.balanceSC ?? 0),
+      message: canSpin
+        ? `You have ${availableSpins} free ${availableSpins === 1 ? 'spin' : 'spins'} available!`
+        : 'Free spins unlock after an approved deposit — 2 spins credited per deposit.',
     });
   } catch (err) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    console.error('Daily spin GET error:', err);
+    return NextResponse.json({
+      success: true,
+      canSpin: false,
+      availableSpins: 0,
+      slices: WHEEL_SLICES,
+      error: err.message,
+    });
   }
 }
 
+// POST: weighted spin (10% $3, 20% $2, 40% $1, 30% bad luck — Paradise spec)
 export async function POST(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req, 'player');
-    if (!user) {
-      return NextResponse.json({ success: false, error: 'Please log in to spin the wheel' }, { status: 401 });
+    const session = await getSessionUser(req, 'player');
+    if (!session) {
+      return NextResponse.json({ success: false, message: 'Please log in to spin.' }, { status: 401 });
     }
 
     const db = await getDb();
-    const userId = user.id || user._id.toString();
+    const usersCol = db.collection('users');
+    const userId = session.userId || session.id;
+    const user = await usersCol.findOne(toIdQuery(userId));
+    if (!user) {
+      return NextResponse.json({ success: false, message: 'User not found' }, { status: 404 });
+    }
 
-    // Check 24-hr cooldown
-    const lastSpin = await db
-      .collection('daily_spins')
-      .findOne({ userId }, { sort: { createdAt: -1 } });
-
-    if (lastSpin) {
-      const lastTime = new Date(lastSpin.createdAt).getTime();
-      const now = Date.now();
-      const cooldownMs = 24 * 60 * 60 * 1000;
-      if (now - lastTime < cooldownMs) {
-        const remainingHours = Math.ceil((cooldownMs - (now - lastTime)) / (1000 * 60 * 60));
-        return NextResponse.json({
+    const availableSpins = Math.max(0, Number(user.availableSpins || 0));
+    if (availableSpins <= 0) {
+      return NextResponse.json(
+        {
           success: false,
-          error: `You have already claimed your daily spin! Next spin in ${remainingHours} hours.`,
-        }, { status: 429 });
-      }
+          canSpin: false,
+          availableSpins: 0,
+          message: 'No free spins available. Make a deposit — when staff approves it you get 2 free spins.',
+        },
+        { status: 400 }
+      );
     }
 
-    // Pick segment
-    const segmentIndex = Math.floor(Math.random() * WHEEL_SEGMENTS.length);
-    const wonPrize = WHEEL_SEGMENTS[segmentIndex];
+    const rand = Math.random() * 100;
+    let prizeAmount = 0;
+    let sliceIndex = 1;
+    let isBadLuck = false;
 
-    const incUpdate = {};
-    if (wonPrize.type === 'SC') {
-      incUpdate.balanceSC = Number(wonPrize.value);
+    if (rand < 10) {
+      prizeAmount = 3;
+      sliceIndex = 3;
+    } else if (rand < 30) {
+      prizeAmount = 2;
+      const twoSlices = [2, 6];
+      sliceIndex = twoSlices[Math.floor(Math.random() * twoSlices.length)];
+    } else if (rand < 70) {
+      prizeAmount = 1;
+      const oneSlices = [0, 4, 7];
+      sliceIndex = oneSlices[Math.floor(Math.random() * oneSlices.length)];
     } else {
-      incUpdate.balanceGC = Number(wonPrize.value);
+      prizeAmount = 0;
+      isBadLuck = true;
+      const zeroSlices = [1, 5];
+      sliceIndex = zeroSlices[Math.floor(Math.random() * zeroSlices.length)];
     }
 
-    await db.collection('users').updateOne(
-      toIdQuery(userId),
-      { $inc: incUpdate }
-    );
+    const remainingSpins = Math.max(0, availableSpins - 1);
+    const oldBalance = Number(user.balanceSC ?? 0);
+    const newBalance = Number((oldBalance + prizeAmount).toFixed(2));
+    const now = new Date();
 
-    // Save spin record
-    await db.collection('daily_spins').insertOne({
-      userId,
-      username: user.username,
-      prize: wonPrize,
-      createdAt: new Date(),
-    });
+    const updateOps = {
+      $inc: { availableSpins: -1 },
+      $set: { lastDailySpin: now, updatedAt: now },
+    };
+    if (prizeAmount > 0) {
+      updateOps.$inc.balanceSC = prizeAmount;
+    }
 
-    const updatedUser = await db.collection('users').findOne(toIdQuery(userId));
+    await usersCol.updateOne({ _id: user._id }, updateOps);
+
+    if (prizeAmount > 0) {
+      await db.collection('ledger').insertOne({
+        userId: user._id.toString(),
+        username: user.username,
+        type: 'depositor_spin_bonus',
+        currency: 'SC',
+        amount: prizeAmount,
+        balanceBefore: oldBalance,
+        balanceAfter: newBalance,
+        referenceId: `SPIN-${now.getTime()}`,
+        notes: `Depositor Free Spin Reward: Won $${prizeAmount.toFixed(2)} SC on wheel spin`,
+        createdAt: now,
+      });
+    }
+
+    const slice = WHEEL_SLICES[sliceIndex];
+    const prize = {
+      label: isBadLuck ? slice.label : `$${prizeAmount.toFixed(2)} SC`,
+      type: 'SC',
+      value: prizeAmount,
+    };
 
     return NextResponse.json({
       success: true,
-      segmentIndex,
-      prize: wonPrize,
-      newBalanceSC: updatedUser?.balanceSC ?? user.balanceSC,
-      newBalanceGC: updatedUser?.balanceGC ?? user.balanceGC,
+      winAmount: prizeAmount,
+      sliceIndex,
+      slice,
+      prize,
+      isBadLuck,
+      availableSpins: remainingSpins,
+      canSpin: remainingSpins > 0,
+      newBalanceSC: newBalance,
+      message: isBadLuck
+        ? 'Bad Luck! Better luck on your next spin.'
+        : `Congratulations! You won $${prizeAmount.toFixed(2)} SC!`,
     });
   } catch (err) {
-    console.error('Daily spin error:', err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    console.error('Daily spin POST error:', err);
+    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }

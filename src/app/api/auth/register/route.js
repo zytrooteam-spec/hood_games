@@ -149,6 +149,7 @@ export async function POST(req) {
       role: ROLES.PLAYER,
       balanceSC: 0,
       balanceGC: 10000,
+      availableSpins: 0,
       emailVerified: true,
       isVerified: true,
       referralCode: myReferralCode,
