@@ -41,8 +41,8 @@ export async function confirmPlayerSession(apiUser) {
     };
   }
 
-  for (let attempt = 0; attempt < 6; attempt++) {
-    await new Promise((r) => setTimeout(r, 75 * (attempt + 1)));
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await new Promise((r) => setTimeout(r, 50 * (attempt + 1)));
     const confirmed = await fetchPlayerSession();
     if (confirmed) return { ok: true, user: confirmed };
   }

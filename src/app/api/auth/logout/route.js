@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 
+export const runtime = 'nodejs';
+
 function clearCookieOpts(req) {
   const base = getSessionCookieOptions(req);
   return {

@@ -16,6 +16,9 @@ import {
   Info,
   Sparkles,
   ShieldCheck,
+  User,
+  Lock,
+  RefreshCw,
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import {
@@ -64,10 +67,11 @@ const VARIANTS = {
   },
 };
 
-function HoodAlertDialog({ dialog, onDismiss }) {
+function HoodAlertDialog({ dialog, formValues, setFormValues, onDismiss }) {
   if (!dialog?.open) return null;
 
   const isConfirm = dialog.mode === 'confirm';
+  const isForm = dialog.mode === 'form';
   const v = VARIANTS[dialog.variant] || VARIANTS.info;
   const Icon = v.icon;
 
@@ -76,13 +80,30 @@ function HoodAlertDialog({ dialog, onDismiss }) {
     onDismiss(result);
   };
 
+  const submitForm = () => {
+    if (!dialog.fields?.length) {
+      close(null);
+      return;
+    }
+    for (const field of dialog.fields) {
+      const val = String(formValues[field.name] ?? '').trim();
+      if (field.required && !val) return;
+    }
+    playTune('click', 0.35);
+    const out = {};
+    dialog.fields.forEach((field) => {
+      out[field.name] = String(formValues[field.name] ?? '').trim();
+    });
+    onDismiss(out);
+  };
+
   return (
     <div
       className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
       aria-labelledby="hood-alert-title"
-      onClick={() => !isConfirm && close(true)}
+      onClick={() => !isConfirm && !isForm && close(true)}
     >
       <div
         className={`relative w-full max-w-md rounded-3xl bg-gradient-to-b from-[#0e2042] via-[#09142a] to-[#070d1e] border-2 ${v.ring} p-6 sm:p-8 ${v.glow} shadow-[0_24px_70px_rgba(0,0,0,0.85)] overflow-hidden`}
@@ -91,10 +112,20 @@ function HoodAlertDialog({ dialog, onDismiss }) {
         <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-[#2cb64e]/10 rounded-full blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 -right-16 w-48 h-48 bg-[#1a3363]/80 rounded-full blur-2xl" />
 
-        {!isConfirm && (
+        {!isConfirm && !isForm && (
           <button
             type="button"
             onClick={() => close(true)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-[#070d1e] text-gray-400 hover:text-white border border-[#1a3363] hover:border-[#2cb64e]/40 transition-all z-10"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        )}
+        {isForm && (
+          <button
+            type="button"
+            onClick={() => close(null)}
             className="absolute top-4 right-4 p-2 rounded-full bg-[#070d1e] text-gray-400 hover:text-white border border-[#1a3363] hover:border-[#2cb64e]/40 transition-all z-10"
             aria-label="Close"
           >
@@ -130,15 +161,97 @@ function HoodAlertDialog({ dialog, onDismiss }) {
           </h3>
         </div>
 
-        <p className="relative text-sm text-gray-300 leading-relaxed text-center whitespace-pre-wrap px-1 mb-7">
-          {dialog.message}
-        </p>
+        {dialog.message ? (
+          <p className="relative text-sm text-gray-300 leading-relaxed text-center whitespace-pre-wrap px-1 mb-5">
+            {dialog.message}
+          </p>
+        ) : (
+          <div className="mb-4" />
+        )}
 
-        <div className={`relative flex gap-3 ${isConfirm ? 'flex-col-reverse sm:flex-row' : ''}`}>
-          {isConfirm && (
+        {isForm && (
+          <form
+            className="relative space-y-3 mb-6 text-left"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitForm();
+            }}
+          >
+            {typeof dialog.regenerate === 'function' && (
+              <button
+                type="button"
+                onClick={() => {
+                  playTune('click', 0.3);
+                  const next = dialog.regenerate(formValues);
+                  if (next && typeof next === 'object') {
+                    setFormValues((prev) => ({ ...prev, ...next }));
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider border border-[#2cb64e]/35 bg-[#2cb64e]/10 text-[#2cb64e] hover:bg-[#2cb64e]/20 transition-colors"
+              >
+                <RefreshCw size={14} />
+                {dialog.regenerateLabel || 'Generate new values'}
+              </button>
+            )}
+
+            {dialog.fields.map((field) => {
+              const FieldIcon = field.icon === 'lock' ? Lock : field.icon === 'user' ? User : null;
+              const regenField =
+                typeof field.regenerate === 'function'
+                  ? () => {
+                      const next = field.regenerate(formValues);
+                      if (next != null) {
+                        setFormValues((prev) => ({ ...prev, [field.name]: String(next) }));
+                      }
+                    }
+                  : null;
+              return (
+                <div key={field.name}>
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <label className="text-[11px] font-bold text-gray-300">{field.label}</label>
+                    {regenField && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playTune('click', 0.25);
+                          regenField();
+                        }}
+                        className="text-[9px] font-black uppercase tracking-wider text-[#2cb64e] hover:text-white flex items-center gap-1"
+                      >
+                        <RefreshCw size={10} />
+                        New
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative flex items-center">
+                    {FieldIcon && (
+                      <FieldIcon size={15} className="absolute left-3 text-gray-500 pointer-events-none" />
+                    )}
+                    <input
+                      type={field.type || 'text'}
+                      autoComplete="off"
+                      value={formValues[field.name] ?? ''}
+                      onChange={(e) =>
+                        setFormValues((prev) => ({ ...prev, [field.name]: e.target.value }))
+                      }}
+                      placeholder={field.placeholder || ''}
+                      className={`hood-input w-full py-3 rounded-2xl text-sm font-medium font-mono ${FieldIcon ? 'pl-10 pr-4' : 'px-4'}`}
+                      required={Boolean(field.required)}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </form>
+        )}
+
+        <div
+          className={`relative flex gap-3 ${isConfirm || isForm ? 'flex-col-reverse sm:flex-row' : ''}`}
+        >
+          {(isConfirm || isForm) && (
             <button
               type="button"
-              onClick={() => close(false)}
+              onClick={() => close(isConfirm ? false : null)}
               className="flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider bg-[#12244c] border border-[#1a3363] text-gray-200 hover:bg-[#1a3363] transition-colors"
             >
               {dialog.cancelLabel || 'Cancel'}
@@ -146,7 +259,7 @@ function HoodAlertDialog({ dialog, onDismiss }) {
           )}
           <button
             type="button"
-            onClick={() => close(true)}
+            onClick={() => (isForm ? submitForm() : close(true))}
             className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider shadow-[0_4px_22px_rgba(44,182,78,0.35)] transition-transform hover:scale-[1.02] active:scale-[0.98] ${v.btn}`}
           >
             {dialog.confirmLabel || 'OK'}
@@ -171,12 +284,17 @@ export function useHoodAlert() {
 
 export default function HoodAlertProvider({ children }) {
   const [dialog, setDialog] = useState({ open: false });
+  const [formValues, setFormValues] = useState({});
 
   const dismiss = useCallback((result) => {
     setDialog((d) => {
-      if (d.resolve) d.resolve(!!result);
+      if (d.resolve) {
+        if (d.mode === 'form') d.resolve(result && typeof result === 'object' ? result : null);
+        else d.resolve(!!result);
+      }
       return { open: false };
     });
+    setFormValues({});
   }, []);
 
   const openAlert = useCallback((opts) => {
@@ -214,10 +332,36 @@ export default function HoodAlertProvider({ children }) {
     });
   }, []);
 
+  const openForm = useCallback((opts) => {
+    playTune('click', 0.35);
+    const fields = opts.fields || [];
+    const initial = {};
+    fields.forEach((f) => {
+      initial[f.name] = f.defaultValue ?? '';
+    });
+    setFormValues(initial);
+    return new Promise((resolve) => {
+      setDialog({
+        open: true,
+        mode: 'form',
+        title: opts.title || 'Enter details',
+        message: opts.message || '',
+        variant: opts.variant || 'info',
+        confirmLabel: opts.confirmLabel || 'Submit',
+        cancelLabel: opts.cancelLabel || 'Cancel',
+        pill: opts.pill || 'STAFF INPUT',
+        fields,
+        regenerate: opts.regenerate,
+        regenerateLabel: opts.regenerateLabel,
+        resolve,
+      });
+    });
+  }, []);
+
   useEffect(() => {
-    registerHoodAlertHandlers({ alert: openAlert, confirm: openConfirm });
+    registerHoodAlertHandlers({ alert: openAlert, confirm: openConfirm, form: openForm });
     return () => unregisterHoodAlertHandlers();
-  }, [openAlert, openConfirm]);
+  }, [openAlert, openConfirm, openForm]);
 
   const value = {
     alert: openAlert,
@@ -231,7 +375,12 @@ export default function HoodAlertProvider({ children }) {
   return (
     <HoodAlertContext.Provider value={value}>
       {children}
-      <HoodAlertDialog dialog={dialog} onDismiss={dismiss} />
+      <HoodAlertDialog
+        dialog={dialog}
+        formValues={formValues}
+        setFormValues={setFormValues}
+        onDismiss={dismiss}
+      />
     </HoodAlertContext.Provider>
   );
 }

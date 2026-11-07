@@ -217,6 +217,11 @@ class FallbackCollection {
       const itemVal = item[key];
       if (val instanceof RegExp) {
         if (!val.test(String(itemVal || ''))) return false;
+      } else if (
+        key === '_id' ||
+        (val && typeof val === 'object' && (val._bsontype === 'ObjectID' || val.constructor?.name === 'ObjectId'))
+      ) {
+        if (String(itemVal) !== String(val)) return false;
       } else if (typeof val === 'object' && val !== null) {
         if (val.$regex) {
           const re = new RegExp(val.$regex, val.$options || '');

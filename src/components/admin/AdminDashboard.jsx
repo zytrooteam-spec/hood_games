@@ -49,7 +49,12 @@ import {
   requestDesktopNotificationPermission,
   AVAILABLE_TUNES,
 } from '@/lib/soundAlerts';
-import { hoodAlert, hoodConfirm } from '@/lib/hoodAlert';
+import { hoodAlert, hoodConfirm, hoodPromptForm } from '@/lib/hoodAlert';
+import {
+  generateGameCredentialPair,
+  generateGamePassword,
+  generateGameUsername,
+} from '@/lib/gameCredentials';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import { GamesLibraryTab, GatewaysTab, GameLoadsTab, LedgerTab, StaffTab } from './AdminExtraTabs';
 import AdminImageField from './AdminImageField';
@@ -547,7 +552,26 @@ export default function AdminDashboard({ user, onLogout }) {
 
   // Approve/Reject Deposit
   const handleDepositAction = async (depositId, action) => {
-    const reason = action === 'reject' ? prompt('Enter reason for rejection:') : null;
+    let reason = null;
+    if (action === 'reject') {
+      const values = await hoodPromptForm({
+        title: 'Reject deposit',
+        message: 'Add a short reason the player will see on their wallet.',
+        variant: 'warning',
+        confirmLabel: 'Reject deposit',
+        pill: 'FINANCE DESK',
+        fields: [
+          {
+            name: 'reason',
+            label: 'Rejection reason',
+            placeholder: 'e.g. Payment screenshot unclear',
+            required: true,
+          },
+        ],
+      });
+      if (!values?.reason) return;
+      reason = values.reason;
+    }
     try {
       const res = await fetch('/api/payments/deposit', {
         method: 'PUT',
@@ -568,7 +592,26 @@ export default function AdminDashboard({ user, onLogout }) {
 
   // Approve/Reject Redemption
   const handleRedemptionAction = async (redemptionId, action) => {
-    const reason = action === 'reject' ? prompt('Enter reason for rejection:') : null;
+    let reason = null;
+    if (action === 'reject') {
+      const values = await hoodPromptForm({
+        title: 'Reject cashout',
+        message: 'Tell the player why this redemption was returned.',
+        variant: 'warning',
+        confirmLabel: 'Reject cashout',
+        pill: 'FINANCE DESK',
+        fields: [
+          {
+            name: 'reason',
+            label: 'Rejection reason',
+            placeholder: 'e.g. Invalid payout address',
+            required: true,
+          },
+        ],
+      });
+      if (!values?.reason) return;
+      reason = values.reason;
+    }
     try {
       const res = await fetch('/api/payments/withdraw', {
         method: 'PUT',
@@ -589,16 +632,53 @@ export default function AdminDashboard({ user, onLogout }) {
 
   // Approve Account Request
   const handleApproveAccountRequest = async (requestId) => {
-    const gameUsername = prompt('Enter generated Game Username:');
-    if (!gameUsername) return;
-    const gamePassword = prompt('Enter generated Game Password:');
-    if (!gamePassword) return;
+    const req = accountRequests.find((r) => r._id === requestId);
+    const playerUsername = req?.username || '';
+    const makePair = () => generateGameCredentialPair(playerUsername);
+    const initial = makePair();
+
+    const values = await hoodPromptForm({
+      title: 'Issue game login & PIN',
+      message:
+        'Suggested credentials are filled in automatically — edit them or tap “Generate new” before sending.',
+      variant: 'success',
+      confirmLabel: 'Issue login & PIN',
+      pill: 'GAME ID DESK',
+      regenerate: () => makePair(),
+      regenerateLabel: 'Generate new username & PIN',
+      fields: [
+        {
+          name: 'gameUsername',
+          label: 'Game username',
+          placeholder: 'Platform login ID',
+          icon: 'user',
+          required: true,
+          defaultValue: initial.gameUsername,
+          regenerate: () => generateGameUsername(playerUsername),
+        },
+        {
+          name: 'gamePassword',
+          label: 'Game password / PIN',
+          placeholder: 'Platform password',
+          icon: 'lock',
+          required: true,
+          defaultValue: initial.gamePassword,
+          regenerate: () => generateGamePassword(),
+        },
+      ],
+    });
+    if (!values?.gameUsername || !values?.gamePassword) return;
 
     try {
       const res = await fetch('/api/account-requests', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId, action: 'approve', gameUsername, gamePassword }),
+        body: JSON.stringify({
+          requestId,
+          action: 'approve',
+          gameUsername: values.gameUsername,
+          gamePassword: values.gamePassword,
+        }),
       });
       const data = await res.json();
       if (data.success) {

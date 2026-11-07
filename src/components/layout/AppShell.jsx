@@ -50,9 +50,11 @@ export default function AppShell({ children }) {
       const player = await fetchPlayerSession();
       if (player) {
         diffSet(setUser, player);
-      } else {
+        return;
+      }
+      if (!isSilent) {
         diffSet(setUser, null);
-        if (!isSilent) setUnreadNotifs(0);
+        setUnreadNotifs(0);
       }
     } catch {
       if (!isSilent) diffSet(setUser, null);

@@ -261,11 +261,34 @@ export function GameLoadsTab() {
   }, []);
   useEffect(() => { load(); const i = setInterval(load, 5000); return () => clearInterval(i); }, [load]);
 
-  const act = async (id, action) => {
+  const act = async (id, action, transfer) => {
+    if (action === 'reject') {
+      const ok = await hoodConfirm({
+        title: 'Reject & refund load?',
+        message: `Refund $${Number(transfer?.amount || 0).toFixed(2)} SC to ${transfer?.username || 'player'}'s wallet?`,
+        confirmLabel: 'Reject & refund',
+        cancelLabel: 'Keep pending',
+        variant: 'warning',
+      });
+      if (!ok) return;
+    } else {
+      const ok = await hoodConfirm({
+        title: 'Mark credits loaded?',
+        message: `Confirm $${Number(transfer?.amount || 0).toFixed(2)} was loaded into ${transfer?.gameTitle || 'game'} for ${transfer?.username || 'player'}.`,
+        confirmLabel: 'Yes, loaded',
+        cancelLabel: 'Cancel',
+        variant: 'success',
+      });
+      if (!ok) return;
+    }
+
     const res = await fetch('/api/coins/allotment', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action }) });
     const d = await res.json();
     if (!d.success) hoodAlert.error(d.error || 'Failed', 'Load request failed');
-    else playTune(action === 'complete' ? 'coin' : 'click');
+    else {
+      playTune(action === 'complete' ? 'coin' : 'click');
+      hoodAlert.success(action === 'complete' ? 'Load marked complete' : 'Load rejected & refunded');
+    }
     load();
   };
 
@@ -289,8 +312,8 @@ export function GameLoadsTab() {
                 <td className="p-3 text-right space-x-1 whitespace-nowrap">
                   {t.status === 'pending' && (
                     <>
-                      <button onClick={() => act(t._id, 'complete')} className="px-2.5 py-1 rounded bg-[#2cb64e] text-white font-bold text-[10px]"><Check size={10} className="inline" /> Loaded</button>
-                      <button onClick={() => act(t._id, 'reject')} className="px-2.5 py-1 rounded bg-rose-600 text-white font-bold text-[10px]">Reject & Refund</button>
+                      <button onClick={() => act(t._id, 'complete', t)} className="px-2.5 py-1 rounded bg-[#2cb64e] text-white font-bold text-[10px]"><Check size={10} className="inline" /> Loaded</button>
+                      <button onClick={() => act(t._id, 'reject', t)} className="px-2.5 py-1 rounded bg-rose-600 text-white font-bold text-[10px]">Reject & Refund</button>
                     </>
                   )}
                 </td>

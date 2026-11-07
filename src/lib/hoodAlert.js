@@ -5,15 +5,18 @@
 
 let showAlertImpl = null;
 let showConfirmImpl = null;
+let showFormImpl = null;
 
-export function registerHoodAlertHandlers({ alert, confirm }) {
+export function registerHoodAlertHandlers({ alert, confirm, form }) {
   showAlertImpl = alert;
   showConfirmImpl = confirm;
+  showFormImpl = form;
 }
 
 export function unregisterHoodAlertHandlers() {
   showAlertImpl = null;
   showConfirmImpl = null;
+  showFormImpl = null;
 }
 
 function nativeAlert(message) {
@@ -67,4 +70,22 @@ export function hoodConfirm(input) {
     });
   }
   return Promise.resolve(nativeConfirm(message));
+}
+
+/**
+ * Centered modal with one or more input fields (replaces window.prompt chains).
+ * @returns {Promise<Record<string, string> | null>}
+ */
+export function hoodPromptForm(input) {
+  const opts = typeof input === 'string' ? { message: input, fields: [{ name: 'value', label: input, required: true }] } : input;
+  if (showFormImpl) {
+    return showFormImpl({
+      variant: 'info',
+      title: 'Enter details',
+      confirmLabel: 'Submit',
+      cancelLabel: 'Cancel',
+      ...opts,
+    });
+  }
+  return Promise.resolve(null);
 }

@@ -5,6 +5,8 @@ import { signToken, ROLES, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 
+export const runtime = 'nodejs';
+
 function attachSessionCookie(response, token, isAdminPortal, req) {
   const opts = getSessionCookieOptions(req);
   if (isAdminPortal) {

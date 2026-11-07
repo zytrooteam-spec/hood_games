@@ -1,8 +1,8 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { cookies } from 'next/headers';
 import { getDb, toIdQuery } from './mongodb';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'hood_games_ultra_secret_vip_key_2026';
+import { getJwtSecret } from './jwtSecret.server';
 
 export const ROLES = {
   ADMIN: 'admin',
@@ -20,12 +20,12 @@ const STAFF_ROLES = new Set([
 ]);
 
 export function signToken(payload, expiresIn = '7d') {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn });
 }
 
 export function verifyToken(token) {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, getJwtSecret());
   } catch (err) {
     return null;
   }
@@ -40,15 +40,31 @@ export async function verifyPassword(plain, hashed) {
 }
 
 function parseCookies(cookieHeader) {
+  if (!cookieHeader || !String(cookieHeader).trim()) return {};
   return Object.fromEntries(
     cookieHeader.split(';').map((c) => {
-      const [k, ...v] = c.trim().split('=');
-      return [k, decodeURIComponent(v.join('='))];
+      const idx = c.indexOf('=');
+      if (idx === -1) return [c.trim(), ''];
+      const k = c.slice(0, idx).trim();
+      const v = c.slice(idx + 1).trim();
+      return [k, v];
     })
   );
 }
 
-async function loadUserFromToken(decoded) {
+function readCookie(req, name) {
+  try {
+    const fromJar = req?.cookies?.get?.(name);
+    if (fromJar?.value) return fromJar.value;
+  } catch {
+    /* ignore */
+  }
+  const header = req?.headers?.get?.('cookie') || '';
+  const parsed = parseCookies(header);
+  return parsed[name] || null;
+}
+
+export async function loadUserFromToken(decoded) {
   if (!decoded || !decoded.userId) return null;
 
   const db = await getDb();
@@ -88,13 +104,48 @@ async function loadUserFromToken(decoded) {
  *   - player: only players_session / legacy token (player tab)
  *   - auto: admin referer → admin cookie; else player first
  */
+async function readSessionCookies(req) {
+  try {
+    const jar = await cookies();
+    const fromJar = {
+      admin_session: jar.get('admin_session')?.value || null,
+      players_session: jar.get('players_session')?.value || null,
+      vegas_session: jar.get('vegas_session')?.value || null,
+      token: jar.get('token')?.value || null,
+      hood_token: jar.get('hood_token')?.value || null,
+      auth_token: jar.get('auth_token')?.value || null,
+    };
+    if (
+      fromJar.admin_session ||
+      fromJar.players_session ||
+      fromJar.token ||
+      fromJar.vegas_session
+    ) {
+      return fromJar;
+    }
+  } catch {
+    /* fall back to Cookie header */
+  }
+  return {
+    admin_session: readCookie(req, 'admin_session'),
+    players_session: readCookie(req, 'players_session'),
+    vegas_session: readCookie(req, 'vegas_session'),
+    token: readCookie(req, 'token'),
+    hood_token: readCookie(req, 'hood_token'),
+    auth_token: readCookie(req, 'auth_token'),
+  };
+}
+
 export async function getSessionUser(req, preferredType = 'auto') {
   try {
-    const cookieHeader = req.headers.get('cookie') || '';
-    const cookies = parseCookies(cookieHeader);
-    const adminToken = cookies['admin_session'];
+    const jar = await readSessionCookies(req);
+    const adminToken = jar.admin_session;
     const playerToken =
-      cookies['players_session'] || cookies['vegas_session'] || cookies['token'] || cookies['hood_token'] || cookies['auth_token'];
+      jar.players_session ||
+      jar.vegas_session ||
+      jar.token ||
+      jar.hood_token ||
+      jar.auth_token;
 
     const referer = req.headers.get('referer') || '';
     const url = req.url || '';
@@ -126,6 +177,7 @@ export async function getSessionUser(req, preferredType = 'auto') {
     if (!token) return null;
 
     const decoded = verifyToken(token);
+    if (!decoded) return null;
     const user = await loadUserFromToken(decoded);
     if (!user) return null;
 

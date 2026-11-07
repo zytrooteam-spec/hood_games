@@ -87,9 +87,9 @@ export default function HomePage() {
       if (player) {
         diffSet(setUser, player);
         if (player.email) loadUserAccounts(player.email);
-      } else {
-        diffSet(setUser, null);
+        return;
       }
+      if (!isSilent) diffSet(setUser, null);
     } catch {
       if (!isSilent) diffSet(setUser, null);
     }
@@ -475,7 +475,8 @@ export default function HomePage() {
         onClose={() => setAuthModal({ open: false, tab: 'login' })}
         onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'withdraw' })}
         onSuccess={(u) => {
-          setUser(u);
+          const player = normalizePlayerUser(u);
+          if (player) diffSet(setUser, player);
           fetchUser();
         }}
       />

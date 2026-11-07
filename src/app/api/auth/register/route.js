@@ -5,6 +5,8 @@ import { signToken, ROLES } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 
+export const runtime = 'nodejs';
+
 export async function POST(req) {
   try {
     const dbReady = await ensureDbInitialized();

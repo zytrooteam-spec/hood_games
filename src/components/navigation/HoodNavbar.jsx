@@ -7,9 +7,6 @@ import {
   User,
   LogOut,
   Bell,
-  Sparkles,
-  Gamepad2,
-  Download,
   MessageSquare,
   Menu,
   Coins
@@ -34,9 +31,9 @@ export default function HoodNavbar({
 
   return (
     <header className="sticky top-0 z-40 w-full bg-[#09142a]/95 backdrop-blur-xl border-b border-[#1a3363] shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-4 flex flex-wrap items-center justify-between gap-x-2 gap-y-2 sm:gap-4">
-        {/* Left Side: Mobile Hamburger (Responsive ONLY, hidden on desktop) + Nav Pills */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 sm:flex-initial">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex flex-nowrap items-center justify-between gap-2 sm:gap-3 min-h-[52px]">
+        {/* Left: hamburger (mobile) + Cashback pill (desktop) */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
           {/* Hamburger Menu: Visible ONLY on mobile/tablet (lg:hidden), NEVER on desktop */}
           <button
             type="button"
@@ -47,56 +44,20 @@ export default function HoodNavbar({
             <Menu size={20} />
           </button>
 
-          {/* Desktop Navigation Links (No redundant logo here since it's already in the sidebar) */}
-          <nav className="hidden lg:flex items-center gap-2">
-            <Link
-              href="/"
-              onClick={() => playTune('click')}
-              className="px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider text-gray-300 hover:text-white hover:bg-[#0c1b38] border border-transparent hover:border-[#1a3363] transition-all"
-            >
-              Home Lobby
-            </Link>
-
-            <Link
-              href="/games"
-              onClick={() => playTune('click')}
-              className="px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 text-gray-300 hover:text-[#2cb64e] hover:bg-[#0c1b38] border border-transparent hover:border-[#1a3363] transition-all"
-            >
-              <Gamepad2 size={16} />
-              <span>Games</span>
-            </Link>
-
-            <Link
-              href="/wheel-spin"
-              onClick={() => playTune('spin')}
-              className="px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider text-amber-300 hover:bg-[#0c1b38] flex items-center gap-2 transition-all border border-amber-500/25 hover:border-amber-500/50"
-            >
-              <Sparkles size={15} className="text-amber-400 animate-pulse" />
-              <span>Wheel Spin</span>
-            </Link>
-
+          <nav className="hidden lg:flex items-center">
             <Link
               href="/cashback"
               onClick={() => playTune('click')}
-              className="px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider text-emerald-300 hover:bg-[#0c1b38] flex items-center gap-2 transition-all border border-emerald-500/25 hover:border-emerald-500/50"
+              className="px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-wider text-emerald-300 hover:bg-[#0c1b38] flex items-center gap-2 transition-all border border-emerald-500/25 hover:border-emerald-500/50 whitespace-nowrap"
             >
-              <Coins size={15} className="text-emerald-400" />
+              <Coins size={15} className="text-emerald-400 shrink-0" />
               <span>Cashback</span>
-            </Link>
-
-            <Link
-              href="/download-app"
-              onClick={() => playTune('click')}
-              className="px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider text-cyan-300 hover:bg-[#0c1b38] flex items-center gap-2 transition-all border border-cyan-500/25 hover:border-cyan-500/50"
-            >
-              <Download size={15} />
-              <span>Download App</span>
             </Link>
           </nav>
         </div>
 
-        {/* Right Side: Balance Pill, Wallet Button, Auth Buttons, Support & Profile */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 ml-auto">
+        {/* Right: balance, wallet, alerts — same row, no wrap */}
+        <div className="flex flex-nowrap items-center gap-1.5 sm:gap-2 min-w-0 ml-auto">
           {user ? (
             <>
               {/* User Sweeps Balance Pill */}
