@@ -14,3 +14,45 @@ export function normalizePlayerUser(user) {
   if (STAFF_ROLES.has(role)) return null;
   return user;
 }
+
+const PLAYER_ME_URL = '/api/auth/me?session=player';
+
+/** Fetch player session; always sends cookies (WebView-safe). */
+export async function fetchPlayerSession() {
+  const res = await fetch(PLAYER_ME_URL, {
+    method: 'GET',
+    credentials: 'include',
+    cache: 'no-store',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (data?.success && data?.user) {
+    return normalizePlayerUser(data.user);
+  }
+  return null;
+}
+
+/** After login/register API success — validate role & confirm session cookie. */
+export async function confirmPlayerSession(apiUser) {
+  const optimistic = normalizePlayerUser(apiUser);
+  if (!optimistic) {
+    return {
+      ok: false,
+      error: 'Staff accounts must sign in at /admin, not the player login.',
+    };
+  }
+
+  await new Promise((r) => setTimeout(r, 100));
+  const confirmed = await fetchPlayerSession();
+  const user = confirmed || optimistic;
+
+  if (!confirmed) {
+    return {
+      ok: true,
+      user,
+      warning:
+        'Signed in, but session cookie was not saved. Try again in a regular browser tab (not private mode), or use https://hoodgaming.com',
+    };
+  }
+
+  return { ok: true, user };
+}

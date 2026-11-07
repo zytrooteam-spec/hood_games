@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Hood Gaming</string>
     <string name="title_activity_main">Hood Gaming</string>
-    <string name="package_name">com.hoodgames.app</string>
-    <string name="custom_url_scheme">com.hoodgames.app</string>
+    <string name="package_name">com.hoodgaming.official</string>
+    <string name="custom_url_scheme">com.hoodgaming.official</string>
 </resources>

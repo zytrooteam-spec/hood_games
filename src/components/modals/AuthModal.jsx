@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { broadcastPlayerSession } from '@/lib/sessionClient';
+import { confirmPlayerSession } from '@/lib/playerSession';
 
 export default function AuthModal({
   isOpen,
@@ -87,14 +88,23 @@ export default function AuthModal({
           setError(data.error || 'Invalid credentials');
           return;
         }
+        const session = await confirmPlayerSession(data.user);
+        if (!session.ok) {
+          setError(session.error);
+          return;
+        }
         playTune('win');
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('user-sync', { detail: data.user }));
-          window.dispatchEvent(new CustomEvent('hood-user-sync', { detail: data.user }));
-          broadcastPlayerSession(data.user);
+          window.dispatchEvent(new CustomEvent('user-sync', { detail: session.user }));
+          window.dispatchEvent(new CustomEvent('hood-user-sync', { detail: session.user }));
+          broadcastPlayerSession(session.user);
         }
-        onSuccess?.(data.user);
-        handleClose();
+        onSuccess?.(session.user);
+        if (session.warning) {
+          setError(session.warning);
+        } else {
+          handleClose();
+        }
       } else {
         const res = await fetch('/api/auth/register', {
           method: 'POST',
@@ -112,14 +122,23 @@ export default function AuthModal({
           setError(data.error || 'Registration failed');
           return;
         }
+        const session = await confirmPlayerSession(data.user);
+        if (!session.ok) {
+          setError(session.error);
+          return;
+        }
         playTune('win');
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('user-sync', { detail: data.user }));
-          window.dispatchEvent(new CustomEvent('hood-user-sync', { detail: data.user }));
-          broadcastPlayerSession(data.user);
+          window.dispatchEvent(new CustomEvent('user-sync', { detail: session.user }));
+          window.dispatchEvent(new CustomEvent('hood-user-sync', { detail: session.user }));
+          broadcastPlayerSession(session.user);
         }
-        onSuccess?.(data.user);
-        handleClose();
+        onSuccess?.(session.user);
+        if (session.warning) {
+          setError(session.warning);
+        } else {
+          handleClose();
+        }
       }
     } catch {
       setError('Connection failed. Please check your network.');

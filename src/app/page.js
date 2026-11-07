@@ -44,7 +44,7 @@ import {
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { broadcastPlayerSession, subscribePlayerSession } from '@/lib/sessionClient';
-import { normalizePlayerUser } from '@/lib/playerSession';
+import { normalizePlayerUser, fetchPlayerSession } from '@/lib/playerSession';
 
 export default function HomePage() {
   const router = useRouter();
@@ -83,12 +83,10 @@ export default function HomePage() {
   // Load Session User
   const fetchUser = async (isSilent = false) => {
     try {
-      const res = await fetch('/api/auth/me?session=player', { cache: 'no-store' });
-      const data = await res.json();
-      if (data?.success && data?.user) {
-        const player = normalizePlayerUser(data.user);
+      const player = await fetchPlayerSession();
+      if (player) {
         diffSet(setUser, player);
-        if (player?.email) loadUserAccounts(player.email);
+        if (player.email) loadUserAccounts(player.email);
       } else {
         diffSet(setUser, null);
       }
@@ -187,6 +185,7 @@ export default function HomePage() {
     await fetch('/api/auth/logout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ isAdminLogout: false }),
     });
     diffSet(setUser, null);

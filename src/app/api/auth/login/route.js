@@ -3,21 +3,14 @@ import bcrypt from 'bcryptjs';
 import { getDb } from '@/lib/mongodb';
 import { signToken, ROLES, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
+import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 
-const BASE_COOKIE = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
-  maxAge: 7 * 24 * 60 * 60,
-};
-
-const SESSION_COOKIE_OPTS = { ...BASE_COOKIE, path: '/' };
-
-function attachSessionCookie(response, token, isAdminPortal) {
+function attachSessionCookie(response, token, isAdminPortal, req) {
+  const opts = getSessionCookieOptions(req);
   if (isAdminPortal) {
-    response.cookies.set('admin_session', token, SESSION_COOKIE_OPTS);
+    response.cookies.set('admin_session', token, opts);
   } else {
-    response.cookies.set('players_session', token, SESSION_COOKIE_OPTS);
+    response.cookies.set('players_session', token, opts);
   }
 }
 
@@ -94,7 +87,7 @@ export async function POST(req) {
         },
       });
 
-      attachSessionCookie(response, token, true);
+      attachSessionCookie(response, token, true, req);
       return response;
     }
 
@@ -162,7 +155,7 @@ export async function POST(req) {
       },
     });
 
-    attachSessionCookie(response, token, isAdminPortal);
+    attachSessionCookie(response, token, isAdminPortal, req);
     return response;
   } catch (err) {
     console.error('Login error:', err);

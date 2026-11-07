@@ -59,7 +59,7 @@ function DownloadAppContent() {
               className="btn-hood-green px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider shadow-[0_4px_25px_rgba(44,182,78,0.45)] flex items-center gap-2.5"
             >
               <Download size={18} />
-              <span>{downloading ? 'Starting APK Download...' : 'Download Android APK (v2.5.0)'}</span>
+              <span>{downloading ? 'Starting APK Download...' : 'Download Android APK (v2.6.0)'}</span>
             </button>
 
             <span className="text-xs text-gray-400 font-mono">18.4 MB • Free & Secure</span>
@@ -88,11 +88,11 @@ function DownloadAppContent() {
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="p-3 rounded-xl bg-[#070d1e] border border-[#1a3363]">
               <span className="text-[10px] uppercase font-bold text-gray-400 block">Package ID</span>
-              <span className="font-mono font-bold text-white">com.hoodgames.app</span>
+              <span className="font-mono font-bold text-white">com.hoodgaming.official</span>
             </div>
             <div className="p-3 rounded-xl bg-[#070d1e] border border-[#1a3363]">
               <span className="text-[10px] uppercase font-bold text-gray-400 block">Version</span>
-              <span className="font-mono font-bold text-[#2cb64e]">2.5.0 (Hood Gaming)</span>
+              <span className="font-mono font-bold text-[#2cb64e]">2.6.0 (standalone app)</span>
             </div>
             <div className="p-3 rounded-xl bg-[#070d1e] border border-[#1a3363]">
               <span className="text-[10px] uppercase font-bold text-gray-400 block">File Size</span>
@@ -124,7 +124,11 @@ function DownloadAppContent() {
               </div>
               <div className="flex items-start gap-2">
                 <span className="w-5 h-5 rounded-full bg-[#12244c] text-white flex items-center justify-center font-bold text-[10px] shrink-0">2</span>
-                <span>Tap the downloaded file and select <strong>Install</strong> (Allow unknown sources if prompted).</span>
+                <span>
+                  Tap the file and tap <strong>Install</strong>. Hood Gaming installs as its{' '}
+                  <strong>own app</strong> (<code>com.hoodgaming.official</code>) — it will{' '}
+                  <strong>not</strong> update or replace Players Paradise.
+                </span>
               </div>
               <div className="flex items-start gap-2">
                 <span className="w-5 h-5 rounded-full bg-[#12244c] text-white flex items-center justify-center font-bold text-[10px] shrink-0">3</span>

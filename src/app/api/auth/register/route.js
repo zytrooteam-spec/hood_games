@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { getDb } from '@/lib/mongodb';
 import { signToken, ROLES } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
+import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 
 export async function POST(req) {
   try {
@@ -59,6 +60,7 @@ export async function POST(req) {
     const token = signToken({
       userId,
       username: cleanUser,
+      email: cleanEmail,
       role: ROLES.PLAYER,
     });
 
@@ -74,14 +76,7 @@ export async function POST(req) {
       },
     });
 
-    const cookieOpts = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60,
-    };
-    response.cookies.set('players_session', token, cookieOpts);
+    response.cookies.set('players_session', token, getSessionCookieOptions(req));
 
     return response;
   } catch (err) {

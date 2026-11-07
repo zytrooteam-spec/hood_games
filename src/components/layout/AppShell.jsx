@@ -15,7 +15,7 @@ import { Headphones } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { diffSet, areEqual } from '@/lib/fastDiff';
 import { broadcastPlayerSession, subscribePlayerSession } from '@/lib/sessionClient';
-import { normalizePlayerUser } from '@/lib/playerSession';
+import { normalizePlayerUser, fetchPlayerSession } from '@/lib/playerSession';
 
 export const AppShellContext = createContext({
   user: null,
@@ -47,13 +47,12 @@ export default function AppShell({ children }) {
 
   const fetchUser = async (isSilent = false) => {
     try {
-      const res = await fetch('/api/auth/me?session=player', { cache: 'no-store' });
-      const data = await res.json();
-      if (data?.success && data?.user) {
-        diffSet(setUser, normalizePlayerUser(data.user));
+      const player = await fetchPlayerSession();
+      if (player) {
+        diffSet(setUser, player);
       } else {
         diffSet(setUser, null);
-        setUnreadNotifs(0);
+        if (!isSilent) setUnreadNotifs(0);
       }
     } catch {
       if (!isSilent) diffSet(setUser, null);
@@ -109,6 +108,7 @@ export default function AppShell({ children }) {
     await fetch('/api/auth/logout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ isAdminLogout: false }),
     });
     diffSet(setUser, null);
@@ -222,7 +222,8 @@ export default function AppShell({ children }) {
             router.push(`/wallet?tab=${encodeURIComponent(tab || 'withdraw')}`);
           }}
           onSuccess={(u) => {
-            setUser(u);
+            const player = normalizePlayerUser(u);
+            if (player) diffSet(setUser, player);
             fetchUser();
           }}
         />

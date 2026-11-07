@@ -40,7 +40,7 @@ export default function HoodAppModal({ isOpen, onClose }) {
         <div className="p-3.5 rounded-2xl bg-[#070d1e] border border-[#1a3363] text-left text-xs space-y-2 mb-5">
           <div className="flex justify-between text-gray-300">
             <span>Package:</span>
-            <span className="font-mono text-[#2cb64e] font-bold">com.hoodgames.app</span>
+            <span className="font-mono text-[#2cb64e] font-bold">com.hoodgaming.official</span>
           </div>
           <div className="flex justify-between text-gray-300">
             <span>Compatibility:</span>

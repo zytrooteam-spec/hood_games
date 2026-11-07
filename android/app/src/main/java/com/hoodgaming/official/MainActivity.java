@@ -1,4 +1,4 @@
-package com.hoodgames.app;
+package com.hoodgaming.official;
 
 import com.getcapacitor.BridgeActivity;
 
