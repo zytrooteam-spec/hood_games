@@ -278,8 +278,20 @@ class FallbackDb {
 
 let fallbackDbInstance = null;
 
+function allowJsonFallback() {
+  return (
+    process.env.NODE_ENV !== 'production' ||
+    process.env.ALLOW_JSON_FALLBACK === 'true'
+  );
+}
+
 export async function getDb() {
   if (useFallback) {
+    if (!allowJsonFallback()) {
+      throw new Error(
+        'MongoDB is not connected. Set MONGODB_URI in .env on the server (production does not use local JSON fallback).'
+      );
+    }
     if (!fallbackDbInstance) fallbackDbInstance = new FallbackDb();
     return fallbackDbInstance;
   }
@@ -287,19 +299,31 @@ export async function getDb() {
   try {
     if (!clientPromise) {
       client = new MongoClient(uri, {
-        serverSelectionTimeoutMS: 4000,
-        connectTimeoutMS: 5000,
+        serverSelectionTimeoutMS: 8000,
+        connectTimeoutMS: 10000,
       });
       clientPromise = client.connect();
     }
     const connectedClient = await clientPromise;
-    return connectedClient.db();
+    const dbName = process.env.MONGODB_DB_NAME || 'hood_games';
+    return connectedClient.db(dbName);
   } catch (err) {
-    console.warn('⚠️ MongoDB Atlas/Local connection failed, using local resilient storage:', err.message);
+    if (!allowJsonFallback()) {
+      console.error('MongoDB connection failed (production):', err.message);
+      throw err;
+    }
+    console.warn('⚠️ MongoDB unavailable, using local .hood_store.json:', err.message);
     useFallback = true;
     if (!fallbackDbInstance) fallbackDbInstance = new FallbackDb();
     return fallbackDbInstance;
   }
+}
+
+export async function pingMongo() {
+  const db = await getDb();
+  if (useFallback) return { ok: false, mode: 'json_fallback' };
+  await db.command({ ping: 1 });
+  return { ok: true, mode: 'mongodb' };
 }
 
 export async function initDb() {

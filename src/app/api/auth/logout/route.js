@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
+import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 
-const CLEAR = {
-  path: '/',
-  maxAge: 0,
-  expires: new Date(0),
-  httpOnly: true,
-  sameSite: 'lax',
-};
+function clearCookieOpts(req) {
+  const base = getSessionCookieOptions(req);
+  return {
+    ...base,
+    maxAge: 0,
+    expires: new Date(0),
+  };
+}
 
 export async function POST(req) {
   let body = {};
@@ -18,15 +20,13 @@ export async function POST(req) {
   const isAdminLogout = Boolean(body.isAdminLogout || referer.includes('/admin'));
 
   const response = NextResponse.json({ success: true, message: 'Logged out successfully' });
+  const clear = clearCookieOpts(req);
 
   if (isAdminLogout) {
-    response.cookies.set('admin_session', '', CLEAR);
-    response.cookies.delete('admin_session');
+    response.cookies.set('admin_session', '', clear);
   } else {
-    response.cookies.set('players_session', '', CLEAR);
-    response.cookies.set('token', '', CLEAR);
-    response.cookies.delete('players_session');
-    response.cookies.delete('token');
+    response.cookies.set('players_session', '', clear);
+    response.cookies.set('token', '', clear);
   }
 
   return response;

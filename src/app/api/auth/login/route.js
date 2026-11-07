@@ -16,7 +16,13 @@ function attachSessionCookie(response, token, isAdminPortal, req) {
 
 export async function POST(req) {
   try {
-    await ensureDbInitialized();
+    const dbReady = await ensureDbInitialized();
+    if (!dbReady) {
+      return NextResponse.json(
+        { success: false, error: 'Database not ready. Verify MONGODB_URI on the server.' },
+        { status: 503 }
+      );
+    }
     const { identifier, password, isAdminLogin } = await req.json();
     const referer = req.headers.get('referer') || '';
     let pathname = '';
@@ -159,6 +165,10 @@ export async function POST(req) {
     return response;
   } catch (err) {
     console.error('Login error:', err);
-    return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 });
+    const msg =
+      err?.message?.includes('MongoDB') || err?.message?.includes('MONGODB')
+        ? 'Cannot reach database. Admin: check MONGODB_URI in .env and restart PM2.'
+        : 'Server error. Please try again.';
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }

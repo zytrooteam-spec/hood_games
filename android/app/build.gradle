@@ -7,8 +7,8 @@ android {
         applicationId "com.hoodgaming.official"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10
-        versionName "2.6.0"
+        versionCode 11
+        versionName "2.6.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -68,11 +68,22 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
+// Only wire google-services when Firebase package matches applicationId (file stays as downloaded).
 try {
     def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
+    def appId = android.defaultConfig.applicationId
+    if (servicesJSON.exists() && servicesJSON.text?.trim()) {
+        def parsed = new groovy.json.JsonSlurper().parse(servicesJSON)
+        def gsPackage = parsed?.client?.getAt(0)?.client_info?.android_client_info?.package_name
+        if (gsPackage == appId) {
+            apply plugin: 'com.google.gms.google-services'
+        } else {
+            logger.lifecycle(
+                "google-services.json is for '${gsPackage}' but APK id is '${appId}' — " +
+                "keeping your Firebase file unchanged; server/web push still uses firebase-service-account.json."
+            )
+        }
     }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+} catch (Exception e) {
+    logger.info("google-services.json not applied: ${e.message}")
 }

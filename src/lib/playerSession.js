@@ -41,18 +41,11 @@ export async function confirmPlayerSession(apiUser) {
     };
   }
 
-  await new Promise((r) => setTimeout(r, 100));
-  const confirmed = await fetchPlayerSession();
-  const user = confirmed || optimistic;
-
-  if (!confirmed) {
-    return {
-      ok: true,
-      user,
-      warning:
-        'Signed in, but session cookie was not saved. Try again in a regular browser tab (not private mode), or use https://hoodgaming.com',
-    };
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await new Promise((r) => setTimeout(r, 75 * (attempt + 1)));
+    const confirmed = await fetchPlayerSession();
+    if (confirmed) return { ok: true, user: confirmed };
   }
 
-  return { ok: true, user };
+  return { ok: true, user: optimistic };
 }

@@ -83,9 +83,13 @@ export default function AuthModal({
             isAdminLogin: false,
           }),
         });
-        const data = await res.json();
-        if (!data.success) {
-          setError(data.error || 'Invalid credentials');
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          setError(data.error || `Login failed (${res.status || 'network'})`);
+          return;
+        }
+        if (!data.user) {
+          setError('Login response invalid. Please try again.');
           return;
         }
         const session = await confirmPlayerSession(data.user);
@@ -100,11 +104,7 @@ export default function AuthModal({
           broadcastPlayerSession(session.user);
         }
         onSuccess?.(session.user);
-        if (session.warning) {
-          setError(session.warning);
-        } else {
-          handleClose();
-        }
+        handleClose();
       } else {
         const res = await fetch('/api/auth/register', {
           method: 'POST',
@@ -117,9 +117,13 @@ export default function AuthModal({
             phone: phone.trim(),
           }),
         });
-        const data = await res.json();
-        if (!data.success) {
-          setError(data.error || 'Registration failed');
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          setError(data.error || `Sign up failed (${res.status || 'network'})`);
+          return;
+        }
+        if (!data.user) {
+          setError('Sign up response invalid. Please try again.');
           return;
         }
         const session = await confirmPlayerSession(data.user);
@@ -134,11 +138,7 @@ export default function AuthModal({
           broadcastPlayerSession(session.user);
         }
         onSuccess?.(session.user);
-        if (session.warning) {
-          setError(session.warning);
-        } else {
-          handleClose();
-        }
+        handleClose();
       }
     } catch {
       setError('Connection failed. Please check your network.');

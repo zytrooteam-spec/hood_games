@@ -7,7 +7,13 @@ import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 
 export async function POST(req) {
   try {
-    await ensureDbInitialized();
+    const dbReady = await ensureDbInitialized();
+    if (!dbReady) {
+      return NextResponse.json(
+        { success: false, error: 'Database not ready. Verify MONGODB_URI on the server.' },
+        { status: 503 }
+      );
+    }
     const { username, email, password, phone, referralCode } = await req.json();
 
     if (!username || !email || !password) {
@@ -81,6 +87,10 @@ export async function POST(req) {
     return response;
   } catch (err) {
     console.error('Registration error:', err);
-    return NextResponse.json({ success: false, error: 'Registration failed' }, { status: 500 });
+    const msg =
+      err?.message?.includes('MongoDB') || err?.message?.includes('MONGODB')
+        ? 'Cannot reach database. Admin: check MONGODB_URI in .env and restart PM2.'
+        : 'Registration failed. Please try again.';
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }
