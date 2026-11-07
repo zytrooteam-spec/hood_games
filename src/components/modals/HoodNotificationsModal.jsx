@@ -25,7 +25,7 @@ export default function HoodNotificationsModal({ isOpen, onClose, user, onAllRea
 
   const markAllRead = async () => {
     try {
-      await fetch('/api/notifications', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      await fetch('/api/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
       setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
       onAllRead?.();
     } catch {

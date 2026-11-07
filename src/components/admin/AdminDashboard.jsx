@@ -87,6 +87,10 @@ export default function AdminDashboard({ user, onLogout }) {
   const [cashbackReport, setCashbackReport] = useState(null);
   const [disbursingCashback, setDisbursingCashback] = useState(false);
   const [viewingProof, setViewingProof] = useState(null);
+  const [pushTitle, setPushTitle] = useState('');
+  const [pushBody, setPushBody] = useState('');
+  const [pushDispatching, setPushDispatching] = useState(false);
+  const [pushStatus, setPushStatus] = useState('');
 
   // Player editing modal states
   const [selectedPlayerToEdit, setSelectedPlayerToEdit] = useState(null);
@@ -1978,6 +1982,64 @@ export default function AdminDashboard({ user, onLogout }) {
                     />
                   </div>
                 </div>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4">
+                <h4 className="text-sm font-black text-white">Player push broadcast (FCM)</h4>
+                <p className="text-[10px] text-gray-500">
+                  Sends to all subscribed devices (APK + browser). Same as Players Paradise admin dispatch.
+                </p>
+                <input
+                  className="hood-input w-full px-3 py-2 rounded-xl text-xs"
+                  placeholder="Push title"
+                  value={pushTitle}
+                  onChange={(e) => setPushTitle(e.target.value)}
+                />
+                <textarea
+                  className="hood-input w-full px-3 py-2 rounded-xl text-xs min-h-[72px]"
+                  placeholder="Push message"
+                  value={pushBody}
+                  onChange={(e) => setPushBody(e.target.value)}
+                />
+                <button
+                  type="button"
+                  disabled={pushDispatching || !pushTitle.trim() || !pushBody.trim()}
+                  onClick={async () => {
+                    setPushDispatching(true);
+                    setPushStatus('');
+                    try {
+                      const res = await fetch('/api/notifications', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                          title: pushTitle.trim(),
+                          message: pushBody.trim(),
+                          channel: 'push',
+                          target: 'all',
+                          url: '/',
+                        }),
+                      });
+                      const data = await res.json();
+                      if (data.success) {
+                        hoodAlert.success(data.message || 'Broadcast sent', 'Push dispatched');
+                        setPushTitle('');
+                        setPushBody('');
+                      } else {
+                        hoodAlert.error(data.error || 'Failed', 'Push failed');
+                      }
+                      setPushStatus(data.message || data.error || '');
+                    } catch {
+                      hoodAlert.error('Network error', 'Push failed');
+                    } finally {
+                      setPushDispatching(false);
+                    }
+                  }}
+                  className="btn-hood-green w-full py-2.5 rounded-xl text-xs font-black uppercase disabled:opacity-50"
+                >
+                  {pushDispatching ? 'Sending…' : 'Dispatch push to all players'}
+                </button>
+                {pushStatus ? <p className="text-[10px] text-gray-400">{pushStatus}</p> : null}
               </div>
 
               <div className="p-6 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4">
