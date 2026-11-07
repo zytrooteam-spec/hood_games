@@ -15,6 +15,7 @@ import { playTune } from '@/lib/soundAlerts';
 
 export default function HoodNavbar({
   user,
+  sessionReady = true,
   unreadNotifications = 0,
   onOpenNotifications,
   onOpenAuth,
@@ -58,7 +59,9 @@ export default function HoodNavbar({
 
         {/* Right: balance, wallet, alerts — same row, no wrap */}
         <div className="flex flex-nowrap items-center gap-1.5 sm:gap-2 min-w-0 ml-auto">
-          {user ? (
+          {!sessionReady ? (
+            <div className="h-9 w-24 rounded-xl bg-[#0c1b38]/60 border border-[#1a3363] animate-pulse" aria-hidden />
+          ) : user ? (
             <>
               {/* User Sweeps Balance Pill */}
               <div

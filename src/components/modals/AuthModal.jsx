@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { getOrCreateDeviceId } from '@/lib/deviceClient';
 import {
   X,
   Lock,
@@ -34,6 +36,16 @@ export default function AuthModal({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [regStep, setRegStep] = useState('details');
+  const [otp, setOtp] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [ageVerified, setAgeVerified] = useState(true);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setInterval(() => setResendCooldown((c) => (c <= 1 ? 0 : c - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resendCooldown]);
 
   const resetFields = () => {
     setIdentifier('');
@@ -43,6 +55,8 @@ export default function AuthModal({
     setPhone('');
     setShowPassword(false);
     setError('');
+    setRegStep('details');
+    setOtp('');
   };
 
   React.useEffect(() => {
@@ -50,6 +64,7 @@ export default function AuthModal({
     const next =
       initialTab === 'register' || initialTab === 'signup' ? 'register' : 'login';
     setTab(next);
+    setRegStep('details');
     setError('');
   }, [isOpen, initialTab]);
 
@@ -60,8 +75,102 @@ export default function AuthModal({
 
   const switchTab = (next) => {
     setTab(next);
+    setRegStep('details');
     setError('');
     playTune('click');
+  };
+
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+    if (!ageVerified) {
+      setError('You must certify that you are 18+ and a US resident.');
+      return;
+    }
+    const cleanUser = username.trim().toLowerCase();
+    const cleanMail = email.trim().toLowerCase();
+    if (cleanUser.length < 3) {
+      setError('Username must be at least 3 characters.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/auth/otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'send',
+          email: cleanMail,
+          username: cleanUser,
+          purpose: 'Registration',
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setError(data.error || 'Could not send verification code.');
+        return;
+      }
+      setRegStep('otp');
+      setResendCooldown(45);
+      playTune('win');
+    } catch {
+      setError('Network error sending verification code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyRegister = async (e) => {
+    e.preventDefault();
+    if (!otp || otp.trim().length !== 6) {
+      setError('Enter the 6-digit code from your email.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const deviceId = getOrCreateDeviceId();
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-device-id': deviceId },
+        credentials: 'include',
+        body: JSON.stringify({
+          username: username.trim().toLowerCase(),
+          email: email.trim().toLowerCase(),
+          password: password.trim(),
+          phone: phone.trim(),
+          otp: otp.trim(),
+          ageVerified: true,
+          deviceId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setError(data.error || 'Registration failed.');
+        return;
+      }
+      const session = await confirmPlayerSession(data.user);
+      if (!session.ok) {
+        setError(session.error);
+        return;
+      }
+      playTune('win');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('user-sync', { detail: session.user }));
+        window.dispatchEvent(new CustomEvent('hood-user-sync', { detail: session.user }));
+        broadcastPlayerSession(session.user);
+      }
+      onSuccess?.(session.user);
+      handleClose();
+    } catch {
+      setError('Registration failed. Check your connection.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -90,40 +199,6 @@ export default function AuthModal({
         }
         if (!data.user) {
           setError('Login response invalid. Please try again.');
-          return;
-        }
-        const session = await confirmPlayerSession(data.user);
-        if (!session.ok) {
-          setError(session.error);
-          return;
-        }
-        playTune('win');
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('user-sync', { detail: session.user }));
-          window.dispatchEvent(new CustomEvent('hood-user-sync', { detail: session.user }));
-          broadcastPlayerSession(session.user);
-        }
-        onSuccess?.(session.user);
-        handleClose();
-      } else {
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            username: username.trim(),
-            email: email.trim(),
-            password,
-            phone: phone.trim(),
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.success) {
-          setError(data.error || `Sign up failed (${res.status || 'network'})`);
-          return;
-        }
-        if (!data.user) {
-          setError('Sign up response invalid. Please try again.');
           return;
         }
         const session = await confirmPlayerSession(data.user);
@@ -175,7 +250,7 @@ export default function AuthModal({
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#2cb64e]/15 border border-[#2cb64e]/40 text-[#2cb64e] text-[10px] sm:text-xs font-black uppercase tracking-wider">
             <Sparkles size={13} className="text-emerald-400 animate-pulse shrink-0" />
-            <span>{isLogin ? 'WELCOME BACK' : 'INSTANT $5.00 SC BONUS'}</span>
+            <span>{isLogin ? 'WELCOME BACK' : 'EMAIL VERIFIED SIGNUP'}</span>
           </div>
 
           <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight px-1">
@@ -218,7 +293,16 @@ export default function AuthModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={
+            isLogin
+              ? handleSubmit
+              : regStep === 'otp'
+                ? handleVerifyRegister
+                : handleSendOtp
+          }
+          className="space-y-4"
+        >
           {isLogin ? (
             <>
               <div>
@@ -258,7 +342,57 @@ export default function AuthModal({
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+                <div className="text-right -mt-1">
+                  <Link
+                    href="/forgot-password"
+                    onClick={handleClose}
+                    className="text-[10px] font-bold text-[#2cb64e] hover:text-white"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
               </div>
+            </>
+          ) : regStep === 'otp' ? (
+            <>
+              <p className="text-xs text-gray-400 text-center">
+                Enter the 6-digit code sent to <strong className="text-white">{email}</strong>
+              </p>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="hood-input w-full py-3 rounded-2xl text-center text-lg font-mono tracking-[0.35em]"
+                placeholder="000000"
+                required
+              />
+              <button
+                type="button"
+                disabled={resendCooldown > 0 || loading}
+                onClick={async () => {
+                  if (resendCooldown > 0) return;
+                  setLoading(true);
+                  const res = await fetch('/api/auth/otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      action: 'send',
+                      email: email.trim().toLowerCase(),
+                      username: username.trim().toLowerCase(),
+                      purpose: 'Registration',
+                    }),
+                  });
+                  const data = await res.json();
+                  setLoading(false);
+                  if (data.success) setResendCooldown(45);
+                  else setError(data.error || 'Resend failed.');
+                }}
+                className="text-[10px] font-bold text-gray-400 hover:text-[#2cb64e] disabled:opacity-50"
+              >
+                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
+              </button>
             </>
           ) : (
             <>
@@ -330,6 +464,15 @@ export default function AuthModal({
                   />
                 </div>
               </div>
+              <label className="flex items-start gap-2 text-[10px] text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={ageVerified}
+                  onChange={(e) => setAgeVerified(e.target.checked)}
+                  className="mt-0.5 accent-[#2cb64e]"
+                />
+                I am 18+ and a US resident (required for sweeps).
+              </label>
             </>
           )}
 
@@ -343,7 +486,9 @@ export default function AuthModal({
                 ? 'Please wait...'
                 : isLogin
                   ? 'Sign in'
-                  : 'Create account & claim $5 SC'}
+                  : regStep === 'otp'
+                    ? 'Verify & create account'
+                    : 'Send email code'}
             </span>
             <ArrowRight size={16} />
           </button>

@@ -1980,6 +1980,43 @@ export default function AdminDashboard({ user, onLogout }) {
                 </div>
               </div>
 
+              <div className="p-6 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-sm font-black text-white">Lobby Freeplay (Players Paradise workflow)</h4>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        freeplayActive: prev?.freeplayActive === false ? true : false,
+                      }))
+                    }
+                    className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${
+                      settings?.freeplayActive !== false
+                        ? 'bg-[#2cb64e]/20 text-[#2cb64e] border border-[#2cb64e]/40'
+                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                    }`}
+                  >
+                    {settings?.freeplayActive !== false ? '● Active' : '✕ Hidden'}
+                  </button>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-300 block mb-1">Freeplay amount ($ SC)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={settings?.freeplayAmountSC ?? 5}
+                    onChange={(e) =>
+                      setSettings({ ...settings, freeplayAmountSC: Number(e.target.value) })
+                    }
+                    className="hood-input w-full px-3 py-2 rounded-xl text-xs font-mono font-bold"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-2">
+                    Signup starts at 0 SC — player claims once via GET FREEPLAY task (email + screenshot proof, staff approves in Game ID desk).
+                  </p>
+                </div>
+              </div>
+
               <button
                 type="submit"
                 disabled={savingSettings}

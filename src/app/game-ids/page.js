@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AppShell, { useAppShell } from '@/components/layout/AppShell';
+import { RequireGuestOrUser } from '@/components/auth/SessionGate';
 import GameRequestModal from '@/components/modals/GameRequestModal';
 import { Key, Copy, Check, Play, Clock, Plus, ShieldCheck, Gamepad2 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
@@ -52,28 +53,27 @@ function GameIdsContent() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  if (!user) {
-    return (
-      <div className="p-8 sm:p-12 rounded-3xl bg-[#09142a] border-2 border-[#1a3363] text-center max-w-lg mx-auto space-y-4 my-12 shadow-2xl">
-        <div className="w-14 h-14 rounded-2xl bg-[#2cb64e]/20 border border-[#2cb64e]/40 flex items-center justify-center text-[#2cb64e] mx-auto">
-          <Key size={26} />
-        </div>
-        <h2 className="text-2xl font-black text-white">Sign In to View Your Game IDs</h2>
-        <p className="text-xs text-gray-300">
-          Log in to access your Orion Stars, Fire Kirin, and Ultra Panda credentials.
-        </p>
-        <button
-          type="button"
-          onClick={() => openAuth('login')}
-          className="btn-hood-green px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-wider"
-        >
-          Log In Now
-        </button>
+  const guestGate = (
+    <div className="p-8 sm:p-12 rounded-3xl bg-[#09142a] border-2 border-[#1a3363] text-center max-w-lg mx-auto space-y-4 my-12 shadow-2xl">
+      <div className="w-14 h-14 rounded-2xl bg-[#2cb64e]/20 border border-[#2cb64e]/40 flex items-center justify-center text-[#2cb64e] mx-auto">
+        <Key size={26} />
       </div>
-    );
-  }
+      <h2 className="text-2xl font-black text-white">Sign In to View Your Game IDs</h2>
+      <p className="text-xs text-gray-300">
+        Log in to access your Orion Stars, Fire Kirin, and Ultra Panda credentials.
+      </p>
+      <button
+        type="button"
+        onClick={() => openAuth('login')}
+        className="btn-hood-green px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-wider"
+      >
+        Log In Now
+      </button>
+    </div>
+  );
 
   return (
+    <RequireGuestOrUser guest={guestGate}>
     <div className="space-y-6 animate-in fade-in">
       {/* Header */}
       <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#0c1b38] via-[#091733] to-[#070d1e] border-2 border-[#1a3363] shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -221,6 +221,7 @@ function GameIdsContent() {
         }}
       />
     </div>
+    </RequireGuestOrUser>
   );
 }
 

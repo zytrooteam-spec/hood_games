@@ -26,6 +26,7 @@ import HoodDailySpinModal from '@/components/games/HoodDailySpinModal';
 import HoodAppModal from '@/components/modals/HoodAppModal';
 import GameRequestModal from '@/components/modals/GameRequestModal';
 import HoodNotificationsModal from '@/components/modals/HoodNotificationsModal';
+import FreeplayTaskModal from '@/components/modals/FreeplayTaskModal';
 import { unlockAudioContext } from '@/lib/soundAlerts';
 
 import {
@@ -67,6 +68,7 @@ export default function HomePage() {
 
   // User state
   const [user, setUser] = useState(null);
+  const [sessionReady, setSessionReady] = useState(false);
   const [settings, setSettings] = useState(null);
   const [games, setGames] = useState([]);
   const [userGameAccounts, setUserGameAccounts] = useState([]);
@@ -79,6 +81,7 @@ export default function HomePage() {
   const [requestModal, setRequestModal] = useState({ open: false, game: null });
   const [notifsOpen, setNotifsOpen] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [freeplayOpen, setFreeplayOpen] = useState(false);
 
   // Load Session User
   const fetchUser = async (isSilent = false) => {
@@ -92,6 +95,8 @@ export default function HomePage() {
       if (!isSilent) diffSet(setUser, null);
     } catch {
       if (!isSilent) diffSet(setUser, null);
+    } finally {
+      if (!isSilent) setSessionReady(true);
     }
   };
 
@@ -225,6 +230,7 @@ export default function HomePage() {
         {/* Top Navbar */}
         <HoodNavbar
           user={user}
+          sessionReady={sessionReady}
           unreadNotifications={unreadNotifs}
           onOpenNotifications={() => setNotifsOpen(true)}
           activeView={activeView}
@@ -250,6 +256,7 @@ export default function HomePage() {
                 user={user}
                 onOpenAuth={(tab) => setAuthModal({ open: true, tab })}
                 onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
+                onOpenFreeplay={() => (user ? setFreeplayOpen(true) : setAuthModal({ open: true, tab: 'register' }))}
                 setActiveView={setActiveView}
                 heroBackgroundUrl={settings?.heroBackgroundUrl}
                 jackpotBannerUrl={settings?.jackpotBannerUrl}
@@ -491,6 +498,13 @@ export default function HomePage() {
       <HoodAppModal
         isOpen={appModalOpen}
         onClose={() => setAppModalOpen(false)}
+      />
+
+      <FreeplayTaskModal
+        isOpen={freeplayOpen}
+        onClose={() => setFreeplayOpen(false)}
+        user={user}
+        onSuccess={fetchUser}
       />
 
       <HoodNotificationsModal

@@ -19,6 +19,7 @@ import { normalizePlayerUser, fetchPlayerSession } from '@/lib/playerSession';
 
 export const AppShellContext = createContext({
   user: null,
+  sessionReady: false,
   fetchUser: () => {},
   openAuth: () => {},
   openCashier: () => {},
@@ -36,6 +37,7 @@ export default function AppShell({ children }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
+  const [sessionReady, setSessionReady] = useState(false);
 
   // Global modals (Auth & Chat can still be triggered when needed, while all 9 items have dedicated pages)
   const [cashierModal, setCashierModal] = useState({ open: false, tab: 'deposit' });
@@ -58,6 +60,8 @@ export default function AppShell({ children }) {
       }
     } catch {
       if (!isSilent) diffSet(setUser, null);
+    } finally {
+      if (!isSilent) setSessionReady(true);
     }
   };
 
@@ -125,6 +129,7 @@ export default function AppShell({ children }) {
 
   const contextValue = {
     user,
+    sessionReady,
     fetchUser,
     openAuth: (tab) => setAuthModal({ open: true, tab: tab || 'login' }),
     openCashier: (tab) => router.push('/wallet'),
@@ -160,6 +165,7 @@ export default function AppShell({ children }) {
           {/* Top Navbar */}
           <HoodNavbar
             user={user}
+            sessionReady={sessionReady}
             unreadNotifications={unreadNotifs}
             onOpenNotifications={() => setNotifsOpen(true)}
             onOpenAuth={(tab) => setAuthModal({ open: true, tab })}

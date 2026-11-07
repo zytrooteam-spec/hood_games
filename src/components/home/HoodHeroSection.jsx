@@ -32,6 +32,7 @@ export default function HoodHeroSection({
   user,
   onOpenAuth,
   onOpenCashier,
+  onOpenFreeplay,
   setActiveView,
   isMobileOnlyHome = false,
   heroBackgroundUrl = '/images/casino-hero-bg.jpg',
@@ -114,9 +115,22 @@ export default function HoodHeroSection({
                   }}
                   className="btn-hood-green px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-[0_4px_22px_rgba(44,182,78,0.45)]"
                 >
-                  <span>{user ? 'Deposit with 300% Boost' : 'Claim $5.00 Free + 300% Bonus'}</span>
+                  <span>{user ? 'Deposit with 300% Boost' : 'Sign Up + Freeplay Task'}</span>
                   <ArrowRight size={16} />
                 </button>
+
+                {onOpenFreeplay && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenFreeplay();
+                      playTune('coin');
+                    }}
+                    className="px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider text-amber-100 bg-amber-500/20 border border-amber-500/50 hover:bg-amber-500/30 transition-all"
+                  >
+                    Get Freeplay
+                  </button>
+                )}
 
                 <button
                   type="button"
