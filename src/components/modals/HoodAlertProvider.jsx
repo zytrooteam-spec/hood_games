@@ -233,7 +233,7 @@ function HoodAlertDialog({ dialog, formValues, setFormValues, onDismiss }) {
                       value={formValues[field.name] ?? ''}
                       onChange={(e) =>
                         setFormValues((prev) => ({ ...prev, [field.name]: e.target.value }))
-                      }}
+                      }
                       placeholder={field.placeholder || ''}
                       className={`hood-input w-full py-3 rounded-2xl text-sm font-medium font-mono ${FieldIcon ? 'pl-10 pr-4' : 'px-4'}`}
                       required={Boolean(field.required)}
