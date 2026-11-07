@@ -8,6 +8,7 @@
     "build": "next build --webpack",
     "start": "next start -p 3007",
     "lint": "eslint",
+    "db:ping": "node scripts/ping-mongodb.mjs",
     "cap:sync": "cap sync",
     "android:sync": "cap sync android",
     "android:open": "cap open android",

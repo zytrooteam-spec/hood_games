@@ -16,8 +16,14 @@ export async function GET() {
     }
     return NextResponse.json({ success: true, mode: result.mode });
   } catch (err) {
+    const msg = err?.message || 'Database unreachable';
+    const hint = /bad auth/i.test(msg)
+      ? 'MongoDB rejected username/password. Atlas → Database Access: reset password, copy connection string into server .env.local (one line), pm2 restart.'
+      : /whitelist|IP address/i.test(msg)
+        ? 'MongoDB Atlas blocked this server IP. Atlas → Network Access → add VPS public IP.'
+        : undefined;
     return NextResponse.json(
-      { success: false, error: err?.message || 'Database unreachable' },
+      { success: false, error: msg, hint, nodeEnv: process.env.NODE_ENV },
       { status: 503 }
     );
   }
