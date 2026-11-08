@@ -74,7 +74,7 @@ if (messaging && uniq.length > 0) {
   const payload = {
     notification: { title, body: message },
     data: { url: '/', title, body: message },
-    webpush: { headers: { Urgency: 'high' }, notification: { title, body, icon: '/logo.png' } },
+    webpush: { headers: { Urgency: 'high' }, notification: { title, body: message, icon: '/logo.png' } },
     android: { priority: 'high', notification: { channelId: 'default', color: '#2cb64e' } },
   };
   const res = await messaging.sendEachForMulticast({ tokens: uniq, ...payload });
