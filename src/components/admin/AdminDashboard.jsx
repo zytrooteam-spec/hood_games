@@ -62,12 +62,11 @@ import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import {
   GamesLibraryTab,
   GatewaysTab,
-  GameLoadsTab,
   LedgerTab,
   StaffTab,
   PromosTab,
-  AffiliatesTab,
 } from './AdminExtraTabs';
+import { AccountRequestsDesk, CoinAllotmentDesk, AffiliatesDesk } from './HoodAdminDesks';
 import AdminImageField from './AdminImageField';
 
 export default function AdminDashboard({ user, onLogout }) {
@@ -953,7 +952,7 @@ export default function AdminDashboard({ user, onLogout }) {
               }`}
             >
               <LayoutDashboard size={16} />
-              <span>Overview Desk</span>
+              <span>Command Center</span>
             </button>
 
             <button
@@ -993,7 +992,7 @@ export default function AdminDashboard({ user, onLogout }) {
             >
               <div className="flex items-center gap-2.5">
                 <Coins size={16} />
-                <span>Game Credit Loads</span>
+                <span>Coins Allotment</span>
               </div>
               <NavCountBadge count={pendingLoadCount} tone="green" />
             </button>
@@ -1008,7 +1007,7 @@ export default function AdminDashboard({ user, onLogout }) {
             >
               <div className="flex items-center gap-2.5">
                 <Key size={16} />
-                <span>Game ID Requests</span>
+                <span>Account Requests</span>
               </div>
               <NavCountBadge count={pendingGameIdCount + pendingFreeplayCount} tone="blue" />
             </button>
@@ -1079,7 +1078,7 @@ export default function AdminDashboard({ user, onLogout }) {
               }`}
             >
               <FileSpreadsheet size={16} />
-              <span>Financial Ledger / TX</span>
+              <span>Transaction Logs</span>
             </button>
 
             <button
@@ -1091,7 +1090,7 @@ export default function AdminDashboard({ user, onLogout }) {
               }`}
             >
               <Megaphone size={16} />
-              <span>Promos & Push</span>
+              <span>Push & Broadcasts</span>
             </button>
 
             <button
@@ -1103,7 +1102,19 @@ export default function AdminDashboard({ user, onLogout }) {
               }`}
             >
               <Link2 size={16} />
-              <span>Affiliates</span>
+              <span>Affiliates 50%</span>
+            </button>
+
+            <button
+              onClick={() => selectNavTab('affiliate_commissions')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'affiliate_commissions'
+                  ? 'btn-hood-green text-white shadow-md'
+                  : 'text-gray-300 hover:bg-[#0e2042]'
+              }`}
+            >
+              <DollarSign size={16} />
+              <span>Affiliate Commissions</span>
             </button>
 
             <button
@@ -1115,7 +1126,7 @@ export default function AdminDashboard({ user, onLogout }) {
               }`}
             >
               <Users size={16} />
-              <span>Player Management</span>
+              <span>Player Accounts</span>
             </button>
 
             <button
@@ -2224,109 +2235,7 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {/* 6. GAME ID REQUESTS                                      */}
         {/* ======================================================== */}
-        {activeTab === 'requests' && (
-          <div className="space-y-4 pt-6">
-            <h3 className="text-base font-black text-white">
-              Player Game Credentials & Freeplay Desk ({accountRequests.length})
-            </h3>
-            <p className="text-[11px] text-gray-400">
-              Paradise-style detail: freeplay rows show task ID, bonus amount, and inbox screenshot. Credit wallet only or issue game ID + freeplay SC.
-            </p>
-            <div className="overflow-x-auto rounded-2xl border border-[#1a3363] bg-[#09142a]">
-              <table className="w-full text-left text-xs min-w-[880px]">
-                <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
-                  <tr>
-                    <th className="p-3">Player</th>
-                    <th className="p-3">Type</th>
-                    <th className="p-3">Game Platform</th>
-                    <th className="p-3">Amount</th>
-                    <th className="p-3">Proof / Notes</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#1a3363]">
-                  {accountRequests.map((req) => {
-                    const player = req.userName || req.username || 'Player';
-                    const pending = isPendingReq(req);
-                    const shot = req.freeplayScreenshot || req.screenshot;
-                    return (
-                      <tr key={req._id} className="hover:bg-[#0e2042]/50">
-                        <td className="p-3 font-bold text-white">
-                          {player}
-                          <p className="text-gray-500 font-normal">{req.userEmail || ''}</p>
-                        </td>
-                        <td className="p-3">
-                          {req.freeplayPending ? (
-                            <span className="px-2 py-0.5 rounded bg-pink-500/20 text-pink-200 text-[10px] font-black uppercase">
-                              Freeplay #{req.freeplayTaskId || '—'}
-                            </span>
-                          ) : Number(req.transferAmount || 0) > 0 ? (
-                            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase">Coin load</span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[10px] font-bold uppercase">Game ID</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-[#2cb64e] font-bold">{req.gameTitle}</td>
-                        <td className="p-3 font-mono">
-                          {req.freeplayPending
-                            ? `$${Number(req.freeplayAmount || 0).toFixed(2)} SC`
-                            : `$${Number(req.transferAmount || 0).toFixed(2)}`}
-                        </td>
-                        <td className="p-3 text-gray-400 max-w-xs">
-                          <p className="truncate">{req.notes || '—'}</p>
-                          {shot && (
-                            <button
-                              type="button"
-                              onClick={() => setViewingProof(shot)}
-                              className="mt-1 text-[10px] font-bold text-[#2cb64e] inline-flex items-center gap-1"
-                            >
-                              <Eye size={12} /> View inbox screenshot
-                            </button>
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/20 text-amber-300">
-                            {req.status}
-                          </span>
-                        </td>
-                        <td className="p-3 text-right space-x-1 whitespace-nowrap">
-                          {pending && req.freeplayPending && (
-                            <button
-                              type="button"
-                              onClick={() => handleFreeplayWalletCredit(req._id, req.freeplayAmount)}
-                              className="btn-hood-green px-3 py-1 rounded text-white text-[10px] font-bold"
-                            >
-                              Credit Freeplay SC
-                            </button>
-                          )}
-                          {pending && (
-                            <button
-                              type="button"
-                              onClick={() => handleApproveAccountRequest(req._id)}
-                              className="px-3 py-1 rounded bg-[#0e2042] border border-[#2cb64e]/50 text-[#2cb64e] text-[10px] font-bold"
-                            >
-                              Issue Login & PIN
-                            </button>
-                          )}
-                          {pending && (
-                            <button
-                              type="button"
-                              onClick={() => handleRejectAccountRequest(req._id)}
-                              className="px-3 py-1 rounded bg-rose-950/50 text-rose-300 text-[10px] font-bold"
-                            >
-                              Reject
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        {activeTab === 'requests' && <AccountRequestsDesk onMutate={() => fetchAllData(true)} />}
 
         {/* ======================================================== */}
         {/* 7. PLAYER MANAGEMENT                                     */}
@@ -2492,7 +2401,7 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {/* 9. GAME CREDIT LOADS                                     */}
         {/* ======================================================== */}
-        {activeTab === 'game_loads' && <GameLoadsTab />}
+        {activeTab === 'game_loads' && <CoinAllotmentDesk sessionUser={user} onMutate={() => fetchAllData(true)} />}
 
         {/* ======================================================== */}
         {/* 10. GAMES LIBRARY                                        */}
@@ -2506,7 +2415,10 @@ export default function AdminDashboard({ user, onLogout }) {
 
         {activeTab === 'promos' && <PromosTab />}
 
-        {activeTab === 'affiliates' && <AffiliatesTab />}
+        {activeTab === 'affiliates' && <AffiliatesDesk mode="affiliates" onRefresh={() => fetchAllData(true)} />}
+        {activeTab === 'affiliate_commissions' && (
+          <AffiliatesDesk mode="affiliate_commissions" onRefresh={() => fetchAllData(true)} />
+        )}
 
         {/* ======================================================== */}
         {/* 12. STAFF MANAGEMENT                                     */}

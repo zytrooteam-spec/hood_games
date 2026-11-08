@@ -132,10 +132,16 @@ export async function POST(req) {
       console.log(`[OTP GENERATED] To: ${cleanEmail} | Code: ${otpCode} | Sent: ${sendResult.success}`);
 
       if (!sendResult.success) {
+        const raw = sendResult.error || '';
+        const smtpAuthFailed = /535|authentication failed|invalid login/i.test(raw);
+        console.error('[OTP SMTP]', raw);
         return NextResponse.json(
           {
             success: false,
-            error: sendResult.error || 'Failed to dispatch security code email. Please check your email address or try again in a few moments.',
+            error: smtpAuthFailed
+              ? 'Email service is temporarily unavailable. Our team is fixing mail settings — try again in a few minutes or contact live chat.'
+              : 'Could not send your verification code. Check the email address and try again.',
+            smtpMisconfigured: smtpAuthFailed,
           },
           { status: 500 }
         );

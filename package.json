@@ -10,6 +10,7 @@
     "lint": "eslint",
     "db:ping": "node scripts/ping-mongodb.mjs",
     "push:test": "node scripts/send-test-push.mjs",
+    "smtp:test": "node scripts/test-smtp.mjs",
     "cap:sync": "cap sync",
     "android:sync": "cap sync android",
     "android:open": "cap open android",

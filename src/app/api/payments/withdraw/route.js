@@ -16,10 +16,13 @@ export async function GET(req) {
 
     const db = await getDb();
     const isStaff = isStaffRole(user.role) && !player;
+    const { searchParams } = new URL(req.url);
+    const statusParam = searchParams.get('status');
 
     let redemptions;
     if (isStaff) {
-      redemptions = await db.collection('redemptions').find({}).sort({ createdAt: -1 }).toArray();
+      const filter = statusParam && statusParam !== 'all' ? { status: statusParam } : {};
+      redemptions = await db.collection('redemptions').find(filter).sort({ createdAt: -1 }).limit(300).toArray();
     } else {
       redemptions = await db
         .collection('redemptions')

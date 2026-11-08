@@ -99,6 +99,62 @@ export async function GET(req) {
   }
 }
 
+export async function PUT(req) {
+  try {
+    await ensureDbInitialized();
+    const session = await getSessionUser(req);
+    if (!session || !isStaffRole(session.role)) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+    const body = await req.json();
+    const { action, userId } = body;
+    const db = await getDb();
+
+    if (action === 'admin_payout') {
+      if (!userId) return NextResponse.json({ success: false, error: 'userId required' }, { status: 400 });
+      const user = await db.collection('users').findOne(toIdQuery(userId));
+      if (!user) return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+      const unpaid = Number(user.affiliateCommissionsUnpaid || 0);
+      if (unpaid <= 0) return NextResponse.json({ success: false, error: 'No unpaid commission' }, { status: 400 });
+      await db.collection('users').updateOne(toIdQuery(userId), {
+        $inc: { balanceSC: unpaid },
+        $set: { affiliateCommissionsUnpaid: 0, updatedAt: new Date() },
+      });
+      await db.collection('ledger').insertOne({
+        userId: user._id.toString(),
+        username: user.username,
+        type: 'affiliate_payout',
+        amount: unpaid,
+        performedBy: session.username,
+        createdAt: new Date(),
+      });
+      return NextResponse.json({ success: true, message: `Settled $${unpaid.toFixed(2)} SC to ${user.username}` });
+    }
+
+    if (action === 'admin_payout_all') {
+      const partners = await db.collection('users').find({ affiliateCommissionsUnpaid: { $gt: 0 } }).toArray();
+      let total = 0;
+      for (const u of partners) {
+        const unpaid = Number(u.affiliateCommissionsUnpaid || 0);
+        if (unpaid <= 0) continue;
+        total += unpaid;
+        await db.collection('users').updateOne(
+          { _id: u._id },
+          { $inc: { balanceSC: unpaid }, $set: { affiliateCommissionsUnpaid: 0, updatedAt: new Date() } }
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        message: `Batch settled $${total.toFixed(2)} SC across ${partners.length} partners`,
+      });
+    }
+
+    return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
+  } catch (err) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
 export async function POST(req) {
   try {
     await ensureDbInitialized();

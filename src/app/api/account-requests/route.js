@@ -4,6 +4,49 @@ import { getSessionUser, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { sanitizeGameTitle } from '@/lib/fastDiff';
+import { mapAccountRequest } from '@/lib/mapAccountRequest';
+
+function buildStaffQuery(searchParams) {
+  const query = {};
+  const status = searchParams.get('status');
+  const type = searchParams.get('type');
+  const email = searchParams.get('email');
+
+  if (email) query.userEmail = email.toLowerCase().trim();
+  if (status && status !== 'all') {
+    const s = status.toUpperCase();
+    if (s === 'PENDING') query.status = { $in: ['pending', 'PENDING', 'Pending'] };
+    else if (s === 'READY') query.status = { $in: ['approved', 'READY', 'ready'] };
+    else if (s === 'REJECTED') query.status = { $in: ['rejected', 'REJECTED', 'cancelled'] };
+    else query.status = s;
+  }
+
+  if (type === 'ACCOUNT_CREATION') {
+    query.$and = [
+      {
+        $or: [
+          { requestType: 'ACCOUNT_CREATION' },
+          {
+            $and: [
+              { requestType: { $ne: 'COIN_LOAD' } },
+              { $or: [{ transferAmount: { $lte: 0 } }, { transferAmount: { $exists: false } }] },
+            ],
+          },
+        ],
+      },
+    ];
+  } else if (type === 'COIN_LOAD') {
+    query.$and = [
+      {
+        $or: [
+          { requestType: 'COIN_LOAD' },
+          { transferAmount: { $gt: 0 } },
+        ],
+      },
+    ];
+  }
+  return query;
+}
 
 export async function GET(req) {
   try {
@@ -17,10 +60,12 @@ export async function GET(req) {
 
     const db = await getDb();
     const isStaff = isStaffRole(user.role) && !player;
+    const { searchParams } = new URL(req.url);
 
     let requests;
     if (isStaff) {
-      requests = await db.collection('accountRequests').find({}).sort({ createdAt: -1 }).toArray();
+      const query = buildStaffQuery(searchParams);
+      requests = await db.collection('accountRequests').find(query).sort({ createdAt: -1 }).limit(250).toArray();
     } else {
       requests = await db
         .collection('accountRequests')
@@ -29,7 +74,12 @@ export async function GET(req) {
         .toArray();
     }
 
-    return NextResponse.json({ success: true, requests });
+    const mapped = requests.map((r) => mapAccountRequest(r));
+    return NextResponse.json({
+      success: true,
+      requests: mapped,
+      accountRequests: mapped,
+    });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
@@ -107,9 +157,17 @@ export async function PUT(req) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Staff access required' }, { status: 403 });
     }
 
-    const { requestId, action, gameUsername, gamePassword, loginUrl, rejectionReason } = await req.json();
+    const body = await req.json();
+    let action = body.action;
+  const requestId = body.requestId || body.id;
+    let gameUsername = body.gameUsername || body.username;
+    let gamePassword = body.gamePassword || body.password;
+    const loginUrl = body.loginUrl || '';
+    const rejectionReason = body.rejectionReason || body.reason;
+
+    if (action === 'cancel') action = 'reject';
     if (!requestId || !action) {
-      return NextResponse.json({ success: false, error: 'Request ID and action required' }, { status: 400 });
+      return NextResponse.json({ success: false, message: 'Request ID and action required' }, { status: 400 });
     }
 
     const db = await getDb();
@@ -198,6 +256,32 @@ export async function PUT(req) {
       return NextResponse.json({ success: true, message: `Credited $${amount.toFixed(2)} SC freeplay to player wallet.` });
     }
 
+    const isCoinLoad =
+      reqDoc.requestType === 'COIN_LOAD' || Number(reqDoc.transferAmount || 0) > 0;
+
+    if (action === 'approve' && isCoinLoad && (!gameUsername || !gamePassword)) {
+      const loadAmt = Number(body.transferAmount ?? reqDoc.transferAmount ?? 0);
+      await db.collection('accountRequests').updateOne(toIdQuery(requestId), {
+        $set: {
+          status: 'approved',
+          approvedBy: user.username,
+          approvedAt: new Date(),
+          updatedAt: new Date(),
+          transferAmount: loadAmt,
+        },
+      });
+      notifyPlayer({
+        userId: reqDoc.userId,
+        title: `⚡ ${reqDoc.gameTitle} Coin Load Approved`,
+        message: `$${loadAmt.toFixed(2)} SC load marked complete for your ${reqDoc.gameTitle} account.`,
+        type: 'coin_load_approved',
+      });
+      return NextResponse.json({
+        success: true,
+        message: `Coin load for ${reqDoc.gameTitle} approved ($${loadAmt.toFixed(2)} SC).`,
+      });
+    }
+
     if (action === 'approve') {
       if (!gameUsername || !gamePassword) {
         return NextResponse.json({ success: false, error: 'Game username and password required' }, { status: 400 });
@@ -279,6 +363,40 @@ export async function PUT(req) {
         type: 'account_approved',
       });
 
+      let autoCoinLoadCreated = false;
+      let queuedLoadAmount = Number(reqDoc.pendingCoinLoadAmount || reqDoc.transferAmount || 0);
+      if (queuedLoadAmount > 0 && !isCoinLoad) {
+        const loadDoc = {
+          userId: reqDoc.userId,
+          userEmail: reqDoc.userEmail,
+          userName: reqDoc.userName || reqDoc.username,
+          gameTitle: reqDoc.gameTitle,
+          gameId: reqDoc.gameId,
+          requestType: 'COIN_LOAD',
+          transferAmount: queuedLoadAmount,
+          gameAccountUsername: gameUsername,
+          gameAccountPassword: gamePassword,
+          status: 'pending',
+          notes: `Auto-queued after ID @${gameUsername}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        const ins = await db.collection('accountRequests').insertOne(loadDoc);
+        autoCoinLoadCreated = true;
+        notifyStaff({
+          title: '⚡ Coin load queued',
+          message: `$${queuedLoadAmount.toFixed(2)} SC waiting in Coins Allotment for ${reqDoc.gameTitle}`,
+          type: 'coin_load',
+        });
+        return NextResponse.json({
+          success: true,
+          message: 'Game credentials issued successfully!',
+          autoCoinLoadCreated,
+          queuedLoadAmount,
+          autoCreatedCoinLoad: { id: ins.insertedId.toString(), ...loadDoc },
+        });
+      }
+
       return NextResponse.json({ success: true, message: 'Game credentials issued successfully!' });
     } else if (action === 'reject') {
       await db.collection('accountRequests').updateOne(
@@ -325,5 +443,26 @@ export async function PUT(req) {
   } catch (err) {
     console.error('Account request PUT error:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req) {
+  try {
+    await ensureDbInitialized();
+    const user = await getSessionUser(req, 'admin');
+    if (!user || !isStaffRole(user.role)) {
+      return NextResponse.json({ success: false, message: 'Staff only' }, { status: 403 });
+    }
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    if (!id) return NextResponse.json({ success: false, message: 'ID required' }, { status: 400 });
+    const db = await getDb();
+    const res = await db.collection('accountRequests').deleteOne(toIdQuery(id));
+    if (res.deletedCount === 0) {
+      return NextResponse.json({ success: true, alreadyDeleted: true, message: 'Already removed' });
+    }
+    return NextResponse.json({ success: true, message: 'Request dismissed' });
+  } catch (err) {
+    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }

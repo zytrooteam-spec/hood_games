@@ -1,17 +1,59 @@
 import nodemailer from 'nodemailer';
 
+function envVal(key) {
+  const raw = process.env[key];
+  if (raw == null || raw === '') return '';
+  let v = String(raw).trim();
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    v = v.slice(1, -1);
+  }
+  return v.trim();
+}
+
+function smtpConfig() {
+  const host = envVal('SMTP_HOST') || 'smtp.hostinger.com';
+  const port = parseInt(envVal('SMTP_PORT') || '465', 10);
+  const secure =
+    envVal('SMTP_SECURE').toLowerCase() === 'false' ? false : port === 465;
+  const user = envVal('SMTP_USER');
+  const pass = envVal('SMTP_PASS');
+  const from = envVal('SMTP_FROM') || (user ? `"Hood Gaming" <${user}>` : '');
+  return { host, port, secure, user, pass, from };
+}
+
+export async function verifySmtpConnection() {
+  const cfg = smtpConfig();
+  if (!cfg.user || !cfg.pass) {
+    return { success: false, error: 'SMTP_USER or SMTP_PASS not set' };
+  }
+  const transporter = nodemailer.createTransport({
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.secure,
+    auth: { user: cfg.user, pass: cfg.pass },
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 12000,
+    tls: { rejectUnauthorized: false },
+  });
+  try {
+    await transporter.verify();
+    return { success: true, host: cfg.host, port: cfg.port, user: cfg.user };
+  } catch (err) {
+    return { success: false, error: err.message, user: cfg.user, host: cfg.host, port: cfg.port };
+  }
+}
+
 function createSmtpTransporter() {
-  const host = process.env.SMTP_HOST || 'smtp.hostinger.com';
-  const port = parseInt(process.env.SMTP_PORT || '465', 10);
-  const secure = process.env.SMTP_SECURE === 'false' ? false : port === 465;
+  const cfg = smtpConfig();
 
   return nodemailer.createTransport({
-    host,
-    port,
-    secure,
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.secure,
     auth: {
-      user: process.env.SMTP_USER || '',
-      pass: process.env.SMTP_PASS || '',
+      user: cfg.user,
+      pass: cfg.pass,
     },
     connectionTimeout: 8000,
     greetingTimeout: 8000,
@@ -23,17 +65,16 @@ function createSmtpTransporter() {
 }
 
 export async function sendEmail({ to, subject, html, text }) {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const cfg = smtpConfig();
 
-  if (!user || !pass) {
+  if (!cfg.user || !cfg.pass) {
     console.log(`[SMTP SIMULATED] To: ${to} | Subject: ${subject}`);
     return { success: true, simulated: true };
   }
 
   try {
     const transporter = createSmtpTransporter();
-    const fromRaw = process.env.SMTP_FROM || `"Hood Games" <${user}>`;
+    const fromRaw = cfg.from;
 
     const info = await transporter.sendMail({
       from: fromRaw,
