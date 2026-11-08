@@ -1,13 +1,23 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { RefreshCw, X, Check, Key } from 'lucide-react';
+import { RefreshCw, Check, Key } from 'lucide-react';
 import AccountRequestsView from './AccountRequestsView';
 import CoinOperationsDesk from './CoinOperationsDesk';
 import AffiliateManagementHub from './AffiliateManagementHub';
 import { diffSet } from '@/lib/fastDiff';
 import { hoodAlert, hoodConfirm } from '@/lib/hoodAlert';
 import { generateGameCredentialPair } from '@/lib/gameCredentials';
+import {
+  HoodAdminModal,
+  HoodAdminModalHeader,
+  HoodAdminModalBody,
+  HoodAdminModalSummary,
+  HoodAdminModalSummaryRow,
+  HoodAdminModalField,
+  HoodAdminModalActions,
+  HoodAdminModalButton,
+} from './HoodAdminModal';
 
 export function AccountRequestsDesk({ onMutate }) {
   const [requests, setRequests] = useState([]);
@@ -153,54 +163,86 @@ export function AccountRequestsDesk({ onMutate }) {
       />
 
       {/* Freeplay quick actions injected via custom row handler in view - use parallel buttons in modal for freeplay */}
-      {approvalModal.open && approvalModal.request && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="w-full max-w-md rounded-3xl bg-[#09142a] border-2 border-[#2cb64e]/40 p-6 space-y-4">
-            <div className="flex justify-between items-start">
-              <h3 className="text-white font-black text-lg m-0">Fulfill {approvalModal.request.gameTitle}</h3>
-              <button type="button" onClick={() => setApprovalModal({ open: false, request: null, username: '', password: '' })} className="text-gray-400">
-                <X size={18} />
-              </button>
-            </div>
-            <p className="text-xs text-gray-400">
-              Player: <strong className="text-white">{approvalModal.request.userName}</strong>
-            </p>
-            {approvalModal.request.freeplayPending && (
-              <button
-                type="button"
-                onClick={() => {
-                  freeplayWallet(approvalModal.request);
-                  setApprovalModal({ open: false, request: null, username: '', password: '' });
-                }}
-                className="w-full py-2 rounded-xl bg-pink-950/40 border border-pink-500/40 text-pink-200 text-xs font-bold"
-              >
-                Credit Freeplay SC only (${Number(approvalModal.request.freeplayAmount || 0).toFixed(2)})
-              </button>
-            )}
-            <input
-              className="hood-input w-full text-xs font-mono"
-              value={approvalModal.username}
-              onChange={(e) => setApprovalModal({ ...approvalModal, username: e.target.value })}
-              placeholder="Game username"
+      <HoodAdminModal
+        open={Boolean(approvalModal.open && approvalModal.request)}
+        onClose={() => setApprovalModal({ open: false, request: null, username: '', password: '' })}
+        size="sm"
+      >
+        {approvalModal.request ? (
+          <>
+            <HoodAdminModalHeader
+              icon={<Key size={20} strokeWidth={2.5} />}
+              title={`Fulfill ${approvalModal.request.gameTitle}`}
+              subtitle="Issue portal username & password to the player"
+              onClose={() => setApprovalModal({ open: false, request: null, username: '', password: '' })}
             />
-            <input
-              className="hood-input w-full text-xs font-mono"
-              value={approvalModal.password}
-              onChange={(e) => setApprovalModal({ ...approvalModal, password: e.target.value })}
-              placeholder="Game password"
-            />
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={confirmApprove}
-              className="w-full btn-hood-green py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2"
-            >
-              {submitting ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-              Confirm & Issue Credentials
-            </button>
-          </div>
-        </div>
-      )}
+            <HoodAdminModalBody>
+              <HoodAdminModalSummary>
+                <HoodAdminModalSummaryRow label="Player" value={approvalModal.request.userName} />
+                <HoodAdminModalSummaryRow
+                  label="Platform"
+                  value={approvalModal.request.gameTitle}
+                  valueClassName="text-[#7ee08f]"
+                />
+                {approvalModal.request.freeplayPending ? (
+                  <HoodAdminModalSummaryRow
+                    label="Freeplay pending"
+                    value={`$${Number(approvalModal.request.freeplayAmount || 0).toFixed(2)} SC`}
+                    valueClassName="text-pink-300"
+                  />
+                ) : null}
+              </HoodAdminModalSummary>
+
+              {approvalModal.request.freeplayPending ? (
+                <HoodAdminModalButton
+                  type="button"
+                  variant="secondary"
+                  className="w-full !normal-case !font-bold !tracking-normal border-pink-500/35 text-pink-200 hover:border-pink-400/50"
+                  onClick={() => {
+                    freeplayWallet(approvalModal.request);
+                    setApprovalModal({ open: false, request: null, username: '', password: '' });
+                  }}
+                >
+                  Credit freeplay SC only (skip game ID)
+                </HoodAdminModalButton>
+              ) : null}
+
+              <HoodAdminModalField label="Game username / ID" required>
+                <input
+                  className="hood-input w-full font-mono font-bold"
+                  value={approvalModal.username}
+                  onChange={(e) => setApprovalModal({ ...approvalModal, username: e.target.value })}
+                  placeholder="e.g. player12345"
+                  autoComplete="off"
+                />
+              </HoodAdminModalField>
+              <HoodAdminModalField label="Game password / PIN" required>
+                <input
+                  className="hood-input w-full font-mono font-bold"
+                  value={approvalModal.password}
+                  onChange={(e) => setApprovalModal({ ...approvalModal, password: e.target.value })}
+                  placeholder="Auto-generated — edit if needed"
+                  autoComplete="off"
+                />
+              </HoodAdminModalField>
+
+              <HoodAdminModalActions>
+                <HoodAdminModalButton
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setApprovalModal({ open: false, request: null, username: '', password: '' })}
+                >
+                  Cancel
+                </HoodAdminModalButton>
+                <HoodAdminModalButton type="button" variant="primary" disabled={submitting} onClick={confirmApprove}>
+                  {submitting ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} strokeWidth={3} />}
+                  Confirm &amp; issue
+                </HoodAdminModalButton>
+              </HoodAdminModalActions>
+            </HoodAdminModalBody>
+          </>
+        ) : null}
+      </HoodAdminModal>
     </div>
   );
 }

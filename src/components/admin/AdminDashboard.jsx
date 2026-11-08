@@ -68,6 +68,14 @@ import {
 } from './AdminExtraTabs';
 import { AccountRequestsDesk, CoinAllotmentDesk, AffiliatesDesk } from './HoodAdminDesks';
 import AdminImageField from './AdminImageField';
+import {
+  HoodAdminModal,
+  HoodAdminModalHeader,
+  HoodAdminModalBody,
+  HoodAdminModalField,
+  HoodAdminModalActions,
+  HoodAdminModalButton,
+} from './HoodAdminModal';
 
 export default function AdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -2292,104 +2300,79 @@ export default function AdminDashboard({ user, onLogout }) {
             </div>
 
             {/* Direct Player Balance & Account Modal */}
-            {selectedPlayerToEdit && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                <div className="w-full max-w-md rounded-3xl bg-[#09142a] border-2 border-[#1a3363] p-6 space-y-5 shadow-2xl relative">
-                  <div className="flex items-center justify-between border-b border-[#1a3363] pb-3">
-                    <div>
-                      <h3 className="text-base font-black text-white flex items-center gap-2">
-                        <span>Manage Player Balance</span>
-                      </h3>
-                      <p className="text-xs text-gray-400 font-mono">
-                        {selectedPlayerToEdit.username} ({selectedPlayerToEdit.email})
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPlayerToEdit(null)}
-                      className="p-1.5 rounded-full bg-[#070d1e] text-gray-400 hover:text-white border border-[#1a3363]"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleSavePlayerUpdates} className="space-y-4">
-                    <div>
-                      <label className="text-xs font-bold text-gray-300 block mb-1">
-                        Sweeps Coins Balance ($ SC)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={editBalanceSC}
-                        onChange={(e) => setEditBalanceSC(e.target.value)}
-                        className="hood-input w-full px-3 py-2.5 rounded-xl text-xs font-mono font-bold"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-bold text-gray-300 block mb-1">
-                        Gold Coins Balance (GC)
-                      </label>
-                      <input
-                        type="number"
-                        step="1"
-                        value={editBalanceGC}
-                        onChange={(e) => setEditBalanceGC(e.target.value)}
-                        className="hood-input w-full px-3 py-2.5 rounded-xl text-xs font-mono font-bold"
-                        required
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-bold text-gray-300 block mb-1">Account Status</label>
-                        <select
-                          value={editStatus}
-                          onChange={(e) => setEditStatus(e.target.value)}
-                          className="hood-input w-full px-3 py-2.5 rounded-xl text-xs font-bold"
-                        >
-                          <option value="active">Active</option>
-                          <option value="suspended">Suspended</option>
-                          <option value="banned">Banned</option>
-                        </select>
+            <HoodAdminModal
+              open={Boolean(selectedPlayerToEdit)}
+              onClose={() => setSelectedPlayerToEdit(null)}
+              size="sm"
+              zIndex={50000}
+            >
+              {selectedPlayerToEdit ? (
+                <>
+                  <HoodAdminModalHeader
+                    icon={<Users size={18} />}
+                    title="Manage player balance"
+                    subtitle={`${selectedPlayerToEdit.username} · ${selectedPlayerToEdit.email}`}
+                    onClose={() => setSelectedPlayerToEdit(null)}
+                  />
+                  <HoodAdminModalBody>
+                    <form onSubmit={handleSavePlayerUpdates} className="space-y-4">
+                      <HoodAdminModalField label="Sweeps balance (SC)">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editBalanceSC}
+                          onChange={(e) => setEditBalanceSC(e.target.value)}
+                          className="hood-input w-full font-mono font-bold"
+                          required
+                        />
+                      </HoodAdminModalField>
+                      <HoodAdminModalField label="Gold coins (GC)">
+                        <input
+                          type="number"
+                          step="1"
+                          value={editBalanceGC}
+                          onChange={(e) => setEditBalanceGC(e.target.value)}
+                          className="hood-input w-full font-mono font-bold"
+                          required
+                        />
+                      </HoodAdminModalField>
+                      <div className="grid grid-cols-2 gap-3">
+                        <HoodAdminModalField label="Status">
+                          <select
+                            value={editStatus}
+                            onChange={(e) => setEditStatus(e.target.value)}
+                            className="hood-input w-full font-bold"
+                          >
+                            <option value="active">Active</option>
+                            <option value="suspended">Suspended</option>
+                            <option value="banned">Banned</option>
+                          </select>
+                        </HoodAdminModalField>
+                        <HoodAdminModalField label="Role">
+                          <select
+                            value={editRole}
+                            onChange={(e) => setEditRole(e.target.value)}
+                            className="hood-input w-full font-bold"
+                          >
+                            <option value="player">Player</option>
+                            <option value="staff">Staff</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                        </HoodAdminModalField>
                       </div>
-
-                      <div>
-                        <label className="text-xs font-bold text-gray-300 block mb-1">System Role</label>
-                        <select
-                          value={editRole}
-                          onChange={(e) => setEditRole(e.target.value)}
-                          className="hood-input w-full px-3 py-2.5 rounded-xl text-xs font-bold"
-                        >
-                          <option value="player">Player</option>
-                          <option value="staff">Staff</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2.5 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPlayerToEdit(null)}
-                        className="w-1/2 py-2.5 rounded-xl bg-[#070d1e] text-gray-400 hover:text-white border border-[#1a3363] text-xs font-bold"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={savingPlayer}
-                        className="w-1/2 btn-hood-green py-2.5 rounded-xl text-xs font-black uppercase tracking-wider"
-                      >
-                        {savingPlayer ? 'Saving...' : 'SAVE PLAYER'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
+                      <HoodAdminModalActions>
+                        <HoodAdminModalButton type="button" variant="ghost" onClick={() => setSelectedPlayerToEdit(null)}>
+                          Cancel
+                        </HoodAdminModalButton>
+                        <HoodAdminModalButton type="submit" variant="primary" disabled={savingPlayer}>
+                          {savingPlayer ? 'Saving…' : 'Save player'}
+                        </HoodAdminModalButton>
+                      </HoodAdminModalActions>
+                    </form>
+                  </HoodAdminModalBody>
+                </>
+              ) : null}
+            </HoodAdminModal>
           </div>
         )}
 
@@ -2428,30 +2411,24 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {/* LIGHTBOX / DEPOSIT PROOF IMAGE VIEWER MODAL              */}
         {/* ======================================================== */}
-        {viewingProof && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in">
-            <div className="relative max-w-2xl max-h-[85vh] w-full bg-[#09142a] border-2 border-[#1a3363] rounded-3xl p-5 flex flex-col items-center overflow-hidden shadow-2xl">
-              <button
-                type="button"
-                onClick={() => setViewingProof(null)}
-                className="absolute top-4 right-4 p-2 rounded-full bg-[#070d1e] text-gray-300 hover:text-white border border-[#1a3363] hover:border-[#2cb64e]/50 transition-all z-10"
-              >
-                <X size={18} />
-              </button>
-              <h4 className="text-sm font-black text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Eye size={16} className="text-[#2cb64e]" />
-                <span>Deposit / Freeplay screenshot proof</span>
-              </h4>
-              <div className="overflow-auto max-h-[65vh] w-full flex items-center justify-center rounded-2xl border border-[#1a3363] bg-[#070d1e] p-2">
-                <img
-                  src={viewingProof}
-                  alt="Deposit Proof"
-                  className="max-w-full max-h-[60vh] object-contain rounded-xl"
-                />
-              </div>
-            </div>
+        <HoodAdminModal open={Boolean(viewingProof)} onClose={() => setViewingProof(null)} size="lg" zIndex={50000}>
+          <HoodAdminModalHeader
+            icon={<Eye size={18} />}
+            title="Deposit / freeplay proof"
+            subtitle="Full-size screenshot review"
+            onClose={() => setViewingProof(null)}
+          />
+          <div className="overflow-auto max-h-[70vh] w-full flex items-center justify-center rounded-xl border border-[#1a3363] bg-[#050a14] p-3">
+            {viewingProof ? (
+              <img src={viewingProof} alt="Deposit proof" className="max-w-full max-h-[65vh] object-contain rounded-lg" />
+            ) : null}
           </div>
-        )}
+          <HoodAdminModalActions>
+            <HoodAdminModalButton type="button" variant="primary" onClick={() => setViewingProof(null)}>
+              Close preview
+            </HoodAdminModalButton>
+          </HoodAdminModalActions>
+        </HoodAdminModal>
       </main>
     </div>
   );

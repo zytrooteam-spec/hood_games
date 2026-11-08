@@ -21,6 +21,12 @@ import {
   Coins,
 } from 'lucide-react';
 import AdminPagination from '@/components/admin/AdminPagination';
+import {
+  HoodAdminModal,
+  HoodAdminModalHeader,
+  HoodAdminModalActions,
+  HoodAdminModalButton,
+} from '@/components/admin/HoodAdminModal';
 
 export default function AffiliateManagementHub({
   activeTab = 'affiliates',
@@ -711,61 +717,20 @@ export default function AffiliateManagementHub({
       </div>
 
       {/* 5. Recruited Network Inspection Modal */}
-      {selectedNetworkPartner && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.85)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '12px',
-          }}
-          onClick={() => setSelectedNetworkPartner(null)}
-        >
-          <div
-            className="modal-scrollable"
-            style={{
-              backgroundColor: '#0E0A24',
-              border: '1px solid rgba(0, 240, 255, 0.35)',
-              borderRadius: '24px',
-              padding: '20px 16px',
-              width: '100%',
-              maxWidth: '680px',
-              maxHeight: '92vh',
-              overflowY: 'auto',
-              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '14px', marginBottom: '16px' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 900, color: '#FFFFFF' }}>
-                  Recruited Player Network ({selectedNetworkPartner.totalReferrals})
-                </h3>
-                <p style={{ margin: '3px 0 0 0', fontSize: '11.5px', color: '#9A91A8' }}>
-                  Direct referrals invited by <strong style={{ color: '#00F0FF' }}>{selectedNetworkPartner.username}</strong> ({selectedNetworkPartner.referralCode})
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedNetworkPartner(null)}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '6px',
-                  color: '#9A91A8',
-                  cursor: 'pointer',
-                }}
-              >
-                <X size={18} />
-              </button>
-            </div>
+      <HoodAdminModal
+        open={Boolean(selectedNetworkPartner)}
+        onClose={() => setSelectedNetworkPartner(null)}
+        size="lg"
+        zIndex={100000}
+      >
+        {selectedNetworkPartner ? (
+          <>
+            <HoodAdminModalHeader
+              icon={<Users size={18} />}
+              title={`Recruited network (${selectedNetworkPartner.totalReferrals})`}
+              subtitle={`Partner ${selectedNetworkPartner.username} · code ${selectedNetworkPartner.referralCode}`}
+              onClose={() => setSelectedNetworkPartner(null)}
+            />
 
             {/* Network Table */}
             {(!selectedNetworkPartner.referees || selectedNetworkPartner.referees.length === 0) ? (
@@ -814,27 +779,14 @@ export default function AffiliateManagementHub({
               </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '18px' }}>
-              <button
-                type="button"
-                onClick={() => setSelectedNetworkPartner(null)}
-                style={{
-                  padding: '9px 20px',
-                  borderRadius: '12px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                  color: '#FFFFFF',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                }}
-              >
-                Close Window
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            <HoodAdminModalActions>
+              <HoodAdminModalButton type="button" variant="primary" onClick={() => setSelectedNetworkPartner(null)}>
+                Close
+              </HoodAdminModalButton>
+            </HoodAdminModalActions>
+          </>
+        ) : null}
+      </HoodAdminModal>
     </div>
   );
 }

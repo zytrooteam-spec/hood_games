@@ -17,6 +17,12 @@ import {
   Zap,
 } from 'lucide-react';
 import AdminPagination from '@/components/admin/AdminPagination';
+import {
+  HoodAdminModal,
+  HoodAdminModalHeader,
+  HoodAdminModalActions,
+  HoodAdminModalButton,
+} from '@/components/admin/HoodAdminModal';
 
 const AccountRequestsView = React.memo(function AccountRequestsView({
   requests = [],
@@ -716,46 +722,28 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
       )}
 
       {/* Screenshot Proof Preview Modal */}
-      {previewScreenshot && (
-        <div
-          onClick={() => setPreviewScreenshot(null)}
-          className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative max-w-2xl w-full bg-[#0E0A24] border border-cyan-500/40 rounded-3xl p-4 sm:p-6 shadow-2xl space-y-4"
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <h3 className="text-sm font-heading font-black text-white uppercase tracking-wider flex items-center gap-2">
-                <span>🎁 Player Freeplay Task Inbox Proof</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setPreviewScreenshot(null)}
-                className="w-8 h-8 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-white flex items-center justify-center"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="max-h-[75vh] overflow-auto rounded-2xl bg-black border border-white/10 flex items-center justify-center p-2">
-              <img
-                src={previewScreenshot}
-                alt="Freeplay Task Inbox Proof"
-                className="max-h-[70vh] w-auto object-contain rounded-xl"
-              />
-            </div>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setPreviewScreenshot(null)}
-                className="px-5 py-2 rounded-xl bg-cyan-500 text-black font-black text-xs uppercase"
-              >
-                Close Preview
-              </button>
-            </div>
-          </div>
+      <HoodAdminModal open={Boolean(previewScreenshot)} onClose={() => setPreviewScreenshot(null)} size="lg">
+        <HoodAdminModalHeader
+          icon={<ShieldCheck size={18} />}
+          title="Freeplay task inbox proof"
+          subtitle="Verify social / task completion screenshot"
+          onClose={() => setPreviewScreenshot(null)}
+        />
+        <div className="max-h-[75vh] overflow-auto rounded-xl bg-[#050a14] border border-[#1a3363] flex items-center justify-center p-3">
+          {previewScreenshot ? (
+            <img
+              src={previewScreenshot}
+              alt="Freeplay task inbox proof"
+              className="max-h-[70vh] w-auto object-contain rounded-lg"
+            />
+          ) : null}
         </div>
-      )}
+        <HoodAdminModalActions>
+          <HoodAdminModalButton type="button" variant="primary" onClick={() => setPreviewScreenshot(null)}>
+            Close preview
+          </HoodAdminModalButton>
+        </HoodAdminModalActions>
+      </HoodAdminModal>
     </div>
   );
 });

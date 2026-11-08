@@ -150,3 +150,152 @@ h6,
 .animate-pulse-subtle {
   animation: pulse-subtle 3s ease-in-out infinite;
 }
+
+/* Admin / staff modals (Hood theme) */
+@keyframes hood-modal-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.hood-modal-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(4, 10, 22, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: hood-modal-fade-in 0.18s ease-out;
+}
+
+.hood-modal-card {
+  background: linear-gradient(155deg, #0c1b38 0%, #09142a 52%, #070d1e 100%);
+  border-radius: 22px;
+  padding: 22px 22px 20px;
+  max-height: 92vh;
+  overflow-y: auto;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.88);
+}
+
+.hood-modal-card--default {
+  border: 1.5px solid rgba(44, 182, 78, 0.42);
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, 0.88),
+    0 0 36px rgba(44, 182, 78, 0.12);
+}
+
+.hood-modal-card--danger {
+  border: 1.5px solid rgba(244, 63, 94, 0.45);
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, 0.88),
+    0 0 28px rgba(244, 63, 94, 0.15);
+}
+
+.hood-modal-card--neutral {
+  border: 1.5px solid rgba(26, 51, 99, 0.95);
+}
+
+.modal-scrollable {
+  -webkit-overflow-scrolling: touch;
+}
+
+.hood-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(26, 51, 99, 0.85);
+}
+
+.hood-modal-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(44, 182, 78, 0.14);
+  border: 1px solid rgba(44, 182, 78, 0.4);
+  color: #2cb64e;
+  box-shadow: 0 0 14px rgba(44, 182, 78, 0.2);
+}
+
+.hood-modal-icon--danger {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: rgba(244, 63, 94, 0.4);
+  color: #fb7185;
+  box-shadow: 0 0 14px rgba(244, 63, 94, 0.18);
+}
+
+.hood-modal-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+}
+
+.hood-modal-subtitle {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.4;
+}
+
+.hood-modal-close {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  background: #070d1e;
+  border: 1px solid rgba(26, 51, 99, 0.9);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.hood-modal-close:hover {
+  color: #fff;
+  border-color: rgba(44, 182, 78, 0.45);
+  background: rgba(44, 182, 78, 0.08);
+}
+
+.hood-modal-summary {
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: rgba(14, 32, 66, 0.55);
+  border: 1px solid rgba(26, 51, 99, 0.85);
+}
+
+.hood-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 16px;
+  margin-top: 8px;
+  border-top: 1px solid rgba(26, 51, 99, 0.85);
+}
+
+.hood-modal-field input.hood-input,
+.hood-modal-field textarea.hood-input,
+.hood-modal-field select.hood-input {
+  padding: 0.65rem 0.9rem;
+  font-size: 0.8125rem;
+}

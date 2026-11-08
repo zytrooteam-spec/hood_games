@@ -22,6 +22,17 @@ import {
 } from 'lucide-react';
 import { diffSet } from '@/lib/fastDiff';
 import AdminPagination from '@/components/admin/AdminPagination';
+import {
+  HoodAdminModal,
+  HoodAdminModalHeader,
+  HoodAdminModalBody,
+  HoodAdminModalSummary,
+  HoodAdminModalSummaryRow,
+  HoodAdminModalField,
+  HoodAdminModalHint,
+  HoodAdminModalActions,
+  HoodAdminModalButton,
+} from '@/components/admin/HoodAdminModal';
 
 export default function CoinOperationsDesk({
   sessionUser,
@@ -2331,474 +2342,212 @@ export default function CoinOperationsDesk({
           ========================================================================= */}
 
       {/* 1. Approve Game Load Modal */}
-      {approveLoadModal.open && (
-        <div
-          className="vegas-modal-overlay"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(5, 3, 15, 0.92)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            zIndex: 999999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px',
-          }}
-          onClick={() => setApproveLoadModal({ open: false, item: null, username: '', password: '' })}
-        >
-          <div
-            className="vegas-modal-card w-full max-w-lg p-5 sm:p-6 max-h-[90vh] overflow-y-auto modal-scrollable relative space-y-4"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: '#0E0A24',
-              background: 'linear-gradient(145deg, #0E0A24 0%, #150E36 100%)',
-              border: '1px solid rgba(0, 240, 255, 0.45)',
-              boxShadow: '0 30px 80px rgba(0, 0, 0, 0.98), 0 0 40px rgba(0, 240, 255, 0.25)',
-              borderRadius: '20px',
-              fontFamily: 'Lexend, -apple-system, sans-serif',
-            }}
-          >
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center text-[#00F0FF]"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(224, 38, 216, 0.15) 100%)',
-                    border: '1px solid rgba(0, 240, 255, 0.4)',
-                    boxShadow: '0 0 15px rgba(0, 240, 255, 0.25)',
-                  }}
-                >
-                  <CheckCircle2 size={18} strokeWidth={2.5} />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-white m-0 tracking-wide">
-                    Approve Game Load &amp; Deduct Balance
-                  </h3>
-                  <p className="text-[11px] text-gray-400 m-0">Confirm credentials and credit sweepstakes portal</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setApproveLoadModal({ open: false, item: null, username: '', password: '' })}
-                className="p-1.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
+      <HoodAdminModal
+        open={approveLoadModal.open}
+        onClose={() => setApproveLoadModal({ open: false, item: null, username: '', password: '', transferAmount: 0 })}
+      >
+        <HoodAdminModalHeader
+          icon={<CheckCircle2 size={20} strokeWidth={2.5} />}
+          title="Approve game load & deduct balance"
+          subtitle="Confirm credentials and credit the sweepstakes portal"
+          onClose={() => setApproveLoadModal({ open: false, item: null, username: '', password: '', transferAmount: 0 })}
+        />
+        <HoodAdminModalBody>
+          <HoodAdminModalSummary>
+            <HoodAdminModalSummaryRow label="Player" value={approveLoadModal.item?.userName || '—'} />
+            <HoodAdminModalSummaryRow
+              label="Game platform"
+              value={approveLoadModal.item?.gameTitle || '—'}
+              valueClassName="text-[#7ee08f]"
+            />
+            <HoodAdminModalSummaryRow
+              label="Requested deduct"
+              value={`$${Number(approveLoadModal.item?.transferAmount || 0).toFixed(2)} SC`}
+              valueClassName="text-[#7ee08f] font-mono"
+            />
+          </HoodAdminModalSummary>
 
-            <div
-              className="rounded-xl p-3.5 space-y-2 text-xs"
-              style={{
-                backgroundColor: 'rgba(0, 240, 255, 0.08)',
-                border: '1px solid rgba(0, 240, 255, 0.25)',
-              }}
+          <form onSubmit={handleApproveLoadSubmit} className="space-y-4">
+            <HoodAdminModalField
+              label="Coins to load / deduct (SC)"
+              hint={`Requested: $${Number(approveLoadModal.item?.transferAmount || 0).toFixed(2)}`}
+              tone="accent"
+              required
             >
-              <div className="flex justify-between">
-                <span className="text-gray-400">Player:</span>
-                <strong className="text-white">{approveLoadModal.item?.userName}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Game Platform:</span>
-                <strong className="text-[#00F0FF]">{approveLoadModal.item?.gameTitle}</strong>
-              </div>
-              <div className="flex justify-between pt-1 border-t border-white/10">
-                <span className="text-gray-300 font-bold">Transfer Deduct Amount:</span>
-                <strong className="text-[#00F0FF] text-sm font-mono">
-                  ${Number(approveLoadModal.item?.transferAmount || 0).toFixed(2)} SC
-                </strong>
-              </div>
-            </div>
-
-            <form onSubmit={handleApproveLoadSubmit} className="space-y-4">
-              {/* Editable Coin Amount Field */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-bold text-[#FBBF24] uppercase tracking-wider">
-                    Coins to Load / Deduct ($ SC) — Editable
-                  </label>
-                  <span className="text-[10.5px] text-gray-400">
-                    Requested: <strong className="text-white">${Number(approveLoadModal.item?.transferAmount || 0).toFixed(2)} SC</strong>
-                  </span>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-2.5 text-[#00F0FF] font-black text-sm">$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={approveLoadModal.transferAmount}
-                    onChange={(e) => setApproveLoadModal({ ...approveLoadModal, transferAmount: e.target.value })}
-                    required
-                    className="w-full rounded-xl pl-8 pr-3.5 py-2.5 text-white font-mono font-black text-sm outline-none transition-all focus:border-[#00F0FF]"
-                    style={{
-                      backgroundColor: '#070514',
-                      border: '1.5px solid rgba(0, 240, 255, 0.45)',
-                    }}
-                  />
-                </div>
-                <p className="text-[10px] text-gray-400 mt-1">
-                  You can adjust this coin load amount. Exactly this amount will be deducted from player's balance.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-gray-300 mb-1 uppercase tracking-wider">
-                  Game Account Username / ID
-                </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#2cb64e] font-black text-sm">$</span>
                 <input
-                  type="text"
-                  value={approveLoadModal.username}
-                  onChange={(e) => setApproveLoadModal({ ...approveLoadModal, username: e.target.value })}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={approveLoadModal.transferAmount}
+                  onChange={(e) => setApproveLoadModal({ ...approveLoadModal, transferAmount: e.target.value })}
                   required
-                  className="w-full rounded-xl px-3.5 py-2.5 text-white text-xs outline-none transition-all"
-                  style={{
-                    backgroundColor: '#070514',
-                    border: '1px solid rgba(0, 240, 255, 0.3)',
-                  }}
+                  className="hood-input w-full pl-8 font-mono font-bold"
                 />
               </div>
+              <HoodAdminModalHint>Adjust if needed — this exact amount is deducted from the player wallet.</HoodAdminModalHint>
+            </HoodAdminModalField>
 
-              <div>
-                <label className="block text-[11px] font-bold text-gray-300 mb-1 uppercase tracking-wider">
-                  Game Account Password / PIN
-                </label>
-                <input
-                  type="text"
-                  value={approveLoadModal.password}
-                  onChange={(e) => setApproveLoadModal({ ...approveLoadModal, password: e.target.value })}
-                  required
-                  className="w-full rounded-xl px-3.5 py-2.5 text-white text-xs outline-none transition-all"
-                  style={{
-                    backgroundColor: '#070514',
-                    border: '1px solid rgba(0, 240, 255, 0.3)',
-                  }}
-                />
-              </div>
+            <HoodAdminModalField label="Game username / ID" required>
+              <input
+                type="text"
+                value={approveLoadModal.username}
+                onChange={(e) => setApproveLoadModal({ ...approveLoadModal, username: e.target.value })}
+                required
+                className="hood-input w-full font-mono"
+              />
+            </HoodAdminModalField>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setApproveLoadModal({ open: false, item: null, username: '', password: '', transferAmount: 0 })}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="py-2.5 px-6 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                  style={{
-                    background: 'linear-gradient(135deg, #00F0FF 0%, #00d0e8 40%, #E026D8 100%)',
-                    color: '#070514',
-                    boxShadow: '0 0 25px rgba(0, 240, 255, 0.45)',
-                    border: 'none',
-                  }}
-                >
-                  <Check size={14} strokeWidth={3} />
-                  <span>Confirm &amp; Deduct</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <HoodAdminModalField label="Game password / PIN" required>
+              <input
+                type="text"
+                value={approveLoadModal.password}
+                onChange={(e) => setApproveLoadModal({ ...approveLoadModal, password: e.target.value })}
+                required
+                className="hood-input w-full font-mono"
+              />
+            </HoodAdminModalField>
+
+            <HoodAdminModalActions>
+              <HoodAdminModalButton
+                type="button"
+                variant="ghost"
+                onClick={() => setApproveLoadModal({ open: false, item: null, username: '', password: '', transferAmount: 0 })}
+              >
+                Cancel
+              </HoodAdminModalButton>
+              <HoodAdminModalButton type="submit" variant="primary">
+                <Check size={14} strokeWidth={3} />
+                Confirm &amp; deduct
+              </HoodAdminModalButton>
+            </HoodAdminModalActions>
+          </form>
+        </HoodAdminModalBody>
+      </HoodAdminModal>
 
       {/* 2. Reject Game Load Modal (Mandatory Note) */}
-      {rejectLoadModal.open && (
-        <div
-          className="vegas-modal-overlay"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(5, 3, 15, 0.92)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            zIndex: 999999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px',
-          }}
-          onClick={() => setRejectLoadModal({ open: false, item: null, reason: '' })}
-        >
-          <div
-            className="vegas-modal-card w-full max-w-lg p-5 sm:p-6 max-h-[90vh] overflow-y-auto modal-scrollable relative space-y-4"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: '#0E0A24',
-              background: 'linear-gradient(145deg, #0E0A24 0%, #150E36 100%)',
-              border: '1px solid rgba(244, 63, 94, 0.45)',
-              boxShadow: '0 30px 80px rgba(0, 0, 0, 0.98), 0 0 40px rgba(244, 63, 94, 0.25)',
-              borderRadius: '20px',
-              fontFamily: 'Lexend, -apple-system, sans-serif',
-            }}
-          >
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center text-rose-400"
-                  style={{
-                    backgroundColor: 'rgba(244, 63, 94, 0.15)',
-                    border: '1px solid rgba(244, 63, 94, 0.4)',
-                    boxShadow: '0 0 15px rgba(244, 63, 94, 0.25)',
-                  }}
-                >
-                  <AlertCircle size={18} />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-white m-0 tracking-wide">
-                    Reject Game Load Request
-                  </h3>
-                  <p className="text-[11px] text-gray-400 m-0">Provide explanatory note to player</p>
-                </div>
-              </div>
-              <button
+      <HoodAdminModal
+        open={rejectLoadModal.open}
+        variant="danger"
+        onClose={() => setRejectLoadModal({ open: false, item: null, reason: '' })}
+      >
+        <HoodAdminModalHeader
+          icon={<AlertCircle size={20} />}
+          iconClassName="hood-modal-icon--danger"
+          title="Reject game load request"
+          subtitle="Player will see your note in-app"
+          onClose={() => setRejectLoadModal({ open: false, item: null, reason: '' })}
+        />
+        <HoodAdminModalBody>
+          <p className="text-xs text-gray-400 leading-relaxed m-0">
+            Include a clear reason (maintenance, invalid ID, deposit mismatch, etc.).
+          </p>
+          <form onSubmit={handleRejectLoadSubmit} className="space-y-4">
+            <HoodAdminModalField label="Reason note (shown to player)" tone="danger" required>
+              <textarea
+                rows={4}
+                placeholder="e.g. Game portal maintenance — please retry in 15 minutes."
+                value={rejectLoadModal.reason}
+                onChange={(e) => setRejectLoadModal({ ...rejectLoadModal, reason: e.target.value })}
+                required
+                className="hood-input w-full resize-none min-h-[96px]"
+              />
+            </HoodAdminModalField>
+            <HoodAdminModalActions>
+              <HoodAdminModalButton
                 type="button"
+                variant="ghost"
                 onClick={() => setRejectLoadModal({ open: false, item: null, reason: '' })}
-                className="p-1.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
               >
-                <X size={18} />
-              </button>
-            </div>
-
-            <p className="text-xs text-gray-400 leading-relaxed m-0">
-              Admin rejection requires a mandatory note explaining the reason to the player (e.g. game server maintenance, invalid player name, or insufficient deposit).
-            </p>
-
-            <form onSubmit={handleRejectLoadSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-bold text-rose-400 mb-1 uppercase tracking-wider">
-                  Reason Note (Displayed to User) *
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="e.g. Game portal maintenance in progress. Please retry in 15 minutes."
-                  value={rejectLoadModal.reason}
-                  onChange={(e) => setRejectLoadModal({ ...rejectLoadModal, reason: e.target.value })}
-                  required
-                  className="w-full rounded-xl px-3.5 py-2.5 text-white text-xs outline-none transition-all resize-none"
-                  style={{
-                    backgroundColor: '#070514',
-                    border: '1px solid rgba(244, 63, 94, 0.4)',
-                  }}
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setRejectLoadModal({ open: false, item: null, reason: '' })}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="py-2.5 px-6 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                  style={{
-                    backgroundColor: '#EF4444',
-                    color: '#FFFFFF',
-                    boxShadow: '0 0 20px rgba(239, 68, 68, 0.4)',
-                    border: 'none',
-                  }}
-                >
-                  <X size={14} strokeWidth={3} />
-                  <span>Reject &amp; Send Note</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                Cancel
+              </HoodAdminModalButton>
+              <HoodAdminModalButton type="submit" variant="danger">
+                <X size={14} strokeWidth={3} />
+                Reject &amp; notify
+              </HoodAdminModalButton>
+            </HoodAdminModalActions>
+          </form>
+        </HoodAdminModalBody>
+      </HoodAdminModal>
 
       {/* 3. Reject Cashout Modal (Mandatory Note) */}
-      {rejectCashoutModal.open && (
-        <div
-          className="vegas-modal-overlay"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(5, 3, 15, 0.92)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            zIndex: 999999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px',
-          }}
-          onClick={() => setRejectCashoutModal({ open: false, item: null, reason: '' })}
-        >
-          <div
-            className="vegas-modal-card w-full max-w-lg p-5 sm:p-6 max-h-[90vh] overflow-y-auto modal-scrollable relative space-y-4"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: '#0E0A24',
-              background: 'linear-gradient(145deg, #0E0A24 0%, #150E36 100%)',
-              border: '1px solid rgba(244, 63, 94, 0.45)',
-              boxShadow: '0 30px 80px rgba(0, 0, 0, 0.98), 0 0 40px rgba(244, 63, 94, 0.25)',
-              borderRadius: '20px',
-              fontFamily: 'Lexend, -apple-system, sans-serif',
-            }}
-          >
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center text-rose-400"
-                  style={{
-                    backgroundColor: 'rgba(244, 63, 94, 0.15)',
-                    border: '1px solid rgba(244, 63, 94, 0.4)',
-                    boxShadow: '0 0 15px rgba(244, 63, 94, 0.25)',
-                  }}
-                >
-                  <AlertCircle size={18} />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-white m-0 tracking-wide">
-                    Reject Game Cashout Proof
-                  </h3>
-                  <p className="text-[11px] text-gray-400 m-0">Unfreeze funds and notify player</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setRejectCashoutModal({ open: false, item: null, reason: '' })}
-                className="p-1.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <p className="text-xs text-gray-400 leading-relaxed m-0">
-              Enter reason for rejecting this cashout (e.g. screenshot score does not match game panel, expired session, or unverified win). Funds will be unfrozen and returned to the player.
-            </p>
-
-            <form onSubmit={handleRejectCashoutSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-bold text-rose-400 mb-1 uppercase tracking-wider">
-                  Rejection Note (Displayed to User) *
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="e.g. Screenshot timestamp expired or game score does not match platform record."
-                  value={rejectCashoutModal.reason}
-                  onChange={(e) => setRejectCashoutModal({ ...rejectCashoutModal, reason: e.target.value })}
-                  required
-                  className="w-full rounded-xl px-3.5 py-2.5 text-white text-xs outline-none transition-all resize-none"
-                  style={{
-                    backgroundColor: '#070514',
-                    border: '1px solid rgba(244, 63, 94, 0.4)',
-                  }}
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setRejectCashoutModal({ open: false, item: null, reason: '' })}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="py-2.5 px-6 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                  style={{
-                    backgroundColor: '#EF4444',
-                    color: '#FFFFFF',
-                    boxShadow: '0 0 20px rgba(239, 68, 68, 0.4)',
-                    border: 'none',
-                  }}
-                >
-                  <X size={14} strokeWidth={3} />
-                  <span>Reject &amp; Unfreeze</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Full-screen Zoomable Game Screenshot Proof Modal */}
-      {screenshotModal.open && (
-        <div
-          className="vegas-modal-overlay"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(5, 3, 15, 0.94)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            zIndex: 999999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px',
-          }}
-          onClick={() => setScreenshotModal({ open: false, src: null, title: '' })}
-        >
-          <div
-            className="vegas-modal-card relative w-full max-w-4xl p-5 sm:p-6 max-h-[92vh] overflow-hidden flex flex-col gap-3"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: '#0E0A24',
-              background: 'linear-gradient(145deg, #0E0A24 0%, #150E36 100%)',
-              border: '1.5px solid #00F0FF',
-              boxShadow: '0 30px 80px rgba(0, 0, 0, 0.98), 0 0 40px rgba(0, 240, 255, 0.3)',
-              borderRadius: '20px',
-              fontFamily: 'Lexend, -apple-system, sans-serif',
-            }}
-          >
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[#00F0FF]"
-                  style={{
-                    backgroundColor: 'rgba(0, 240, 255, 0.15)',
-                    border: '1px solid rgba(0, 240, 255, 0.35)',
-                  }}
-                >
-                  <Eye size={16} />
-                </div>
-                <h4 className="m-0 text-sm sm:text-base font-black text-white">
-                  {screenshotModal.title || 'Game Winning Proof'}
-                </h4>
-              </div>
-              <button
-                type="button"
-                onClick={() => setScreenshotModal({ open: false, src: null, title: '' })}
-                className="p-1.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div
-              className="overflow-auto rounded-xl flex items-center justify-center p-2"
-              style={{
-                backgroundColor: '#05030e',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                maxHeight: '76vh',
-              }}
-            >
-              <img
-                src={screenshotModal.src}
-                alt="Proof Full View"
-                className="max-w-full max-h-[72vh] object-contain rounded-lg"
+      <HoodAdminModal
+        open={rejectCashoutModal.open}
+        variant="danger"
+        onClose={() => setRejectCashoutModal({ open: false, item: null, reason: '' })}
+      >
+        <HoodAdminModalHeader
+          icon={<AlertCircle size={20} />}
+          iconClassName="hood-modal-icon--danger"
+          title="Reject cashout proof"
+          subtitle="Funds unfreeze and return to the player wallet"
+          onClose={() => setRejectCashoutModal({ open: false, item: null, reason: '' })}
+        />
+        <HoodAdminModalBody>
+          <p className="text-xs text-gray-400 leading-relaxed m-0">
+            Explain mismatch (score, timestamp, session) so support stays clear.
+          </p>
+          <form onSubmit={handleRejectCashoutSubmit} className="space-y-4">
+            <HoodAdminModalField label="Rejection note (shown to player)" tone="danger" required>
+              <textarea
+                rows={4}
+                placeholder="e.g. Screenshot does not match portal balance."
+                value={rejectCashoutModal.reason}
+                onChange={(e) => setRejectCashoutModal({ ...rejectCashoutModal, reason: e.target.value })}
+                required
+                className="hood-input w-full resize-none min-h-[96px]"
               />
-            </div>
-          </div>
+            </HoodAdminModalField>
+            <HoodAdminModalActions>
+              <HoodAdminModalButton
+                type="button"
+                variant="ghost"
+                onClick={() => setRejectCashoutModal({ open: false, item: null, reason: '' })}
+              >
+                Cancel
+              </HoodAdminModalButton>
+              <HoodAdminModalButton type="submit" variant="danger">
+                <X size={14} strokeWidth={3} />
+                Reject &amp; unfreeze
+              </HoodAdminModalButton>
+            </HoodAdminModalActions>
+          </form>
+        </HoodAdminModalBody>
+      </HoodAdminModal>
+
+      {/* 4. Full-screen Game Screenshot Proof Modal */}
+      <HoodAdminModal
+        open={screenshotModal.open}
+        size="xl"
+        className="!flex !flex-col !gap-3 !overflow-hidden"
+        onClose={() => setScreenshotModal({ open: false, src: null, title: '' })}
+      >
+        <HoodAdminModalHeader
+          icon={<Eye size={18} />}
+          title={screenshotModal.title || 'Game winning proof'}
+          subtitle="Zoom review — verify score and timestamp"
+          onClose={() => setScreenshotModal({ open: false, src: null, title: '' })}
+        />
+        <div className="overflow-auto rounded-xl flex items-center justify-center p-3 bg-[#050a14] border border-[#1a3363] max-h-[76vh] min-h-[200px]">
+          {screenshotModal.src ? (
+            <img
+              src={screenshotModal.src}
+              alt="Proof full view"
+              className="max-w-full max-h-[72vh] object-contain rounded-lg"
+            />
+          ) : null}
         </div>
-      )}
+        <HoodAdminModalActions className="!justify-center sm:!justify-end">
+          <HoodAdminModalButton
+            type="button"
+            variant="primary"
+            onClick={() => setScreenshotModal({ open: false, src: null, title: '' })}
+          >
+            Close preview
+          </HoodAdminModalButton>
+        </HoodAdminModalActions>
+      </HoodAdminModal>
     </div>
   );
 }
