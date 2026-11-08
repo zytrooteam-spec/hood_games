@@ -71,6 +71,7 @@ export default function GameRequestModal({
     try {
       const res = await fetch('/api/account-requests', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           gameId: initialGame?.id,

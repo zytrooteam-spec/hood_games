@@ -70,9 +70,11 @@ export async function loadUserFromToken(decoded) {
   const db = await getDb();
   const user = await db.collection('users').findOne(toIdQuery(decoded.userId));
   if (!user) {
+    const uid = String(decoded.userId || '');
     return {
-      _id: decoded.userId,
-      id: decoded.userId,
+      _id: uid,
+      id: uid,
+      userId: uid,
       username: decoded.username,
       email: decoded.email,
       role: decoded.role || 'player',
@@ -83,9 +85,11 @@ export async function loadUserFromToken(decoded) {
     };
   }
 
+  const uid = user._id.toString();
   return {
-    _id: user._id,
-    id: user._id,
+    _id: uid,
+    id: uid,
+    userId: uid,
     username: user.username,
     email: user.email,
     role: user.role || 'player',

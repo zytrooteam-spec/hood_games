@@ -5,6 +5,7 @@ import { ensureDbInitialized } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { sanitizeGameTitle } from '@/lib/fastDiff';
 import { mapAccountRequest } from '@/lib/mapAccountRequest';
+import { resolvePlayerDbUser } from '@/lib/resolvePlayerDbUser';
 
 function buildStaffQuery(searchParams) {
   const query = {};
@@ -106,10 +107,16 @@ export async function POST(req) {
 
     const db = await getDb();
     const usersCol = db.collection('users');
-    const userId = session.userId || session.id;
-    const dbUser = await usersCol.findOne(toIdQuery(userId));
+    const dbUser = await resolvePlayerDbUser(session, usersCol);
     if (!dbUser) {
-      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Session expired or account missing. Please log out and sign in again.',
+          code: 'USER_NOT_RESOLVED',
+        },
+        { status: 401 }
+      );
     }
 
     const currentSC = Number(dbUser.balanceSC || 0);
