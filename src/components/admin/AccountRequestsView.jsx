@@ -347,7 +347,7 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
                         {Boolean(req.freeplayPending) && (
                           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                             <span className="inline-flex items-center gap-1 text-[10.5px] font-black text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-lg shadow-sm">
-                              🎁 Freeplay: ${Number(req.freeplayAmount || 3).toFixed(2)} SC
+                              🎁 Freeplay: ${Number(req.freeplayAmount || 0).toFixed(2)} SC
                             </span>
                             {(req.freeplayScreenshot || req.screenshot) && (
                               <button
@@ -573,7 +573,7 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
                         <span className="text-xs text-amber-300 font-bold">Freeplay Task:</span>
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-black text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded">
-                            ${Number(req.freeplayAmount || 3).toFixed(2)} SC
+                            ${Number(req.freeplayAmount || 0).toFixed(2)} SC
                           </span>
                           {(req.freeplayScreenshot || req.screenshot) && (
                             <button

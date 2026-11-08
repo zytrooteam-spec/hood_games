@@ -6,6 +6,7 @@ import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { sanitizeGameTitle } from '@/lib/fastDiff';
 import { mapAccountRequest } from '@/lib/mapAccountRequest';
 import { resolvePlayerDbUser } from '@/lib/resolvePlayerDbUser';
+import { getFreeplayAmountSC } from '@/lib/freeplayConfig.server';
 
 function buildStaffQuery(searchParams) {
   const query = {};
@@ -303,7 +304,8 @@ export async function PUT(req) {
     };
 
     if (action === 'freeplay_wallet') {
-      const amount = Number(reqDoc.freeplayAmount || 0);
+      const configured = await getFreeplayAmountSC(db);
+      const amount = configured > 0 ? configured : Number(reqDoc.freeplayAmount || 0);
       if (amount <= 0) {
         return NextResponse.json({ success: false, error: 'Invalid freeplay amount on request' }, { status: 400 });
       }
@@ -450,7 +452,8 @@ export async function PUT(req) {
       );
 
       if (reqDoc.freeplayPending) {
-        const fpAmt = Number(reqDoc.freeplayAmount || 0);
+        const configured = await getFreeplayAmountSC(db);
+        const fpAmt = configured > 0 ? configured : Number(reqDoc.freeplayAmount || 0);
         if (fpAmt > 0) {
           const player = await db.collection('users').findOne(toIdQuery(reqDoc.userId));
           if (player) {

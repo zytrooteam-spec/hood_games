@@ -2,15 +2,14 @@ import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/mongodb';
 import { notifyStaff } from '@/lib/notify';
 import { requirePlayerDbUser } from '@/lib/requirePlayerDbUser';
+import { getFreeplayAmountSC } from '@/lib/freeplayConfig.server';
 
 // GET - Check Freeplay eligibility, configured amount, and task status
 export async function GET(req) {
   try {
     const db = await getDb();
     const settingsDoc = await db.collection('system_settings').findOne({ key: 'general' });
-    const configuredAmount = settingsDoc?.freeplayAmountSC !== undefined 
-      ? Number(settingsDoc.freeplayAmountSC) 
-      : 3.0;
+    const configuredAmount = await getFreeplayAmountSC(db);
     const freeplayActive = settingsDoc?.freeplayActive !== false;
 
     const { dbUser: user } = await requirePlayerDbUser(req);
@@ -48,6 +47,7 @@ export async function GET(req) {
       success: true,
       claimed,
       amount: configuredAmount,
+      freeplayAmountSC: configuredAmount,
       freeplayActive,
       pending: Boolean(pendingTask),
       pendingTask: pendingTask ? {
@@ -84,9 +84,7 @@ export async function POST(req) {
         { status: 400 }
       );
     }
-    const configuredAmount = settingsDoc?.freeplayAmountSC !== undefined 
-      ? Number(settingsDoc.freeplayAmountSC) 
-      : 3.0;
+    const configuredAmount = await getFreeplayAmountSC(db);
 
     const usersCol = db.collection('users');
     const user = dbUser;

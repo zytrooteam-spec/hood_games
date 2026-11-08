@@ -2101,29 +2101,14 @@ export default function AdminDashboard({ user, onLogout }) {
             {/* Settings Form */}
             <form onSubmit={handleSaveSettings} className="space-y-6 max-w-2xl">
               <div className="p-6 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4">
-                <h4 className="text-sm font-black text-white font-heading">Site Branding &amp; Images</h4>
-                <p className="text-xs text-gray-400">
-                  Upload or paste image URLs — changes appear instantly across the player site (logo, hero, jackpot card).
-                </p>
+                <h4 className="text-sm font-black text-white font-heading">Site Logo</h4>
+                <p className="text-xs text-gray-400">Navbar, sidebar, and admin header only.</p>
                 <AdminImageField
                   label="Site Logo"
                   value={settings?.logoUrl || '/logo.png'}
                   onChange={(v) => setSettings({ ...settings, logoUrl: v })}
                   hint="Navbar, sidebar, admin header"
                   maxSize={512}
-                />
-                <AdminImageField
-                  label="Hero Background"
-                  value={settings?.heroBackgroundUrl || '/images/casino-hero-bg.jpg'}
-                  onChange={(v) => setSettings({ ...settings, heroBackgroundUrl: v })}
-                  maxSize={1200}
-                  quality={0.55}
-                />
-                <AdminImageField
-                  label="Jackpot Showcase Image"
-                  value={settings?.jackpotBannerUrl || '/images/jackpot-banner.jpg'}
-                  onChange={(v) => setSettings({ ...settings, jackpotBannerUrl: v })}
-                  maxSize={600}
                 />
               </div>
 

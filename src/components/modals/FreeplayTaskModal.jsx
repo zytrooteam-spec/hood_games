@@ -25,9 +25,10 @@ export default function FreeplayTaskModal({
   isOpen,
   onClose,
   user,
-  freeplayAmount = 3,
+  freeplayAmount: freeplayAmountProp = 5,
   onSuccess,
 }) {
+  const [freeplayAmount, setFreeplayAmount] = useState(freeplayAmountProp);
   const [availableGames, setAvailableGames] = useState([]);
   const [selectedGame, setSelectedGame] = useState('Ultra Panda');
   const [screenshot, setScreenshot] = useState('');
@@ -72,20 +73,24 @@ export default function FreeplayTaskModal({
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  // Check freeplay claim status on open
+  useEffect(() => {
+    setFreeplayAmount(freeplayAmountProp);
+  }, [freeplayAmountProp]);
+
+  // Amount + claim status from admin settings (live)
   useEffect(() => {
     if (!isOpen) return;
-    if (user?.email) {
-      fetch('/api/freeplay', { cache: 'no-store' })
-        .then((r) => r.json())
-        .then((d) => {
-          if (d?.success && d.claimed) {
-            setIsClaimed(true);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [isOpen, user]);
+    playerApiFetch('/api/freeplay')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success) {
+          const amt = Number(d.freeplayAmountSC ?? d.amount);
+          if (Number.isFinite(amt) && amt >= 0) setFreeplayAmount(amt);
+          if (d.claimed) setIsClaimed(true);
+        }
+      })
+      .catch(() => {});
+  }, [isOpen, user?.email]);
 
   // Auto-send verification email on first open (only if not already claimed)
   useEffect(() => {

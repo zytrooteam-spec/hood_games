@@ -280,8 +280,7 @@ export default function HomePage() {
                 onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
                 onOpenFreeplay={() => (user ? setFreeplayOpen(true) : setAuthModal({ open: true, tab: 'register' }))}
                 setActiveView={setActiveView}
-                heroBackgroundUrl={settings?.heroBackgroundUrl}
-                jackpotBannerUrl={settings?.jackpotBannerUrl}
+                freeplayAmountSC={Number(settings?.freeplayAmountSC ?? 5)}
                 isMobileOnlyHome={isMobile && activeView === 'home'}
               />
 

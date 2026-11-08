@@ -35,25 +35,13 @@ export default function HoodHeroSection({
   onOpenFreeplay,
   setActiveView,
   isMobileOnlyHome = false,
-  heroBackgroundUrl = '/images/casino-hero-bg.jpg',
-  jackpotBannerUrl = '/images/jackpot-banner.jpg',
+  freeplayAmountSC = 5,
 }) {
+  const fpLabel = Number(freeplayAmountSC) > 0 ? `$${Number(freeplayAmountSC).toFixed(0)} Freeplay` : 'Get Freeplay';
   return (
     <div className="relative w-full rounded-3xl overflow-hidden border border-[#1a3363] bg-[#09142a] shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
-      {/* 1. Casino Hero Realistic Background Image */}
-      <div className="absolute inset-0 z-0">
-        <HeroImage
-          src={heroBackgroundUrl || '/images/casino-hero-bg.jpg'}
-          alt="VIP Casino Lounge"
-          fill
-          priority
-          sizes="(max-width: 1280px) 100vw, 1280px"
-          className="object-cover object-center opacity-30 transform scale-105 absolute inset-0 w-full h-full"
-        />
-        {/* Deep Blue Gradient Wash Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#070d1e] via-[#09142a]/90 to-[#070d1e]/85" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#070d1e] via-transparent to-transparent" />
-      </div>
+      <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#070d1e] via-[#0c1b38] to-[#09142a]" />
+      <div className="absolute inset-0 z-0 bg-gradient-to-t from-[#070d1e] via-transparent to-transparent" />
 
       {/* 2. Cyber Glowing Ambient Lights */}
       <div className="absolute -top-24 left-1/4 w-96 h-96 bg-[#2cb64e]/15 rounded-full blur-3xl pointer-events-none" />
@@ -128,7 +116,7 @@ export default function HoodHeroSection({
                     }}
                     className="px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-wider text-amber-100 bg-amber-500/20 border border-amber-500/50 hover:bg-amber-500/30 transition-all"
                   >
-                    Get Freeplay
+                    {fpLabel}
                   </button>
                 )}
 
@@ -155,15 +143,8 @@ export default function HoodHeroSection({
                 <span>Live Community Jackpot</span>
               </div>
 
-              {/* 3D Casino Art Frame */}
-              <div className="relative w-36 h-36 mx-auto rounded-2xl overflow-hidden border-2 border-[#2cb64e]/50 shadow-[0_0_30px_rgba(44,182,78,0.4)] bg-[#070d1e] mb-4">
-                <HeroImage
-                  src={jackpotBannerUrl || '/images/jackpot-banner.jpg'}
-                  alt="Lucky 777 Jackpot"
-                  fill
-                  sizes="144px"
-                  className="object-cover absolute inset-0 w-full h-full"
-                />
+              <div className="relative w-36 h-36 mx-auto rounded-2xl overflow-hidden border-2 border-[#2cb64e]/50 shadow-[0_0_30px_rgba(44,182,78,0.4)] bg-gradient-to-br from-[#12244c] to-[#070d1e] mb-4 flex items-center justify-center">
+                <Award size={56} className="text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.5)]" />
               </div>
 
               {/* Running Ticker Amount */}

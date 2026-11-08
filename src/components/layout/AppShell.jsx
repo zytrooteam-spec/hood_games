@@ -85,14 +85,18 @@ export default function AppShell({ children }) {
     unlockAudioContext();
     fetchUser();
     fetchUnreadNotifs();
-    fetch('/api/admin/settings', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => d?.success && d.settings && setSiteSettings(d.settings))
-      .catch(() => {});
+    const loadSiteSettings = () => {
+      fetch('/api/admin/settings', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => d?.success && d.settings && setSiteSettings(d.settings))
+        .catch(() => {});
+    };
+    loadSiteSettings();
     // Silent background poll every 6s so balance & status stay in sync without flicker
     const interval = setInterval(() => {
       fetchUser(true);
       fetchUnreadNotifs();
+      loadSiteSettings();
     }, 6000);
 
     const handleUserSync = (e) => {
