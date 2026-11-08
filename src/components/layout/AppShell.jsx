@@ -10,6 +10,7 @@ import AuthModal from '@/components/modals/AuthModal';
 import HoodDailySpinModal from '@/components/games/HoodDailySpinModal';
 import HoodAppModal from '@/components/modals/HoodAppModal';
 import HoodNotificationsModal from '@/components/modals/HoodNotificationsModal';
+import FreeplayTaskModal from '@/components/modals/FreeplayTaskModal';
 import { unlockAudioContext } from '@/lib/soundAlerts';
 import { Headphones } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
@@ -46,6 +47,8 @@ export default function AppShell({ children }) {
   const [appModalOpen, setAppModalOpen] = useState(false);
   const [notifsOpen, setNotifsOpen] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [freeplayOpen, setFreeplayOpen] = useState(false);
+  const [siteSettings, setSiteSettings] = useState(null);
 
   const fetchUser = async (isSilent = false) => {
     try {
@@ -82,6 +85,10 @@ export default function AppShell({ children }) {
     unlockAudioContext();
     fetchUser();
     fetchUnreadNotifs();
+    fetch('/api/admin/settings', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => d?.success && d.settings && setSiteSettings(d.settings))
+      .catch(() => {});
     // Silent background poll every 6s so balance & status stay in sync without flicker
     const interval = setInterval(() => {
       fetchUser(true);
@@ -175,6 +182,10 @@ export default function AppShell({ children }) {
             onOpenApp={() => router.push('/download-app')}
             onLogout={handleLogout}
             onToggleSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+            onOpenFreeplay={() => {
+              if (user) setFreeplayOpen(true);
+              else setAuthModal({ open: true, tab: 'register' });
+            }}
           />
 
           {/* Content Children */}
@@ -241,6 +252,14 @@ export default function AppShell({ children }) {
           onClose={() => setNotifsOpen(false)}
           user={user}
           onAllRead={() => setUnreadNotifs(0)}
+        />
+
+        <FreeplayTaskModal
+          isOpen={freeplayOpen}
+          onClose={() => setFreeplayOpen(false)}
+          user={user}
+          freeplayAmount={Number(siteSettings?.freeplayAmountSC ?? 5)}
+          onSuccess={() => fetchUser()}
         />
       </div>
     </AppShellContext.Provider>

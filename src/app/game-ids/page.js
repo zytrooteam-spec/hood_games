@@ -4,19 +4,26 @@ import React, { useState, useEffect } from 'react';
 import AppShell, { useAppShell } from '@/components/layout/AppShell';
 import { RequireGuestOrUser } from '@/components/auth/SessionGate';
 import GameRequestModal from '@/components/modals/GameRequestModal';
-import { Key, Copy, Check, Play, Clock, Plus, ShieldCheck, Gamepad2 } from 'lucide-react';
+import LoadCoinsModal from '@/components/modals/LoadCoinsModal';
+import { Key, Copy, Check, Play, Clock, Plus, ShieldCheck, Gamepad2, Coins } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
+import { getGameThumbnail, readGamesCache, writeGamesCache } from '@/lib/gameAssets';
+import { findGameForAccount } from '@/lib/matchGameAccount';
 
 function GameIdsContent() {
   const { user, openAuth } = useAppShell();
   const [accounts, setAccounts] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [gamesCatalog, setGamesCatalog] = useState(() => readGamesCache() || []);
+  const [loadingDesk, setLoadingDesk] = useState(true);
   const [copiedId, setCopiedId] = useState(null);
   const [requestModal, setRequestModal] = useState({ open: false, game: null });
+  const [loadCoinsModal, setLoadCoinsModal] = useState({ open: false, game: null, userAccount: null });
 
-  const loadData = async (email) => {
+  const loadData = async (email, silent = false) => {
     if (!email) return;
+    if (!silent) setLoadingDesk(true);
     try {
       const res = await fetch(`/api/game-accounts?email=${encodeURIComponent(email)}`);
       const data = await res.json();
@@ -32,18 +39,33 @@ function GameIdsContent() {
         diffSet(setAccounts, sanitizedAccounts);
         diffSet(setPendingRequests, sanitizedRequests);
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    } finally {
+      setLoadingDesk(false);
+    }
   };
+
+  useEffect(() => {
+    fetch('/api/games', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success && Array.isArray(d.games)) {
+          const sanitized = d.games.map((g) => ({ ...g, title: sanitizeGameTitle(g.title) }));
+          diffSet(setGamesCatalog, sanitized);
+          writeGamesCache(sanitized);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (user?.email) {
       loadData(user.email);
-      // Silent background poll every 5s so newly approved credentials appear seamlessly
-      const interval = setInterval(() => {
-        loadData(user.email);
-      }, 5000);
+      const interval = setInterval(() => loadData(user.email, true), 5000);
       return () => clearInterval(interval);
     }
+    setLoadingDesk(false);
   }, [user?.email]);
 
   const copyText = (txt, id) => {
@@ -135,7 +157,26 @@ function GameIdsContent() {
           <span>Active Game Credentials ({accounts.length})</span>
         </h3>
 
-        {accounts.length === 0 ? (
+        {loadingDesk && accounts.length === 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="p-5 rounded-3xl bg-[#09142a] border border-[#1a3363] animate-pulse space-y-3">
+                <div className="flex gap-3">
+                  <div className="w-14 h-14 rounded-xl bg-[#1a3363]/70" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-2/3 bg-[#1a3363]/70 rounded" />
+                    <div className="h-3 w-1/2 bg-[#1a3363]/50 rounded" />
+                  </div>
+                </div>
+                <div className="h-16 bg-[#1a3363]/40 rounded-xl" />
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="h-10 bg-[#2cb64e]/20 rounded-xl" />
+                  <div className="h-10 bg-[#1a3363]/50 rounded-xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : accounts.length === 0 ? (
           <div className="p-10 rounded-3xl bg-[#09142a] border border-[#1a3363] text-center text-gray-400 space-y-3">
             <Gamepad2 size={32} className="mx-auto text-gray-500" />
             <p className="text-xs">You don't have any provisioned game accounts yet.</p>
@@ -149,16 +190,37 @@ function GameIdsContent() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {accounts.map((acc) => (
+            {accounts.map((acc) => {
+              const matchedGame = findGameForAccount(gamesCatalog, acc);
+              const thumb = getGameThumbnail(
+                acc.gameTitle,
+                matchedGame?.image || matchedGame?.thumbnail || matchedGame?.imageUrl
+              );
+              const launchUrl = acc.loginUrl || matchedGame?.playUrl;
+
+              return (
               <div
                 key={acc._id}
                 className="p-5 rounded-3xl bg-gradient-to-b from-[#0e2042] to-[#070d1e] border-2 border-[#1a3363] hover:border-[#2cb64e]/50 space-y-3 shadow-xl transition-all"
               >
-                <div className="flex items-center justify-between">
-                  <h4 className="font-black text-base text-white">{acc.gameTitle}</h4>
-                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-[#2cb64e]/20 text-[#2cb64e] border border-[#2cb64e]/40">
-                    READY TO PLAY
-                  </span>
+                <div className="flex items-start gap-3">
+                  <div className="w-14 h-14 rounded-xl overflow-hidden border border-[#2cb64e]/35 bg-[#09142a] shrink-0 flex items-center justify-center">
+                    {thumb ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={thumb} alt={acc.gameTitle} className="w-full h-full object-cover" />
+                    ) : (
+                      <Gamepad2 size={22} className="text-[#2cb64e]/50" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="font-black text-base text-white truncate">{acc.gameTitle}</h4>
+                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-[#2cb64e]/20 text-[#2cb64e] border border-[#2cb64e]/40 shrink-0">
+                        READY
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 m-0 mt-0.5">Linked platform account</p>
+                  </div>
                 </div>
 
                 {/* Username Box */}
@@ -191,24 +253,52 @@ function GameIdsContent() {
                   </button>
                 </div>
 
-                {/* Launch Button */}
-                {acc.loginUrl && (
-                  <a
-                    href={acc.loginUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={() => playTune('win')}
-                    className="w-full btn-hood-green py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5"
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={!launchUrl}
+                    onClick={() => {
+                      if (launchUrl) {
+                        playTune('win');
+                        window.open(launchUrl, '_blank', 'noreferrer');
+                      }
+                    }}
+                    className="btn-hood-green py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
                     <Play size={13} className="fill-white" />
-                    <span>Launch Game</span>
-                  </a>
-                )}
+                    Launch
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playTune('coin');
+                      setLoadCoinsModal({
+                        open: true,
+                        game: matchedGame || { title: acc.gameTitle, id: acc.gameId },
+                        userAccount: acc,
+                      });
+                    }}
+                    className="py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 bg-amber-500/15 border border-amber-500/45 text-amber-200 hover:bg-amber-500/25"
+                  >
+                    <Coins size={13} />
+                    Load coins
+                  </button>
+                </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>
+
+      <LoadCoinsModal
+        isOpen={loadCoinsModal.open}
+        game={loadCoinsModal.game}
+        userAccount={loadCoinsModal.userAccount}
+        user={user}
+        onClose={() => setLoadCoinsModal({ open: false, game: null, userAccount: null })}
+        onSuccess={() => user?.email && loadData(user.email, true)}
+      />
 
       <GameRequestModal
         isOpen={requestModal.open}

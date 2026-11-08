@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getDb, toIdQuery } from '@/lib/mongodb';
 import { getSessionUser } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
-import { WHEEL_SLICES } from '@/lib/wheelConstants';
+import { resolveWheelConfig, pickWheelOutcome } from '@/lib/wheelConfig';
 
 export const runtime = 'nodejs';
 
@@ -10,6 +10,9 @@ export const runtime = 'nodejs';
 export async function GET(req) {
   try {
     await ensureDbInitialized();
+    const db = await getDb();
+    const settings = await db.collection('system_settings').findOne({ key: 'general' });
+    const wheelConfig = resolveWheelConfig(settings);
     const session = await getSessionUser(req, 'player');
     if (!session) {
       return NextResponse.json({
@@ -17,12 +20,10 @@ export async function GET(req) {
         authenticated: false,
         canSpin: false,
         availableSpins: 0,
-        slices: WHEEL_SLICES,
+        slices: wheelConfig.slices,
         message: 'Please log in to spin.',
       });
     }
-
-    const db = await getDb();
     const userId = session.userId || session.id;
     const user = await db.collection('users').findOne(toIdQuery(userId));
     if (!user) {
@@ -31,7 +32,7 @@ export async function GET(req) {
         authenticated: false,
         canSpin: false,
         availableSpins: 0,
-        slices: WHEEL_SLICES,
+        slices: wheelConfig.slices,
         message: 'User not found',
       });
     }
@@ -44,7 +45,7 @@ export async function GET(req) {
       authenticated: true,
       canSpin,
       availableSpins,
-      slices: WHEEL_SLICES,
+      slices: wheelConfig.slices,
       lastDailySpin: user.lastDailySpin || null,
       balanceSC: Number(user.balanceSC ?? 0),
       message: canSpin
@@ -57,7 +58,7 @@ export async function GET(req) {
       success: true,
       canSpin: false,
       availableSpins: 0,
-      slices: WHEEL_SLICES,
+      slices: resolveWheelConfig(null).slices,
       error: err.message,
     });
   }
@@ -73,6 +74,8 @@ export async function POST(req) {
     }
 
     const db = await getDb();
+    const settings = await db.collection('system_settings').findOne({ key: 'general' });
+    const wheelConfig = resolveWheelConfig(settings);
     const usersCol = db.collection('users');
     const userId = session.userId || session.id;
     const user = await usersCol.findOne(toIdQuery(userId));
@@ -93,28 +96,7 @@ export async function POST(req) {
       );
     }
 
-    const rand = Math.random() * 100;
-    let prizeAmount = 0;
-    let sliceIndex = 1;
-    let isBadLuck = false;
-
-    if (rand < 10) {
-      prizeAmount = 3;
-      sliceIndex = 3;
-    } else if (rand < 30) {
-      prizeAmount = 2;
-      const twoSlices = [2, 6];
-      sliceIndex = twoSlices[Math.floor(Math.random() * twoSlices.length)];
-    } else if (rand < 70) {
-      prizeAmount = 1;
-      const oneSlices = [0, 4, 7];
-      sliceIndex = oneSlices[Math.floor(Math.random() * oneSlices.length)];
-    } else {
-      prizeAmount = 0;
-      isBadLuck = true;
-      const zeroSlices = [1, 5];
-      sliceIndex = zeroSlices[Math.floor(Math.random() * zeroSlices.length)];
-    }
+    const { prizeAmount, sliceIndex, isBadLuck } = pickWheelOutcome(wheelConfig.odds);
 
     const remainingSpins = Math.max(0, availableSpins - 1);
     const oldBalance = Number(user.balanceSC ?? 0);
@@ -146,7 +128,7 @@ export async function POST(req) {
       });
     }
 
-    const slice = WHEEL_SLICES[sliceIndex];
+    const slice = wheelConfig.slices[sliceIndex] || wheelConfig.slices[0];
     const prize = {
       label: isBadLuck ? slice.label : `$${prizeAmount.toFixed(2)} SC`,
       type: 'SC',

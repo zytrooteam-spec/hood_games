@@ -271,7 +271,8 @@ function WalletPageInner() {
                 Deposit & Redeem Station
               </h1>
               <p className="text-xs sm:text-sm text-gray-300">
-                100% automated sweepstakes wallet. 300% match bonus on first deposit.
+                Deposit: balance credits when staff approves (+ bonus SC, +2 wheel spins). Redeem: amount escrowed until
+                paid; coin load: escrow until desk loads game.
               </p>
             </div>
 
@@ -281,10 +282,20 @@ function WalletPageInner() {
                   <Coins size={20} />
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Available Balance</span>
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Available balance</span>
                   <span className="text-lg font-black text-[#2cb64e] font-mono leading-tight">
-                    ${Number(user.balanceSC || 0).toFixed(2)} SC
+                    $
+                    {Math.max(
+                      0,
+                      Number(user.balanceSC || 0) - Number(user.frozenBalance || 0)
+                    ).toFixed(2)}{' '}
+                    SC
                   </span>
+                  {Number(user.frozenBalance || 0) > 0 ? (
+                    <span className="text-[9px] text-amber-300 font-bold block mt-0.5">
+                      ${Number(user.frozenBalance || 0).toFixed(2)} in escrow (load / redeem pending)
+                    </span>
+                  ) : null}
                 </div>
               </div>
             )}

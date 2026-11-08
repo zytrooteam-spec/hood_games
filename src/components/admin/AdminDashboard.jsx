@@ -68,6 +68,7 @@ import {
 } from './AdminExtraTabs';
 import { AccountRequestsDesk, CoinAllotmentDesk, AffiliatesDesk } from './HoodAdminDesks';
 import AdminImageField from './AdminImageField';
+import AdminDailySpinTab from './AdminDailySpinTab';
 import {
   HoodAdminModal,
   HoodAdminModalHeader,
@@ -1066,6 +1067,18 @@ export default function AdminDashboard({ user, onLogout }) {
             </button>
 
             <button
+              onClick={() => selectNavTab('daily_spin')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'daily_spin'
+                  ? 'btn-hood-green text-white shadow-md'
+                  : 'text-gray-300 hover:bg-[#0e2042]'
+              }`}
+            >
+              <Sparkles size={16} />
+              <span>Daily Spin Wheel</span>
+            </button>
+
+            <button
               onClick={() => selectNavTab('settings')}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
                 activeTab === 'settings'
@@ -1901,6 +1914,19 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {/* 5. CASHBACK & SYSTEM SETTINGS (REQUIREMENT #7)           */}
         {/* ======================================================== */}
+        {activeTab === 'daily_spin' && (
+          <form onSubmit={handleSaveSettings} className="space-y-6 max-w-3xl">
+            <AdminDailySpinTab settings={settings} setSettings={setSettings} />
+            <button
+              type="submit"
+              disabled={savingSettings}
+              className="btn-hood-green px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-wider"
+            >
+              {savingSettings ? 'Saving…' : 'Save wheel to database'}
+            </button>
+          </form>
+        )}
+
         {/* ======================================================== */}
         {/* 5. CASHBACK & SYSTEM SETTINGS (REQUIREMENT #7)           */}
         {/* ======================================================== */}

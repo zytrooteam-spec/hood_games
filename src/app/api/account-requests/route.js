@@ -88,41 +88,119 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req, 'player');
-    if (!user) {
-      return NextResponse.json({ success: false, error: 'Please log in to request game accounts' }, { status: 401 });
+    const session = await getSessionUser(req, 'player');
+    if (!session) {
+      return NextResponse.json({ success: false, error: 'Please log in to continue.' }, { status: 401 });
     }
 
-    const { gameId, gameTitle, transferAmount, notes } = await req.json();
-    const cleanGameTitle = sanitizeGameTitle(gameTitle);
+    const body = await req.json();
+    const cleanGameTitle = sanitizeGameTitle(body.gameTitle);
     if (!cleanGameTitle) {
       return NextResponse.json({ success: false, error: 'Game title required' }, { status: 400 });
     }
 
+    const transferAmount = Math.max(0, Number(body.transferAmount || 0));
+    const requestType =
+      body.requestType || (transferAmount > 0 ? 'COIN_LOAD' : 'ACCOUNT_CREATION');
+    const gameAccountUsername = String(body.gameAccountUsername || '').trim();
+
     const db = await getDb();
-    const userId = user.id || user._id.toString();
+    const usersCol = db.collection('users');
+    const userId = session.userId || session.id;
+    const dbUser = await usersCol.findOne(toIdQuery(userId));
+    if (!dbUser) {
+      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
+    }
 
-    // Check if player already has an account for this game
-    const existingAcc = await db.collection('game_accounts').findOne({
-      userId,
+    const currentSC = Number(dbUser.balanceSC || 0);
+    const frozen = Math.max(0, Number(dbUser.frozenBalance || 0));
+    const available = Math.max(0, Number((currentSC - frozen).toFixed(2)));
+
+    if (requestType === 'COIN_LOAD') {
+      if (transferAmount <= 0) {
+        return NextResponse.json(
+          { success: false, error: 'Specify a coin amount greater than $0.' },
+          { status: 400 }
+        );
+      }
+      if (transferAmount > available) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Cannot load $${transferAmount.toFixed(2)} SC. Available: $${available.toFixed(2)} (${frozen.toFixed(2)} in escrow).`,
+          },
+          { status: 400 }
+        );
+      }
+    } else {
+      const existingAcc = await db.collection('game_accounts').findOne({
+        userId: dbUser._id.toString(),
+        gameTitle: cleanGameTitle,
+      });
+      if (existingAcc) {
+        return NextResponse.json(
+          {
+            success: false,
+            alreadyHasAccount: true,
+            error: `You already have credentials for ${cleanGameTitle}.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    const pendingQuery = {
+      userId: dbUser._id.toString(),
       gameTitle: cleanGameTitle,
-    });
+      status: { $in: ['pending', 'PENDING', 'Pending'] },
+    };
+  if (requestType === 'COIN_LOAD') {
+      pendingQuery.$or = [{ requestType: 'COIN_LOAD' }, { transferAmount: { $gt: 0 } }];
+    }
+    const existingPending = await db.collection('accountRequests').findOne(pendingQuery);
+    if (existingPending) {
+      return NextResponse.json(
+        {
+          success: false,
+          isPending: true,
+          error: `You already have a pending ${requestType === 'COIN_LOAD' ? 'coin load' : 'ID'} request for ${cleanGameTitle}.`,
+        },
+        { status: 400 }
+      );
+    }
 
-    if (existingAcc) {
-      return NextResponse.json({
-        success: false,
-        error: `You already have an active account for ${cleanGameTitle}. View credentials in your My Game IDs station.`,
-      }, { status: 400 });
+    if (requestType === 'COIN_LOAD' && transferAmount > 0) {
+      await usersCol.updateOne(toIdQuery(dbUser._id), {
+        $inc: { frozenBalance: transferAmount },
+        $set: { updatedAt: new Date() },
+      });
+      await db.collection('ledger').insertOne({
+        userId: dbUser._id.toString(),
+        username: dbUser.username,
+        type: 'game_load_freeze',
+        currency: 'SC',
+        amount: transferAmount,
+        balanceBefore: currentSC,
+        balanceAfter: currentSC,
+        frozenAmount: transferAmount,
+        performedBy: 'player',
+        referenceId: cleanGameTitle,
+        notes: `Escrow $${transferAmount.toFixed(2)} SC for ${cleanGameTitle} load`,
+        createdAt: new Date(),
+      });
     }
 
     const reqDoc = {
-      userId,
-      username: user.username,
-      userEmail: user.email,
-      gameId: gameId || cleanGameTitle.toLowerCase().replace(/\s+/g, '-'),
+      userId: dbUser._id.toString(),
+      username: dbUser.username,
+      userName: dbUser.username,
+      userEmail: (dbUser.email || session.email || '').toLowerCase(),
+      gameId: body.gameId || cleanGameTitle.toLowerCase().replace(/\s+/g, '-'),
       gameTitle: cleanGameTitle,
-      transferAmount: Number(transferAmount || 0),
-      notes: notes || '',
+      gameAccountUsername: gameAccountUsername || '',
+      requestType,
+      transferAmount,
+      notes: body.notes || '',
       status: 'pending',
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -131,16 +209,23 @@ export async function POST(req) {
     const res = await db.collection('accountRequests').insertOne(reqDoc);
 
     notifyStaff({
-      title: `🎮 New Game ID Request: ${gameTitle}`,
-      message: `Player ${user.username} requested login credentials for ${gameTitle}.`,
-      type: 'account_request',
+      title:
+        requestType === 'COIN_LOAD'
+          ? `⚡ Coin load: $${transferAmount.toFixed(2)} → ${cleanGameTitle}`
+          : `🎮 New Game ID: ${cleanGameTitle}`,
+      message: `Player ${dbUser.username} — ${requestType === 'COIN_LOAD' ? 'load coins' : 'request credentials'}.`,
+      type: requestType === 'COIN_LOAD' ? 'coin_load' : 'account_request',
       data: { requestId: res.insertedId.toString() },
     });
 
     return NextResponse.json({
       success: true,
-      request: { ...reqDoc, _id: res.insertedId },
-      message: `Request for ${gameTitle} submitted! Staff will issue your credentials shortly.`,
+      requestId: res.insertedId.toString(),
+      request: { ...reqDoc, _id: res.insertedId, id: res.insertedId.toString() },
+      message:
+        requestType === 'COIN_LOAD'
+          ? `Load request submitted! $${transferAmount.toFixed(2)} SC held in escrow until staff approves.`
+          : `Request for ${cleanGameTitle} submitted! Staff will issue credentials shortly.`,
     });
   } catch (err) {
     console.error('Account request error:', err);
@@ -261,24 +346,49 @@ export async function PUT(req) {
 
     if (action === 'approve' && isCoinLoad && (!gameUsername || !gamePassword)) {
       const loadAmt = Number(body.transferAmount ?? reqDoc.transferAmount ?? 0);
+      const originalFrozen = Number(reqDoc.transferAmount || 0);
+      const finalAmt = loadAmt > 0 ? loadAmt : originalFrozen;
+      const player = await db.collection('users').findOne(toIdQuery(reqDoc.userId));
+      if (player && finalAmt > 0) {
+        const oldSC = Number(player.balanceSC || 0);
+        const newSC = Math.max(0, Number((oldSC - finalAmt).toFixed(2)));
+        const oldFrozen = Math.max(0, Number(player.frozenBalance || 0));
+        const newFrozen = Math.max(0, Number((oldFrozen - originalFrozen).toFixed(2)));
+        await db.collection('users').updateOne(toIdQuery(reqDoc.userId), {
+          $set: { balanceSC: newSC, frozenBalance: newFrozen, updatedAt: new Date() },
+        });
+        await db.collection('ledger').insertOne({
+          userId: reqDoc.userId,
+          username: player.username,
+          type: 'game_transfer',
+          currency: 'SC',
+          amount: -finalAmt,
+          balanceBefore: oldSC,
+          balanceAfter: newSC,
+          performedBy: user.username,
+          referenceId: String(reqDoc._id),
+          notes: `Coin load into ${reqDoc.gameTitle} (${reqDoc.gameAccountUsername || 'player ID'})`,
+          createdAt: new Date(),
+        });
+      }
       await db.collection('accountRequests').updateOne(toIdQuery(requestId), {
         $set: {
           status: 'approved',
           approvedBy: user.username,
           approvedAt: new Date(),
           updatedAt: new Date(),
-          transferAmount: loadAmt,
+          transferAmount: finalAmt,
         },
       });
       notifyPlayer({
         userId: reqDoc.userId,
         title: `⚡ ${reqDoc.gameTitle} Coin Load Approved`,
-        message: `$${loadAmt.toFixed(2)} SC load marked complete for your ${reqDoc.gameTitle} account.`,
+        message: `$${finalAmt.toFixed(2)} SC transferred into your ${reqDoc.gameTitle} account.`,
         type: 'coin_load_approved',
       });
       return NextResponse.json({
         success: true,
-        message: `Coin load for ${reqDoc.gameTitle} approved ($${loadAmt.toFixed(2)} SC).`,
+        message: `Coin load for ${reqDoc.gameTitle} approved ($${finalAmt.toFixed(2)} SC).`,
       });
     }
 
@@ -399,6 +509,22 @@ export async function PUT(req) {
 
       return NextResponse.json({ success: true, message: 'Game credentials issued successfully!' });
     } else if (action === 'reject') {
+      const isCoinLoadReject =
+        reqDoc.requestType === 'COIN_LOAD' || Number(reqDoc.transferAmount || 0) > 0;
+      if (isCoinLoadReject) {
+        const unfrozen = Number(reqDoc.transferAmount || 0);
+        const player = await db.collection('users').findOne(toIdQuery(reqDoc.userId));
+        if (player && unfrozen > 0) {
+          const newFrozen = Math.max(
+            0,
+            Number((Number(player.frozenBalance || 0) - unfrozen).toFixed(2))
+          );
+          await db.collection('users').updateOne(toIdQuery(reqDoc.userId), {
+            $set: { frozenBalance: newFrozen, updatedAt: new Date() },
+          });
+        }
+      }
+
       await db.collection('accountRequests').updateOne(
         toIdQuery(requestId),
         {

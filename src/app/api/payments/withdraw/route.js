@@ -72,26 +72,32 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: 'Please provide your Cash App tag, Zelle email, or Crypto address' }, { status: 400 });
     }
 
-    // Check player balance
     const dbUser = await db.collection('users').findOne(toIdQuery(user.id || user._id));
-    if (!dbUser || Number(dbUser.balanceSC || 0) < numAmount) {
+    const currentSC = Number(dbUser?.balanceSC || 0);
+    const frozen = Math.max(0, Number(dbUser?.frozenBalance || 0));
+    const availableSC = Math.max(0, Number((currentSC - frozen).toFixed(2)));
+
+    if (!dbUser || availableSC < numAmount) {
       return NextResponse.json({
         success: false,
-        error: `Insufficient balance. Your current balance is $${Number(dbUser?.balanceSC || 0).toFixed(2)} SC`,
+        error: `Insufficient available balance. You have $${availableSC.toFixed(2)} SC available (${frozen.toFixed(2)} SC in escrow).`,
       }, { status: 400 });
     }
 
-    // Deduct balanceSC immediately to hold
-    await db.collection('users').updateOne(
-      toIdQuery(user.id || user._id),
-      { $inc: { balanceSC: -numAmount } }
-    );
+    const escrowFrozen = Math.min(numAmount, availableSC);
+    if (escrowFrozen > 0) {
+      await db.collection('users').updateOne(toIdQuery(user.id || user._id), {
+        $inc: { frozenBalance: escrowFrozen },
+        $set: { updatedAt: new Date() },
+      });
+    }
 
     const redemptionDoc = {
       userId: user.id || user._id.toString(),
       username: user.username,
       userEmail: user.email,
       amount: numAmount,
+      escrowFrozen,
       method: method || 'Cash App',
       payoutAddress: payoutAddress.trim(),
       notes: notes || '',
@@ -107,10 +113,13 @@ export async function POST(req) {
     await db.collection('ledger').insertOne({
       userId: user.id || user._id.toString(),
       username: user.username,
-      type: 'redemption_hold',
-      amount: -numAmount,
+      type: 'redemption_escrow',
+      amount: numAmount,
       currency: 'SC',
-      description: `Cashout request to ${method} (${payoutAddress})`,
+      balanceBefore: currentSC,
+      balanceAfter: currentSC,
+      frozenAmount: escrowFrozen,
+      description: `Redeem escrow — ${method} (${payoutAddress})`,
       referenceId: res.insertedId.toString(),
       createdAt: new Date(),
     });
@@ -158,6 +167,31 @@ export async function PUT(req) {
     }
 
     if (action === 'approve') {
+      const player = await db.collection('users').findOne(toIdQuery(redemption.userId));
+      const payAmount = Number(redemption.amount || 0);
+      const escrow = Number(redemption.escrowFrozen ?? redemption.amount ?? 0);
+      if (player) {
+        const oldSC = Number(player.balanceSC || 0);
+        const newSC = Math.max(0, Number((oldSC - payAmount).toFixed(2)));
+        const oldFrozen = Math.max(0, Number(player.frozenBalance || 0));
+        const newFrozen = Math.max(0, Number((oldFrozen - escrow).toFixed(2)));
+        await db.collection('users').updateOne(toIdQuery(redemption.userId), {
+          $set: { balanceSC: newSC, frozenBalance: newFrozen, updatedAt: new Date() },
+        });
+        await db.collection('ledger').insertOne({
+          userId: redemption.userId,
+          username: redemption.username,
+          type: 'redemption_paid',
+          currency: 'SC',
+          amount: -payAmount,
+          balanceBefore: oldSC,
+          balanceAfter: newSC,
+          referenceId: String(redemptionId),
+          notes: `Cashout paid via ${redemption.method}`,
+          createdAt: new Date(),
+        });
+      }
+
       await db.collection('redemptions').updateOne(
         toIdQuery(redemptionId),
         {
@@ -181,11 +215,27 @@ export async function PUT(req) {
 
       return NextResponse.json({ success: true, message: 'Redemption marked as paid!' });
     } else if (action === 'reject') {
-      // Refund held balance back to user
-      await db.collection('users').updateOne(
-        toIdQuery(redemption.userId),
-        { $inc: { balanceSC: Number(redemption.amount) } }
-      );
+      const player = await db.collection('users').findOne(toIdQuery(redemption.userId));
+      const escrow = Number(redemption.escrowFrozen ?? redemption.amount ?? 0);
+      if (player && escrow > 0) {
+        const oldFrozen = Math.max(0, Number(player.frozenBalance || 0));
+        const newFrozen = Math.max(0, Number((oldFrozen - escrow).toFixed(2)));
+        await db.collection('users').updateOne(toIdQuery(redemption.userId), {
+          $set: { frozenBalance: newFrozen, updatedAt: new Date() },
+        });
+        await db.collection('ledger').insertOne({
+          userId: redemption.userId,
+          username: redemption.username,
+          type: 'redemption_released',
+          currency: 'SC',
+          amount: escrow,
+          balanceBefore: Number(player.balanceSC || 0),
+          balanceAfter: Number(player.balanceSC || 0),
+          notes: `Escrow released — redeem rejected`,
+          referenceId: String(redemptionId),
+          createdAt: new Date(),
+        });
+      }
 
       await db.collection('redemptions').updateOne(
         toIdQuery(redemptionId),

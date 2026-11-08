@@ -1,15 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Wallet,
-  User,
   LogOut,
   Bell,
   MessageSquare,
   Menu,
-  Coins
+  Coins,
+  Gift,
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 
@@ -27,8 +27,38 @@ export default function HoodNavbar({
   activeView,
   setActiveView,
   onToggleSidebar,
+  onOpenFreeplay,
 }) {
   const [userDropdown, setUserDropdown] = useState(false);
+  const [lobbySettings, setLobbySettings] = useState(null);
+  const [freeplayStatus, setFreeplayStatus] = useState({ claimed: false, pending: false });
+
+  useEffect(() => {
+    fetch('/api/admin/settings', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success && d.settings) setLobbySettings(d.settings);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!user?.email) {
+      setFreeplayStatus({ claimed: false, pending: false });
+      return;
+    }
+    fetch('/api/freeplay', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success) {
+          setFreeplayStatus({ claimed: Boolean(d.claimed), pending: Boolean(d.pending) });
+        }
+      })
+      .catch(() => {});
+  }, [user?.email]);
+
+  const freeplayActive = lobbySettings?.freeplayActive !== false;
+  const freeplayAmount = Number(lobbySettings?.freeplayAmountSC ?? 5);
 
   return (
     <header className="sticky top-0 z-40 w-full bg-[#09142a]/95 backdrop-blur-xl border-b border-[#1a3363] shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
@@ -77,7 +107,12 @@ export default function HoodNavbar({
                     Sweeps Balance
                   </span>
                   <span className="text-xs sm:text-sm font-black text-[#2cb64e] font-mono leading-tight truncate">
-                    ${Number(user.balanceSC || 0).toFixed(2)} SC
+                    $
+                    {Math.max(
+                      0,
+                      Number(user.balanceSC || 0) - Number(user.frozenBalance || 0)
+                    ).toFixed(2)}{' '}
+                    SC
                   </span>
                 </div>
                 <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-[#2cb64e]/15 border border-[#2cb64e]/30 flex items-center justify-center text-[#2cb64e] shrink-0">
@@ -85,7 +120,35 @@ export default function HoodNavbar({
                 </div>
               </div>
 
-              {/* Green Wallet CTA */}
+              {freeplayActive && onOpenFreeplay ? (
+                <button
+                  type="button"
+                  disabled={freeplayStatus.claimed}
+                  onClick={() => {
+                    if (freeplayStatus.claimed) return;
+                    onOpenFreeplay();
+                    playTune('click');
+                  }}
+                  className={`hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wide border transition-all ${
+                    freeplayStatus.claimed
+                      ? 'opacity-60 border-[#1a3363] text-gray-500 cursor-not-allowed'
+                      : freeplayStatus.pending
+                        ? 'border-amber-500/50 text-amber-200 bg-amber-500/10'
+                        : 'border-[#2cb64e]/50 text-[#7ee08f] bg-[#2cb64e]/10 hover:bg-[#2cb64e]/20'
+                  }`}
+                  title="One-time freeplay task"
+                >
+                  <Gift size={14} />
+                  <span>
+                    {freeplayStatus.claimed
+                      ? 'Freeplay ✓'
+                      : freeplayStatus.pending
+                        ? 'Pending'
+                        : `Get $${freeplayAmount.toFixed(0)} freeplay`}
+                  </span>
+                </button>
+              ) : null}
+
               <button
                 type="button"
                 onClick={() => {

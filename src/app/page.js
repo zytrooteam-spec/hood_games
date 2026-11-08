@@ -25,6 +25,8 @@ import AuthModal from '@/components/modals/AuthModal';
 import HoodDailySpinModal from '@/components/games/HoodDailySpinModal';
 import HoodAppModal from '@/components/modals/HoodAppModal';
 import GameRequestModal from '@/components/modals/GameRequestModal';
+import LoadCoinsModal from '@/components/modals/LoadCoinsModal';
+import { readGamesCache, writeGamesCache } from '@/lib/gameAssets';
 import HoodNotificationsModal from '@/components/modals/HoodNotificationsModal';
 import FreeplayTaskModal from '@/components/modals/FreeplayTaskModal';
 import { unlockAudioContext } from '@/lib/soundAlerts';
@@ -70,8 +72,10 @@ export default function HomePage() {
   const [user, setUser] = useState(null);
   const [sessionReady, setSessionReady] = useState(false);
   const [settings, setSettings] = useState(null);
-  const [games, setGames] = useState([]);
+  const [games, setGames] = useState(() => readGamesCache() || []);
+  const [loadingGames, setLoadingGames] = useState(() => !(readGamesCache()?.length > 0));
   const [userGameAccounts, setUserGameAccounts] = useState([]);
+  const [pendingAccountRequests, setPendingAccountRequests] = useState([]);
 
   // Modals state
   const [cashierModal, setCashierModal] = useState({ open: false, tab: 'deposit' });
@@ -79,6 +83,7 @@ export default function HomePage() {
   const [spinModalOpen, setSpinModalOpen] = useState(false);
   const [appModalOpen, setAppModalOpen] = useState(false);
   const [requestModal, setRequestModal] = useState({ open: false, game: null });
+  const [loadCoinsModal, setLoadCoinsModal] = useState({ open: false, game: null, userAccount: null });
   const [notifsOpen, setNotifsOpen] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [freeplayOpen, setFreeplayOpen] = useState(false);
@@ -105,14 +110,16 @@ export default function HomePage() {
     try {
       const res = await fetch(`/api/game-accounts?email=${encodeURIComponent(email || '')}`);
       const data = await res.json();
-      if (data?.success && Array.isArray(data?.gameAccounts)) {
-        diffSet(setUserGameAccounts, data.gameAccounts);
+      if (data?.success) {
+        if (Array.isArray(data?.gameAccounts)) diffSet(setUserGameAccounts, data.gameAccounts);
+        if (Array.isArray(data?.pendingRequests)) diffSet(setPendingAccountRequests, data.pendingRequests);
       }
     } catch {}
   };
 
   // Load System Settings & Games
-  const fetchSiteData = async () => {
+  const fetchSiteData = async (isSilent = false) => {
+    if (!isSilent && games.length === 0) setLoadingGames(true);
     try {
       const [setRes, gamesRes] = await Promise.all([
         fetch('/api/admin/settings').then((r) => r.json()).catch(() => ({})),
@@ -128,9 +135,12 @@ export default function HomePage() {
           title: sanitizeGameTitle(g.title),
         }));
         diffSet(setGames, sanitized);
+        writeGamesCache(sanitized);
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoadingGames(false);
     }
   };
 
@@ -149,7 +159,14 @@ export default function HomePage() {
   useEffect(() => {
     unlockAudioContext();
     fetchUser();
-    fetchSiteData();
+    const cached = readGamesCache();
+    if (cached?.length) {
+      diffSet(
+        setGames,
+        cached.map((g) => ({ ...g, title: sanitizeGameTitle(g.title) }))
+      );
+    }
+    fetchSiteData(Boolean(cached?.length));
     fetchUnreadNotifs();
 
     const handleUserSync = (e) => {
@@ -157,6 +174,7 @@ export default function HomePage() {
       else {
         diffSet(setUser, null);
         diffSet(setUserGameAccounts, []);
+        diffSet(setPendingAccountRequests, []);
       }
     };
     window.addEventListener('user-sync', handleUserSync);
@@ -174,7 +192,7 @@ export default function HomePage() {
     // Silent background polling every 6s (no loading spinners, no re-render flicker)
     const interval = setInterval(() => {
       fetchUser(true);
-      fetchSiteData();
+      fetchSiteData(true);
       fetchUnreadNotifs();
     }, 6000);
 
@@ -242,6 +260,9 @@ export default function HomePage() {
           onOpenApp={() => setAppModalOpen(true)}
           onLogout={handleLogout}
           onToggleSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+          onOpenFreeplay={() =>
+            user ? setFreeplayOpen(true) : setAuthModal({ open: true, tab: 'register' })
+          }
         />
 
         {/* Page Inner Container with refined spacing and paddings */}
@@ -417,9 +438,17 @@ export default function HomePage() {
 
                 <HoodGameGrid
                   games={games}
+                  loadingGames={loadingGames}
                   userGameAccounts={userGameAccounts}
-                  onRequestGame={(game) => setRequestModal({ open: true, game })}
-                  onOpenCashier={(tab) => setCashierModal({ open: true, tab })}
+                  pendingAccountRequests={pendingAccountRequests}
+                  onRequestGame={(game) => {
+                    if (!user) setAuthModal({ open: true, tab: 'login' });
+                    else setRequestModal({ open: true, game });
+                  }}
+                  onLoadCoins={(game, userAccount) => {
+                    if (!user) setAuthModal({ open: true, tab: 'login' });
+                    else setLoadCoinsModal({ open: true, game, userAccount });
+                  }}
                 />
               </div>
             </div>
@@ -504,6 +533,7 @@ export default function HomePage() {
         isOpen={freeplayOpen}
         onClose={() => setFreeplayOpen(false)}
         user={user}
+        freeplayAmount={Number(settings?.freeplayAmountSC ?? 5)}
         onSuccess={fetchUser}
       />
 
@@ -522,6 +552,18 @@ export default function HomePage() {
         onSuccess={() => {
           setRequestModal({ open: false, game: null });
           fetchUser();
+        }}
+      />
+
+      <LoadCoinsModal
+        isOpen={loadCoinsModal.open}
+        game={loadCoinsModal.game}
+        userAccount={loadCoinsModal.userAccount}
+        user={user}
+        onClose={() => setLoadCoinsModal({ open: false, game: null, userAccount: null })}
+        onSuccess={() => {
+          fetchUser();
+          if (user?.email) loadUserAccounts(user.email);
         }}
       />
     </div>

@@ -91,6 +91,8 @@ export async function loadUserFromToken(decoded) {
     role: user.role || 'player',
     balanceSC: Number(user.balanceSC || 0),
     balanceGC: Number(user.balanceGC || 0),
+    frozenBalance: Number(user.frozenBalance || 0),
+    availableSpins: Number(user.availableSpins || 0),
     isVerified: Boolean(user.isVerified),
     status: user.status || 'active',
   };

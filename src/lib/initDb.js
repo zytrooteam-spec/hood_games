@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { getDb } from './mongodb';
 import { ROLES } from './auth';
 import { sanitizeGameTitle } from './fastDiff';
+import { getDefaultWheelConfig } from './wheelConfig';
 
 let isDbInitialized = false;
 let initPromise = null;
@@ -200,10 +201,16 @@ export async function ensureDbInitialized() {
           geoRestrictionEnabled: false,
           restrictedStates: [],
           maintenanceMode: false,
+          wheelConfig: getDefaultWheelConfig(),
           createdAt: new Date(),
           updatedAt: new Date(),
         });
       }
+
+      await settingsCol.updateOne(
+        { key: 'general', wheelConfig: { $exists: false } },
+        { $set: { wheelConfig: getDefaultWheelConfig(), updatedAt: new Date() } }
+      );
 
       // 3. Ensure Default Games Catalog
       const gamesCol = db.collection('games');
@@ -221,7 +228,7 @@ export async function ensureDbInitialized() {
             rtp: 98.4,
             rating: 4.95,
             badge: 'HOT',
-            image: '/images/ultra-panda.svg',
+            image: '',
             description: 'Premier fish shooter game with massive multipliers and bonus jackpots.',
             isActive: true,
             active: true,
@@ -237,7 +244,7 @@ export async function ensureDbInitialized() {
             rtp: 97.9,
             rating: 4.9,
             badge: 'FEATURED',
-            image: '/images/fire-kirin.svg',
+            image: '',
             description: 'Legendary underwater boss battles and fast arcade fish hunting.',
             isActive: true,
             active: true,
@@ -253,7 +260,7 @@ export async function ensureDbInitialized() {
             rtp: 98.2,
             rating: 4.88,
             badge: 'POPULAR',
-            image: '/images/juwa-777.svg',
+            image: '',
             description: 'Top-tier sweeps app featuring Fortune King, Dragon City, and vibrant reels.',
             isActive: true,
             active: true,
@@ -269,7 +276,7 @@ export async function ensureDbInitialized() {
             rtp: 98.1,
             rating: 4.92,
             badge: 'VIP CHOICE',
-            image: '/images/orion-stars.svg',
+            image: '',
             description: 'The golden standard in online sweeps reels, fish tables, and keno games.',
             isActive: true,
             active: true,
@@ -285,7 +292,7 @@ export async function ensureDbInitialized() {
             rtp: 97.6,
             rating: 4.85,
             badge: 'HIGH PAYOUT',
-            image: '/images/game-vault.svg',
+            image: '',
             description: 'Explosive bonus rounds with high payouts and thousand concurrent players.',
             isActive: true,
             active: true,
@@ -301,7 +308,7 @@ export async function ensureDbInitialized() {
             rtp: 97.4,
             rating: 4.8,
             badge: 'TRENDING',
-            image: '/images/milky-way.svg',
+            image: '',
             description: 'Stellar slot adventures and cosmic fish hunting tables.',
             isActive: true,
             active: true,
@@ -316,7 +323,7 @@ export async function ensureDbInitialized() {
             rtp: 97.7,
             rating: 4.85,
             badge: 'CLASSIC',
-            image: '/images/vegas-777.svg',
+            image: '',
             description: 'Classic fish hunter and exciting high-payout reels.',
             isActive: true,
             active: true,

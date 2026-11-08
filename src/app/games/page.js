@@ -6,19 +6,25 @@ import HoodGameGrid from '@/components/games/HoodGameGrid';
 import HoodCashbackCalculator from '@/components/games/HoodCashbackCalculator';
 import HoodDailySpinModal from '@/components/games/HoodDailySpinModal';
 import GameRequestModal from '@/components/modals/GameRequestModal';
-import { Gamepad2, Sparkles, Zap, Gift, Trophy, ArrowRight } from 'lucide-react';
+import LoadCoinsModal from '@/components/modals/LoadCoinsModal';
+import { Gamepad2, Sparkles, Zap, Gift } from 'lucide-react';
 import Link from 'next/link';
 import { playTune } from '@/lib/soundAlerts';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
+import { readGamesCache, writeGamesCache } from '@/lib/gameAssets';
 
 function GamesContent() {
   const { user, fetchUser, openAuth } = useAppShell();
-  const [games, setGames] = useState([]);
+  const [games, setGames] = useState(() => readGamesCache() || []);
+  const [loadingGames, setLoadingGames] = useState(() => !(readGamesCache()?.length > 0));
   const [userGameAccounts, setUserGameAccounts] = useState([]);
+  const [pendingAccountRequests, setPendingAccountRequests] = useState([]);
   const [requestModal, setRequestModal] = useState({ open: false, game: null });
+  const [loadCoinsModal, setLoadCoinsModal] = useState({ open: false, game: null, userAccount: null });
   const [spinModalOpen, setSpinModalOpen] = useState(false);
 
-  const loadGames = () => {
+  const loadGames = (isSilent = false) => {
+    if (!isSilent && games.length === 0) setLoadingGames(true);
     fetch('/api/games', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
@@ -28,9 +34,11 @@ function GamesContent() {
             title: sanitizeGameTitle(g.title),
           }));
           diffSet(setGames, sanitized);
+          writeGamesCache(sanitized);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoadingGames(false));
   };
 
   const loadUserAccounts = (email) => {
@@ -38,17 +46,19 @@ function GamesContent() {
     fetch(`/api/game-accounts?email=${encodeURIComponent(email)}`)
       .then((r) => r.json())
       .then((d) => {
-        if (d?.success && Array.isArray(d?.gameAccounts)) {
-          diffSet(setUserGameAccounts, d.gameAccounts);
+        if (d?.success) {
+          if (Array.isArray(d?.gameAccounts)) diffSet(setUserGameAccounts, d.gameAccounts);
+          if (Array.isArray(d?.pendingRequests)) diffSet(setPendingAccountRequests, d.pendingRequests);
         }
       })
       .catch(() => {});
   };
 
   useEffect(() => {
-    loadGames();
-    // Silent background poll every 8s
-    const interval = setInterval(loadGames, 8000);
+    const cached = readGamesCache();
+    if (cached?.length) diffSet(setGames, cached.map((g) => ({ ...g, title: sanitizeGameTitle(g.title) })));
+    loadGames(Boolean(cached?.length));
+    const interval = setInterval(() => loadGames(true), 8000);
     return () => clearInterval(interval);
   }, []);
 
@@ -139,16 +149,29 @@ function GamesContent() {
 
         <HoodGameGrid
           games={games}
+          loadingGames={loadingGames}
           userGameAccounts={userGameAccounts}
+          pendingAccountRequests={pendingAccountRequests}
           onRequestGame={(game) => {
             if (!user) openAuth('login');
             else setRequestModal({ open: true, game });
           }}
-          onOpenCashier={() => {}}
+          onLoadCoins={(game, userAccount) => {
+            if (!user) openAuth('login');
+            else setLoadCoinsModal({ open: true, game, userAccount });
+          }}
         />
       </div>
 
       {/* Modals */}
+      <LoadCoinsModal
+        isOpen={loadCoinsModal.open}
+        game={loadCoinsModal.game}
+        userAccount={loadCoinsModal.userAccount}
+        user={user}
+        onClose={() => setLoadCoinsModal({ open: false, game: null, userAccount: null })}
+        onSuccess={() => fetchUser?.()}
+      />
       <GameRequestModal
         isOpen={requestModal.open}
         initialGame={requestModal.game}
