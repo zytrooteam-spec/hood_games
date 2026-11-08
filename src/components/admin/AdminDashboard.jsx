@@ -927,7 +927,7 @@ export default function AdminDashboard({ user, onLogout }) {
     );
 
   return (
-    <div className="font-sans min-h-screen bg-[#070d1e] text-gray-100 flex flex-col md:flex-row relative">
+    <div className="font-sans h-[100dvh] max-h-[100dvh] overflow-hidden bg-[#070d1e] text-gray-100 flex flex-col md:flex-row relative">
       {/* 1. Mobile Topbar (Strictly visible on screens < md) */}
       <div className="md:hidden sticky top-0 z-40 bg-[#09142a]/95 backdrop-blur-xl border-b border-[#1a3363] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -963,9 +963,9 @@ export default function AdminDashboard({ user, onLogout }) {
 
       {/* 3. Admin Sidebar (Permanent on Desktop, Drawer on Mobile) */}
       <aside
-        className={`fixed md:sticky top-0 bottom-0 z-50 w-72 md:w-64 bg-[#09142a] border-r border-[#1a3363] p-4 flex flex-col justify-between shrink-0 transition-transform duration-300 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-50 w-72 md:w-64 bg-[#09142a] border-r border-[#1a3363] p-4 flex flex-col justify-between shrink-0 transition-transform duration-300 ease-in-out ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        } h-screen overflow-y-auto`}
+        } h-[100dvh] max-h-[100dvh] overflow-y-auto overscroll-contain`}
       >
         <div className="space-y-6">
           {/* Logo & Header */}
@@ -1253,7 +1253,7 @@ export default function AdminDashboard({ user, onLogout }) {
       </aside>
 
       {/* Main Content Pane */}
-      <main className="flex-1 p-4 sm:p-8 overflow-y-auto">
+      <main className="flex-1 min-h-0 min-w-0 w-full p-4 sm:p-8 overflow-y-auto overscroll-contain md:ml-64">
         {/* Top Header */}
         <div className="flex items-center justify-between pb-6 border-b border-[#1a3363]">
           <div>
@@ -1959,7 +1959,7 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* 5. CASHBACK & SYSTEM SETTINGS (REQUIREMENT #7)           */}
         {/* ======================================================== */}
         {activeTab === 'daily_spin' && (
-          <form onSubmit={handleSaveSettings} className="space-y-6 max-w-3xl">
+          <form onSubmit={handleSaveSettings} className="w-full max-w-5xl space-y-6">
             <AdminDailySpinTab settings={settings} setSettings={setSettings} />
             <button
               type="submit"
@@ -2094,8 +2094,9 @@ export default function AdminDashboard({ user, onLogout }) {
             </div>
 
             {/* Settings Form */}
-            <form onSubmit={handleSaveSettings} className="space-y-6 max-w-2xl">
-              <div className="p-6 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4">
+            <form onSubmit={handleSaveSettings} className="w-full space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              <div className="p-6 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4 h-full">
                 <h4 className="text-sm font-black text-white font-heading">Site Logo</h4>
                 <p className="text-xs text-gray-400">Navbar, sidebar, and admin header only.</p>
                 <AdminImageField
@@ -2108,7 +2109,7 @@ export default function AdminDashboard({ user, onLogout }) {
               </div>
 
               {/* Cashback Percentage Setting */}
-              <div className="p-6 rounded-2xl bg-[#09142a] border border-[#2cb64e]/40 space-y-4">
+              <div className="p-6 rounded-2xl bg-[#09142a] border border-[#2cb64e]/40 space-y-4 h-full">
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-sm font-black text-white">Sunday Cashback Percentage</h4>
@@ -2141,10 +2142,10 @@ export default function AdminDashboard({ user, onLogout }) {
               </div>
 
               {/* Other Bonus Settings */}
-              <div className="p-6 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4">
+              <div className="p-6 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4 h-full">
                 <h4 className="text-sm font-black text-white">Deposit & Match Bonuses</h4>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold text-gray-300 block mb-1">
                       First Deposit Match Bonus (%)
@@ -2189,7 +2190,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 </div>
               </div>
 
-              <div className="p-6 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4">
+              <div className="p-6 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4 h-full">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 className="text-sm font-black text-white">Lobby Freeplay (Players Paradise workflow)</h4>
                   <button
@@ -2224,6 +2225,7 @@ export default function AdminDashboard({ user, onLogout }) {
                     Signup starts at 0 SC — player claims once via GET FREEPLAY task (email + screenshot proof, staff approves in Game ID desk).
                   </p>
                 </div>
+              </div>
               </div>
 
               <button
