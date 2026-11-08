@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Coins, Lock, RefreshCw, Gamepad2 } from 'lucide-react';
 import { hoodAlert } from '@/lib/hoodAlert';
+import { playerApiFetch } from '@/lib/playerApiFetch';
 import {
   HoodAdminModal,
   HoodAdminModalHeader,
@@ -53,10 +54,8 @@ export default function LoadCoinsModal({ isOpen, onClose, game, user, userAccoun
     setLoading(true);
 
     try {
-      const res = await fetch('/api/account-requests', {
+      const res = await playerApiFetch('/api/account-requests', {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           gameTitle,
           gameId,

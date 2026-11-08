@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { hoodAlert } from '@/lib/hoodAlert';
+import { playerApiFetch } from '@/lib/playerApiFetch';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import HoodCashierGameSelect from '@/components/wallet/HoodCashierGameSelect';
 import { getAvailableGamePlatforms } from '@/lib/gamePlatforms';
@@ -78,10 +79,7 @@ export default function UnifiedCashierModal({
       })
       .catch(() => {});
     if (user?.email) {
-      fetch(`/api/game-accounts?email=${encodeURIComponent(user.email)}`, {
-        credentials: 'include',
-        cache: 'no-store',
-      })
+      playerApiFetch(`/api/game-accounts?email=${encodeURIComponent(user.email)}`)
         .then((r) => r.json())
         .then((d) => {
           if (d?.success && Array.isArray(d.gameAccounts)) {
@@ -148,9 +146,8 @@ export default function UnifiedCashierModal({
     );
 
     try {
-      const res = await fetch('/api/payments/deposit', {
+      const res = await playerApiFetch('/api/payments/deposit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: num,
           method: selectedMethod?.name || 'Cash App',
@@ -197,9 +194,8 @@ export default function UnifiedCashierModal({
     playTune('click');
 
     try {
-      const res = await fetch('/api/payments/withdraw', {
+      const res = await playerApiFetch('/api/payments/withdraw', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: num,
           method: selectedMethod?.name || 'Cash App',

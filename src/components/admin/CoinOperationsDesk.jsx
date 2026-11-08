@@ -151,7 +151,7 @@ export default function CoinOperationsDesk({
     if (!isSilent && loadRequests.length === 0 && cashoutRequests.length === 0) setLoading(true);
     try {
       const [loadsRes, cashoutsRes] = await Promise.all([
-        fetch('/api/account-requests?type=COIN_LOAD&status=all', { cache: 'no-store' }),
+        fetch('/api/account-requests?type=COIN_LOAD&status=all', { credentials: 'include', cache: 'no-store' }),
         fetch('/api/payments/withdraw?status=all&lightweight=true', { cache: 'no-store' }),
       ]);
 

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Key, Check, AlertCircle, ArrowRight, Gamepad2 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { hoodAlert } from '@/lib/hoodAlert';
+import { playerApiFetch } from '@/lib/playerApiFetch';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 
 export default function GameRequestModal({
@@ -69,10 +70,8 @@ export default function GameRequestModal({
     playTune('click');
 
     try {
-      const res = await fetch('/api/account-requests', {
+      const res = await playerApiFetch('/api/account-requests', {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           gameId: initialGame?.id,
           gameTitle: finalGameTitle,

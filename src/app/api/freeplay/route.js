@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { ObjectId } from 'mongodb';
 import { getDb } from '@/lib/mongodb';
-import { getSessionUser } from '@/lib/auth';
 import { notifyStaff } from '@/lib/notify';
+import { requirePlayerDbUser } from '@/lib/requirePlayerDbUser';
 
 // GET - Check Freeplay eligibility, configured amount, and task status
 export async function GET(req) {
@@ -14,8 +13,8 @@ export async function GET(req) {
       : 3.0;
     const freeplayActive = settingsDoc?.freeplayActive !== false;
 
-    const session = await getSessionUser();
-    if (!session) {
+    const { dbUser: user } = await requirePlayerDbUser(req);
+    if (!user) {
       return NextResponse.json({
         success: true,
         claimed: false,
@@ -23,15 +22,6 @@ export async function GET(req) {
         freeplayActive,
         pending: false,
       });
-    }
-
-    const userId = session.userId || session.id;
-    let user = null;
-    if (userId && ObjectId.isValid(userId)) {
-      user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
-    }
-    if (!user && session.email) {
-      user = await db.collection('users').findOne({ email: session.email.toLowerCase().trim() });
     }
 
     // Check if user has already claimed or had an approved task in lifetime
@@ -75,11 +65,11 @@ export async function GET(req) {
 // POST - Submit Freeplay Verification Task
 export async function POST(req) {
   try {
-    const session = await getSessionUser();
-    if (!session) {
+    const { session, dbUser, error, status } = await requirePlayerDbUser(req);
+    if (!dbUser) {
       return NextResponse.json(
-        { success: false, message: 'Please sign in to complete your Freeplay verification task.' },
-        { status: 401 }
+        { success: false, message: error || 'Please sign in to complete your Freeplay verification task.' },
+        { status: status || 401 }
       );
     }
 
@@ -99,21 +89,7 @@ export async function POST(req) {
       : 3.0;
 
     const usersCol = db.collection('users');
-    const userId = session.userId || session.id;
-    let user = null;
-    if (userId && ObjectId.isValid(userId)) {
-      user = await usersCol.findOne({ _id: new ObjectId(userId) });
-    }
-    if (!user && session.email) {
-      user = await usersCol.findOne({ email: session.email.toLowerCase().trim() });
-    }
-
-    if (!user) {
-      return NextResponse.json(
-        { success: false, message: 'User not found. Please log in again.' },
-        { status: 404 }
-      );
-    }
+    const user = dbUser;
 
     // 1-Time Freeplay Check: Block if already claimed
     if (user.freeplayClaimed) {

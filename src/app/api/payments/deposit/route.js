@@ -3,29 +3,29 @@ import { getDb, toIdQuery } from '@/lib/mongodb';
 import { getSessionUser, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
+import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
+import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
 
 export async function GET(req) {
   try {
     await ensureDbInitialized();
-    const player = await getSessionUser(req, 'player');
-    const admin = await getSessionUser(req, 'admin');
-    const user = player || (admin && isStaffRole(admin.role) ? admin : null);
+    const { user, isStaff, dbUser } = await resolveStaffOrPlayer(req);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const db = await getDb();
-    const isStaff = isStaffRole(user.role) && !player;
 
     let deposits;
     if (isStaff) {
       deposits = await db.collection('deposits').find({}).sort({ createdAt: -1 }).toArray();
     } else {
-      deposits = await db
-        .collection('deposits')
-        .find({ userId: user.id || user._id.toString() })
-        .sort({ createdAt: -1 })
-        .toArray();
+      const uid = dbUser?._id?.toString() || user.userId || user.id || user._id?.toString?.();
+      const email = (dbUser?.email || user.email || '').toLowerCase().trim();
+      const filter = email
+        ? { $or: [{ userId: uid }, { userEmail: email }] }
+        : { userId: uid };
+      deposits = await db.collection('deposits').find(filter).sort({ createdAt: -1 }).toArray();
     }
 
     return NextResponse.json({ success: true, deposits });
@@ -37,19 +37,17 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req, 'player');
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'Please log in with your player account to deposit (admin desk uses Finance tab).' },
-        { status: 401 }
-      );
+    const { session, dbUser, error, status } = await requirePlayerDbUser(req);
+    if (!dbUser) {
+      return NextResponse.json({ success: false, error }, { status: status || 401 });
     }
-    if (isStaffRole(user.role)) {
+    if (isStaffRole(session.role)) {
       return NextResponse.json(
         { success: false, error: 'Staff session detected. Open the site in a player tab with a player login to deposit.' },
         { status: 403 }
       );
     }
+    const { userId, username, userEmail } = playerIdentity(dbUser, session);
 
     const { amount, method, senderTag, proofImage, note, gameTitle, gameAccountUsername } = await req.json();
     const numAmount = Number(amount);
@@ -63,7 +61,7 @@ export async function POST(req) {
     // Check system bonus settings
     const settings = await db.collection('system_settings').findOne({ key: 'general' });
     const userDepositsCount = await db.collection('deposits').countDocuments({
-      userId: user.id || user._id.toString(),
+      userId,
       status: 'approved',
     });
 
@@ -76,9 +74,9 @@ export async function POST(req) {
     const totalExpectedSC = Number((numAmount + bonusAmount).toFixed(2));
 
     const depositDoc = {
-      userId: user.id || user._id.toString(),
-      username: user.username,
-      userEmail: user.email,
+      userId,
+      username,
+      userEmail,
       amount: numAmount,
       bonusPercent,
       bonusAmount,
@@ -98,7 +96,7 @@ export async function POST(req) {
 
     // Notify staff desk of new incoming deposit!
     notifyStaff({
-      title: `Incoming $${numAmount} Deposit from ${user.username}`,
+      title: `Incoming $${numAmount} Deposit from ${username}`,
       message: `Method: ${method || 'Cash App'} | Game: ${gameTitle || 'Wallet'} | Tag: ${senderTag || 'N/A'}`,
       type: 'deposit_request',
       data: { depositId: res.insertedId.toString() },

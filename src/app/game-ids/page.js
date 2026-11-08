@@ -10,6 +10,7 @@ import { playTune } from '@/lib/soundAlerts';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import { getGameThumbnail, readGamesCache, writeGamesCache } from '@/lib/gameAssets';
 import { findGameForAccount } from '@/lib/matchGameAccount';
+import { playerApiFetch } from '@/lib/playerApiFetch';
 
 function GameIdsContent() {
   const { user, openAuth } = useAppShell();
@@ -25,10 +26,7 @@ function GameIdsContent() {
     if (!email) return;
     if (!silent) setLoadingDesk(true);
     try {
-      const res = await fetch(`/api/game-accounts?email=${encodeURIComponent(email)}`, {
-        credentials: 'include',
-        cache: 'no-store',
-      });
+      const res = await playerApiFetch(`/api/game-accounts?email=${encodeURIComponent(email)}`);
       const data = await res.json();
       if (data?.success) {
         const sanitizedAccounts = (data.gameAccounts || []).map((a) => ({

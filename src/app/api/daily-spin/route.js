@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getDb, toIdQuery } from '@/lib/mongodb';
-import { getSessionUser } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { resolveWheelConfig, pickWheelOutcome } from '@/lib/wheelConfig';
+import { requirePlayerDbUser } from '@/lib/requirePlayerDbUser';
 
 export const runtime = 'nodejs';
 
@@ -13,8 +13,8 @@ export async function GET(req) {
     const db = await getDb();
     const settings = await db.collection('system_settings').findOne({ key: 'general' });
     const wheelConfig = resolveWheelConfig(settings);
-    const session = await getSessionUser(req, 'player');
-    if (!session) {
+    const { dbUser } = await requirePlayerDbUser(req);
+    if (!dbUser) {
       return NextResponse.json({
         success: true,
         authenticated: false,
@@ -24,18 +24,7 @@ export async function GET(req) {
         message: 'Please log in to spin.',
       });
     }
-    const userId = session.userId || session.id;
-    const user = await db.collection('users').findOne(toIdQuery(userId));
-    if (!user) {
-      return NextResponse.json({
-        success: true,
-        authenticated: false,
-        canSpin: false,
-        availableSpins: 0,
-        slices: wheelConfig.slices,
-        message: 'User not found',
-      });
-    }
+    const user = dbUser;
 
     const availableSpins = Math.max(0, Number(user.availableSpins || 0));
     const canSpin = availableSpins > 0;
@@ -68,20 +57,16 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     await ensureDbInitialized();
-    const session = await getSessionUser(req, 'player');
-    if (!session) {
-      return NextResponse.json({ success: false, message: 'Please log in to spin.' }, { status: 401 });
+    const { dbUser, error, status } = await requirePlayerDbUser(req);
+    if (!dbUser) {
+      return NextResponse.json({ success: false, message: error || 'Please log in to spin.' }, { status: status || 401 });
     }
 
     const db = await getDb();
     const settings = await db.collection('system_settings').findOne({ key: 'general' });
     const wheelConfig = resolveWheelConfig(settings);
     const usersCol = db.collection('users');
-    const userId = session.userId || session.id;
-    const user = await usersCol.findOne(toIdQuery(userId));
-    if (!user) {
-      return NextResponse.json({ success: false, message: 'User not found' }, { status: 404 });
-    }
+    const user = dbUser;
 
     const availableSpins = Math.max(0, Number(user.availableSpins || 0));
     if (availableSpins <= 0) {

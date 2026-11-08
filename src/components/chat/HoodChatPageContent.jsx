@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
+import { playerApiFetch } from '@/lib/playerApiFetch';
 import { hoodAlert } from '@/lib/hoodAlert';
 import { compressImageFile } from '@/lib/imageCompress';
 import { diffSet } from '@/lib/fastDiff';
@@ -115,9 +116,8 @@ export default function HoodChatPageContent({ user, onOpenAuth }) {
     playTune('click');
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await playerApiFetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: textToSend, imageUrl: imageToSend }),
       });
       const data = await res.json();

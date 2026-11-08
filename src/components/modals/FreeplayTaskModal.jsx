@@ -19,6 +19,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { compressImageFile } from '@/lib/imageCompress';
+import { playerApiFetch } from '@/lib/playerApiFetch';
 
 export default function FreeplayTaskModal({
   isOpen,
@@ -106,9 +107,8 @@ export default function FreeplayTaskModal({
     setEmailSending(true);
     setStatusMsg(null);
     try {
-      const res = await fetch('/api/freeplay/send-task-email', {
+      const res = await playerApiFetch('/api/freeplay/send-task-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: targetEmail,
           name: user?.username || '',
@@ -176,9 +176,8 @@ export default function FreeplayTaskModal({
     setStatusMsg(null);
 
     try {
-      const res = await fetch('/api/freeplay', {
+      const res = await playerApiFetch('/api/freeplay', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           gameTitle: selectedGame,
           taskId,

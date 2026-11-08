@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Send, X, ShieldCheck, User, Headphones } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
+import { playerApiFetch } from '@/lib/playerApiFetch';
 import { diffSet } from '@/lib/fastDiff';
 
 export default function HoodLiveChatModal({
@@ -54,9 +55,8 @@ export default function HoodLiveChatModal({
     playTune('click');
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await playerApiFetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: textToSend }),
       });
       const data = await res.json();

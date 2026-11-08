@@ -257,7 +257,7 @@ export function CoinAllotmentDesk({ sessionUser, onMutate }) {
   const [cashouts, setCashouts] = useState([]);
 
   const refresh = useCallback(() => {
-    fetch('/api/account-requests?type=COIN_LOAD&status=all', { cache: 'no-store' })
+    staffApiFetch('/api/account-requests?type=COIN_LOAD&status=all')
       .then((r) => r.json())
       .then((d) => d?.success && diffSet(setLoads, d.accountRequests || []));
     fetch('/api/payments/withdraw?status=all&lightweight=true', { cache: 'no-store' })

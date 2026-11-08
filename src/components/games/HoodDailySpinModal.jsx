@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { Sparkles, X, Clock, Wallet } from 'lucide-react';
 import { WHEEL_SLICES } from '@/lib/wheelConstants';
 import { playTune } from '@/lib/soundAlerts';
+import { playerApiFetch } from '@/lib/playerApiFetch';
 import { hoodAlert } from '@/lib/hoodAlert';
 
 export default function HoodDailySpinModal({ isOpen, onClose, user, onSuccess }) {
@@ -21,7 +22,7 @@ export default function HoodDailySpinModal({ isOpen, onClose, user, onSuccess })
       setWonPrize(null);
       return;
     }
-    fetch('/api/daily-spin')
+    playerApiFetch('/api/daily-spin')
       .then((res) => res.json())
       .then((data) => {
         if (data?.success) {
@@ -86,7 +87,7 @@ export default function HoodDailySpinModal({ isOpen, onClose, user, onSuccess })
     playTune('spin');
 
     try {
-      const res = await fetch('/api/daily-spin', { method: 'POST' });
+      const res = await playerApiFetch('/api/daily-spin', { method: 'POST' });
       const data = await res.json();
 
       if (!data.success) {

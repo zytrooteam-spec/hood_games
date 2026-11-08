@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { broadcastPlayerSession, subscribePlayerSession } from '@/lib/sessionClient';
+import { playerApiFetch } from '@/lib/playerApiFetch';
 import { normalizePlayerUser, fetchPlayerSession } from '@/lib/playerSession';
 
 export default function HomePage() {
@@ -108,10 +109,7 @@ export default function HomePage() {
   // Load User Game Accounts
   const loadUserAccounts = async (email) => {
     try {
-      const res = await fetch(`/api/game-accounts?email=${encodeURIComponent(email || '')}`, {
-        credentials: 'include',
-        cache: 'no-store',
-      });
+      const res = await playerApiFetch(`/api/game-accounts?email=${encodeURIComponent(email || '')}`);
       const data = await res.json();
       if (data?.success) {
         if (Array.isArray(data?.gameAccounts)) diffSet(setUserGameAccounts, data.gameAccounts);

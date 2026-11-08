@@ -3,19 +3,18 @@ import { getDb, toIdQuery } from '@/lib/mongodb';
 import { getSessionUser, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
+import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
+import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
 
 export async function GET(req) {
   try {
     await ensureDbInitialized();
-    const player = await getSessionUser(req, 'player');
-    const admin = await getSessionUser(req, 'admin');
-    const user = player || (admin && isStaffRole(admin.role) ? admin : null);
+    const { user, isStaff, dbUser } = await resolveStaffOrPlayer(req);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const db = await getDb();
-    const isStaff = isStaffRole(user.role) && !player;
     const { searchParams } = new URL(req.url);
     const statusParam = searchParams.get('status');
 
@@ -24,11 +23,12 @@ export async function GET(req) {
       const filter = statusParam && statusParam !== 'all' ? { status: statusParam } : {};
       redemptions = await db.collection('redemptions').find(filter).sort({ createdAt: -1 }).limit(300).toArray();
     } else {
-      redemptions = await db
-        .collection('redemptions')
-        .find({ userId: user.id || user._id.toString() })
-        .sort({ createdAt: -1 })
-        .toArray();
+      const uid = dbUser?._id?.toString() || user.userId || user.id || user._id?.toString?.();
+      const email = (dbUser?.email || user.email || '').toLowerCase().trim();
+      const filter = email
+        ? { $or: [{ userId: uid }, { userEmail: email }] }
+        : { userId: uid };
+      redemptions = await db.collection('redemptions').find(filter).sort({ createdAt: -1 }).toArray();
     }
 
     return NextResponse.json({ success: true, redemptions });
@@ -40,19 +40,17 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     await ensureDbInitialized();
-    const user = await getSessionUser(req, 'player');
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'Please log in with your player account to redeem.' },
-        { status: 401 }
-      );
+    const { session, dbUser, error, status } = await requirePlayerDbUser(req);
+    if (!dbUser) {
+      return NextResponse.json({ success: false, error }, { status: status || 401 });
     }
-    if (isStaffRole(user.role)) {
+    if (isStaffRole(session.role)) {
       return NextResponse.json(
         { success: false, error: 'Use a player login in another tab to redeem (admin session is separate).' },
         { status: 403 }
       );
     }
+    const { userId, username, userEmail } = playerIdentity(dbUser, session);
 
     const { amount, method, payoutAddress, notes, gameTitle } = await req.json();
     const numAmount = Number(amount);
@@ -72,12 +70,11 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: 'Please provide your Cash App tag, Zelle email, or Crypto address' }, { status: 400 });
     }
 
-    const dbUser = await db.collection('users').findOne(toIdQuery(user.id || user._id));
-    const currentSC = Number(dbUser?.balanceSC || 0);
+    const currentSC = Number(dbUser.balanceSC || 0);
     const frozen = Math.max(0, Number(dbUser?.frozenBalance || 0));
     const availableSC = Math.max(0, Number((currentSC - frozen).toFixed(2)));
 
-    if (!dbUser || availableSC < numAmount) {
+    if (availableSC < numAmount) {
       return NextResponse.json({
         success: false,
         error: `Insufficient available balance. You have $${availableSC.toFixed(2)} SC available (${frozen.toFixed(2)} SC in escrow).`,
@@ -86,16 +83,16 @@ export async function POST(req) {
 
     const escrowFrozen = Math.min(numAmount, availableSC);
     if (escrowFrozen > 0) {
-      await db.collection('users').updateOne(toIdQuery(user.id || user._id), {
+      await db.collection('users').updateOne(toIdQuery(dbUser._id), {
         $inc: { frozenBalance: escrowFrozen },
         $set: { updatedAt: new Date() },
       });
     }
 
     const redemptionDoc = {
-      userId: user.id || user._id.toString(),
-      username: user.username,
-      userEmail: user.email,
+      userId,
+      username,
+      userEmail,
       amount: numAmount,
       escrowFrozen,
       method: method || 'Cash App',

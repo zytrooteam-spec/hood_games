@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { playTune } from '@/lib/soundAlerts';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import { readGamesCache, writeGamesCache } from '@/lib/gameAssets';
+import { playerApiFetch } from '@/lib/playerApiFetch';
 
 function GamesContent() {
   const { user, fetchUser, openAuth } = useAppShell();
@@ -43,10 +44,7 @@ function GamesContent() {
 
   const loadUserAccounts = (email) => {
     if (!email) return;
-    fetch(`/api/game-accounts?email=${encodeURIComponent(email)}`, {
-      credentials: 'include',
-      cache: 'no-store',
-    })
+    playerApiFetch(`/api/game-accounts?email=${encodeURIComponent(email)}`)
       .then((r) => r.json())
       .then((d) => {
         if (d?.success) {

@@ -4,6 +4,7 @@ import { getSessionUser, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { compressDataUrlIfNeeded } from '@/lib/serverImageCompress';
+import { requirePlayerDbUser } from '@/lib/requirePlayerDbUser';
 
 function previewText(text, imageUrl) {
   const t = (text || '').trim();
@@ -224,18 +225,29 @@ export async function POST(req) {
       );
     }
 
-    if (!user) {
+    if (!user && !isStaffReply) {
       return NextResponse.json({ success: false, error: 'Please sign in to use live chat.' }, { status: 401 });
     }
 
-    const messageUid = isStaffReply ? String(targetUserId) : user.id?.toString?.() || user._id?.toString?.();
-    const username = isStaffReply ? 'Hood Support Desk' : user?.username || 'Player';
+    let messageUid = isStaffReply ? String(targetUserId) : '';
+    let username = isStaffReply ? 'Hood Support Desk' : user?.username || 'Player';
+    let playerEmail = user?.email || '';
+    if (!isStaffReply) {
+      const resolved = await requirePlayerDbUser(req);
+      if (!resolved.dbUser) {
+        return NextResponse.json({ success: false, error: resolved.error || 'Please sign in.' }, { status: 401 });
+      }
+      messageUid = resolved.dbUser._id.toString();
+      username = resolved.dbUser.username || username;
+      playerEmail = resolved.dbUser.email || playerEmail;
+    }
+
     const senderRole = isStaffReply ? 'staff' : 'player';
 
     const msgDoc = {
       userId: messageUid,
       username,
-      userEmail: user?.email || '',
+      userEmail: playerEmail,
       text: cleanText,
       imageUrl: cleanImageUrl,
       senderRole,
