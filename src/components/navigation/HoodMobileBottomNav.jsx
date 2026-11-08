@@ -10,12 +10,15 @@ export default function HoodMobileBottomNav({
   onOpenCashier,
   onOpenApp,
   onOpenChat,
+  sidebarOpen = false,
 }) {
   const pathname = usePathname();
 
+  if (sidebarOpen) return null;
+
   return (
     <div
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#09142a]/95 backdrop-blur-2xl border-t border-[#1a3363] px-3 py-1 shadow-[0_-10px_35px_rgba(0,0,0,0.8)]"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#09142a]/95 backdrop-blur-2xl border-t border-[#1a3363] px-3 py-1 shadow-[0_-10px_35px_rgba(0,0,0,0.8)]"
       style={{
         paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))',
       }}

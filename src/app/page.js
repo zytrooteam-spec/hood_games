@@ -475,6 +475,7 @@ export default function HomePage() {
 
       {/* 2. Mobile Bottom Navigation Bar (Requirement #3) */}
       <HoodMobileBottomNav
+        sidebarOpen={mobileSidebarOpen}
         onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
         onOpenApp={() => setAppModalOpen(true)}
         onOpenChat={() => router.push('/chat')}

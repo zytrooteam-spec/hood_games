@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Bell, X, ExternalLink, Sparkles, ShieldCheck, MessageSquare } from 'lucide-react';
 import { playTune, unlockAudioContext } from '@/lib/soundAlerts';
+import { getOrCreateDeviceId } from '@/lib/deviceClient';
 
 export default function PushNotificationManager() {
   const router = useRouter();
@@ -157,18 +158,26 @@ export default function PushNotificationManager() {
 
             PushNotifications.addListener('registration', async (token) => {
               try {
-                const storedDevId = typeof window !== 'undefined' ? localStorage.getItem('hood_device_fingerprint') : null;
+                const storedDevId = getOrCreateDeviceId();
                 if (typeof window !== 'undefined' && token.value) {
                   localStorage.setItem('hood_fcm_device_token', token.value);
                 }
+                const meRes = await fetch('/api/auth/me?session=player', { credentials: 'include' }).catch(() => null);
+                const me = meRes?.ok ? await meRes.json().catch(() => ({})) : {};
+                const liveUser = me?.success ? me.user : null;
                 await fetch('/api/notifications', {
                   method: 'PUT',
+                  credentials: 'include',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     token: token.value,
                     fcmToken: token.value,
                     device: 'android_apk',
                     deviceId: storedDevId,
+                    userId: liveUser?.id || liveUser?._id,
+                    email: liveUser?.email,
+                    username: liveUser?.username,
+                    role: liveUser?.role || 'player',
                   }),
                 });
               } catch {}
@@ -341,9 +350,11 @@ export default function PushNotificationManager() {
       if (liveUser && (liveUser.userId || liveUser.email)) {
         try {
           const storedToken = typeof window !== 'undefined' ? localStorage.getItem('hood_fcm_device_token') : null;
-          const storedDevId = typeof window !== 'undefined' ? localStorage.getItem('hood_device_fingerprint') : null;
+          const storedDevId = getOrCreateDeviceId();
+          const isNative = Boolean(window.Capacitor?.isNativePlatform?.());
           fetch('/api/notifications', {
             method: 'PUT',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               userId: liveUser.userId || liveUser._id || liveUser.id,
@@ -351,6 +362,7 @@ export default function PushNotificationManager() {
               username: liveUser.username,
               token: storedToken,
               fcmToken: storedToken,
+              device: isNative ? 'android_apk' : 'web_chrome',
               deviceId: storedDevId,
               role: liveUser.role || 'player',
             }),

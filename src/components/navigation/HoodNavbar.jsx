@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   Wallet,
@@ -30,6 +30,7 @@ export default function HoodNavbar({
   onOpenFreeplay,
 }) {
   const [userDropdown, setUserDropdown] = useState(false);
+  const profileMenuRef = useRef(null);
   const [lobbySettings, setLobbySettings] = useState(null);
   const [freeplayStatus, setFreeplayStatus] = useState({ claimed: false, pending: false });
 
@@ -56,6 +57,21 @@ export default function HoodNavbar({
       })
       .catch(() => {});
   }, [user?.email]);
+
+  useEffect(() => {
+    if (!userDropdown) return;
+    const onDoc = (e) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) {
+        setUserDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('touchstart', onDoc);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('touchstart', onDoc);
+    };
+  }, [userDropdown]);
 
   const freeplayActive = lobbySettings?.freeplayActive !== false;
   const freeplayAmount = Number(lobbySettings?.freeplayAmountSC ?? 5);
@@ -129,22 +145,31 @@ export default function HoodNavbar({
                     onOpenFreeplay();
                     playTune('click');
                   }}
-                  className={`hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wide border transition-all ${
+                  className={`flex items-center justify-center shrink-0 gap-0 sm:gap-1.5 p-2 sm:px-3 sm:py-2 rounded-xl text-[10px] font-black uppercase tracking-wide border transition-all ${
                     freeplayStatus.claimed
                       ? 'opacity-60 border-[#1a3363] text-gray-500 cursor-not-allowed'
                       : freeplayStatus.pending
                         ? 'border-amber-500/50 text-amber-200 bg-amber-500/10'
                         : 'border-[#2cb64e]/50 text-[#7ee08f] bg-[#2cb64e]/10 hover:bg-[#2cb64e]/20'
                   }`}
-                  title="One-time freeplay task"
+                  title={
+                    freeplayStatus.claimed
+                      ? 'Freeplay claimed'
+                      : freeplayStatus.pending
+                        ? 'Freeplay pending review'
+                        : `Get $${freeplayAmount.toFixed(0)} freeplay`
+                  }
                 >
-                  <Gift size={14} />
-                  <span>
+                  <Gift size={15} className="sm:w-[14px] sm:h-[14px] shrink-0" />
+                  <span className="hidden sm:inline">
                     {freeplayStatus.claimed
                       ? 'Freeplay ✓'
                       : freeplayStatus.pending
                         ? 'Pending'
                         : `Get $${freeplayAmount.toFixed(0)} freeplay`}
+                  </span>
+                  <span className="sm:hidden text-[9px] font-black leading-none min-w-[1.25rem] text-center">
+                    {freeplayStatus.claimed ? '✓' : freeplayStatus.pending ? '…' : `$${freeplayAmount.toFixed(0)}`}
                   </span>
                 </button>
               ) : null}
@@ -155,7 +180,7 @@ export default function HoodNavbar({
                   onOpenCashier('deposit');
                   playTune('coin');
                 }}
-                className="btn-hood-green p-2.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs flex items-center gap-2 uppercase tracking-wider font-extrabold shadow-[0_4px_18px_rgba(44,182,78,0.4)]"
+                className="hidden md:flex btn-hood-green p-2.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs items-center gap-2 uppercase tracking-wider font-extrabold shadow-[0_4px_18px_rgba(44,182,78,0.4)]"
                 title="Wallet"
               >
                 <Wallet size={15} />
@@ -192,17 +217,19 @@ export default function HoodNavbar({
                 <MessageSquare size={17} />
               </button>
 
-              {/* User Profile Dropdown */}
-              <div className="relative hidden sm:block">
+              {/* User Profile Dropdown (mobile + desktop — logout lives here) */}
+              <div className="relative shrink-0" ref={profileMenuRef}>
                 <button
                   type="button"
                   onClick={() => setUserDropdown(!userDropdown)}
-                  className="flex items-center gap-2 p-1.5 pr-2.5 rounded-2xl bg-[#0c1b38] border border-[#1a3363] hover:border-[#2cb64e]/50 transition-all shadow-sm"
+                  className="flex items-center gap-1.5 p-1.5 pr-2 sm:pr-2.5 rounded-xl sm:rounded-2xl bg-[#0c1b38] border border-[#1a3363] hover:border-[#2cb64e]/50 transition-all shadow-sm"
+                  title="Account & logout"
+                  aria-label="Open account menu"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#2cb64e] to-[#12244c] flex items-center justify-center text-xs font-black text-white">
+                  <div className="w-8 h-8 rounded-lg sm:rounded-xl bg-gradient-to-br from-[#2cb64e] to-[#12244c] flex items-center justify-center text-xs font-black text-white">
                     {user.username?.charAt(0).toUpperCase()}
                   </div>
-                  <span className="hidden sm:inline text-xs font-bold text-gray-200">
+                  <span className="hidden min-[400px]:inline text-xs font-bold text-gray-200 max-w-[4.5rem] truncate">
                     {user.username}
                   </span>
                 </button>

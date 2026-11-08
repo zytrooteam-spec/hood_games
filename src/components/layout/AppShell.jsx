@@ -213,6 +213,7 @@ export default function AppShell({ children }) {
 
         {/* Mobile Bottom Navigation */}
         <HoodMobileBottomNav
+          sidebarOpen={mobileSidebarOpen}
           onOpenCashier={() => router.push('/wallet')}
           onOpenApp={() => router.push('/download-app')}
           onOpenChat={() => router.push('/chat')}

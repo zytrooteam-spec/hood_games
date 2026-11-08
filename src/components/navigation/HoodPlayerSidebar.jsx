@@ -133,16 +133,16 @@ export default function HoodPlayerSidebar({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 bg-[#09142a]/95 backdrop-blur-xl border-r border-[#1a3363] flex flex-col justify-between transition-all duration-300 ${
+        className={`fixed top-0 left-0 z-[60] bg-[#09142a]/95 backdrop-blur-xl border-r border-[#1a3363] flex flex-col min-h-0 transition-all duration-300 h-[100dvh] max-h-[100dvh] ${
           mobileOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'
         } ${collapsed ? 'lg:w-20' : 'lg:w-64'}`}
         style={{
           paddingTop: 'env(safe-area-inset-top, 0px)',
-          paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
+          paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))',
         }}
       >
         {/* Top Section: Brand & Nav Links */}
-        <div className="space-y-2.5 overflow-hidden flex flex-col">
+        <div className="space-y-2.5 flex flex-col min-h-0 flex-1">
           {/* Header Brand */}
           <div className="flex items-center justify-between px-4 py-3.5 border-b border-[#1a3363]/80 shrink-0">
             <div
@@ -236,7 +236,7 @@ export default function HoodPlayerSidebar({
           )}
 
           {/* Navigation Items (Scrollable if needed) */}
-          <div className="px-3 space-y-1 overflow-y-auto flex-1 max-h-[calc(100vh-270px)]">
+          <div className="px-3 space-y-1 overflow-y-auto flex-1 min-h-0 overscroll-contain">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.path;
@@ -294,10 +294,22 @@ export default function HoodPlayerSidebar({
               );
             })}
           </div>
+
+          {/* Deposit CTA — inside scroll column on mobile so it is never clipped by bottom nav */}
+          <div className="px-3 pt-2 pb-1 shrink-0 space-y-1.5 lg:hidden">
+            <button
+              type="button"
+              onClick={() => handleNav('/wallet')}
+              className="w-full btn-hood-green py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg"
+            >
+              <Wallet size={14} />
+              <span>Deposit / Redeem</span>
+            </button>
+          </div>
         </div>
 
-        {/* Bottom Deposit CTA Bar */}
-        <div className="p-3 border-t border-[#1a3363]/80 bg-[#070d1e]/50 shrink-0 space-y-1.5">
+        {/* Bottom Deposit CTA Bar (desktop / collapsed sidebar) */}
+        <div className="hidden lg:block p-3 border-t border-[#1a3363]/80 bg-[#070d1e]/50 shrink-0 space-y-1.5">
           {(!collapsed || mobileOpen) ? (
             <>
               <button
