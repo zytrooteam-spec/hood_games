@@ -108,7 +108,10 @@ export default function HomePage() {
   // Load User Game Accounts
   const loadUserAccounts = async (email) => {
     try {
-      const res = await fetch(`/api/game-accounts?email=${encodeURIComponent(email || '')}`);
+      const res = await fetch(`/api/game-accounts?email=${encodeURIComponent(email || '')}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
       const data = await res.json();
       if (data?.success) {
         if (Array.isArray(data?.gameAccounts)) diffSet(setUserGameAccounts, data.gameAccounts);

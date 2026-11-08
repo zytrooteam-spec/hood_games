@@ -25,7 +25,10 @@ function GameIdsContent() {
     if (!email) return;
     if (!silent) setLoadingDesk(true);
     try {
-      const res = await fetch(`/api/game-accounts?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`/api/game-accounts?email=${encodeURIComponent(email)}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
       const data = await res.json();
       if (data?.success) {
         const sanitizedAccounts = (data.gameAccounts || []).map((a) => ({

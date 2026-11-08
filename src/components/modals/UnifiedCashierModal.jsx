@@ -78,7 +78,10 @@ export default function UnifiedCashierModal({
       })
       .catch(() => {});
     if (user?.email) {
-      fetch(`/api/game-accounts?email=${encodeURIComponent(user.email)}`, { cache: 'no-store' })
+      fetch(`/api/game-accounts?email=${encodeURIComponent(user.email)}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      })
         .then((r) => r.json())
         .then((d) => {
           if (d?.success && Array.isArray(d.gameAccounts)) {

@@ -28,7 +28,10 @@ function WalletAccountSync({ user, onAccounts }) {
       onAccounts([]);
       return;
     }
-    fetch(`/api/game-accounts?email=${encodeURIComponent(user.email)}`, { cache: 'no-store' })
+    fetch(`/api/game-accounts?email=${encodeURIComponent(user.email)}`, {
+      credentials: 'include',
+      cache: 'no-store',
+    })
       .then((r) => r.json())
       .then((d) => {
         if (d?.success && Array.isArray(d.gameAccounts)) onAccounts(d.gameAccounts);

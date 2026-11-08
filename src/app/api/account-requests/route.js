@@ -52,15 +52,16 @@ function buildStaffQuery(searchParams) {
 export async function GET(req) {
   try {
     await ensureDbInitialized();
-    const player = await getSessionUser(req, 'player');
     const admin = await getSessionUser(req, 'admin');
-    const user = player || (admin && isStaffRole(admin.role) ? admin : null);
+    const player = await getSessionUser(req, 'player');
+
+    const isStaff = Boolean(admin && isStaffRole(admin.role));
+    const user = isStaff ? admin : player;
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const db = await getDb();
-    const isStaff = isStaffRole(user.role) && !player;
     const { searchParams } = new URL(req.url);
 
     let requests;
@@ -68,9 +69,15 @@ export async function GET(req) {
       const query = buildStaffQuery(searchParams);
       requests = await db.collection('accountRequests').find(query).sort({ createdAt: -1 }).limit(250).toArray();
     } else {
+      const usersCol = db.collection('users');
+      const dbUser = await resolvePlayerDbUser(user, usersCol);
+      const uid = dbUser?._id?.toString() || user.userId || user.id || user._id?.toString?.() || '';
+      const email = (dbUser?.email || user.email || '').toLowerCase().trim();
+      const playerFilter = [{ userId: uid }];
+      if (email) playerFilter.push({ userEmail: email });
       requests = await db
         .collection('accountRequests')
-        .find({ userId: user.id || user._id.toString() })
+        .find({ $or: playerFilter })
         .sort({ createdAt: -1 })
         .toArray();
     }
@@ -102,7 +109,7 @@ export async function POST(req) {
 
     const transferAmount = Math.max(0, Number(body.transferAmount || 0));
     const requestType =
-      body.requestType || (transferAmount > 0 ? 'COIN_LOAD' : 'ACCOUNT_CREATION');
+      body.requestType === 'COIN_LOAD' || transferAmount > 0 ? 'COIN_LOAD' : 'ACCOUNT_CREATION';
     const gameAccountUsername = String(body.gameAccountUsername || '').trim();
 
     const db = await getDb();

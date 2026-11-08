@@ -43,7 +43,10 @@ function GamesContent() {
 
   const loadUserAccounts = (email) => {
     if (!email) return;
-    fetch(`/api/game-accounts?email=${encodeURIComponent(email)}`)
+    fetch(`/api/game-accounts?email=${encodeURIComponent(email)}`, {
+      credentials: 'include',
+      cache: 'no-store',
+    })
       .then((r) => r.json())
       .then((d) => {
         if (d?.success) {

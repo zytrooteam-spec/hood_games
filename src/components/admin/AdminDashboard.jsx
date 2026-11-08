@@ -173,6 +173,9 @@ export default function AdminDashboard({ user, onLogout }) {
       bc.onmessage = (ev) => {
         if (ev?.data?.silent) return;
         playAdminChime(ev?.data?.tune);
+        if (ev?.data?.type === 'NEW_GAME_ID_REQUEST' || ev?.data?.type === 'NEW_COIN_LOAD') {
+          window.dispatchEvent(new CustomEvent('hood-admin-refresh'));
+        }
       };
     } catch {
       bc = null;
@@ -374,7 +377,9 @@ export default function AdminDashboard({ user, onLogout }) {
         fetch('/api/admin/stats').then((r) => r.json()).catch(() => ({})),
         fetch('/api/payments/deposit').then((r) => r.json()).catch(() => ({})),
         fetch('/api/payments/withdraw').then((r) => r.json()).catch(() => ({})),
-        fetch('/api/account-requests').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/account-requests?status=all', { credentials: 'include', cache: 'no-store' })
+          .then((r) => r.json())
+          .catch(() => ({})),
         fetch('/api/admin/settings').then((r) => r.json()).catch(() => ({})),
         fetch('/api/chat').then((r) => r.json()).catch(() => ({})),
         fetch('/api/admin/users').then((r) => r.json()).catch(() => ({})),
@@ -385,8 +390,9 @@ export default function AdminDashboard({ user, onLogout }) {
       if (statsRes.success) diffSet(setStats, statsRes.stats);
       if (depRes.success && Array.isArray(depRes.deposits)) diffSet(setDeposits, depRes.deposits);
       if (redRes.success && Array.isArray(redRes.redemptions)) diffSet(setRedemptions, redRes.redemptions);
-      if (reqRes.success && Array.isArray(reqRes.requests)) {
-        const sanitizedRequests = reqRes.requests.map((r) => ({
+      const reqRows = reqRes.requests || reqRes.accountRequests;
+      if (reqRes.success && Array.isArray(reqRows)) {
+        const sanitizedRequests = reqRows.map((r) => ({
           ...r,
           gameTitle: sanitizeGameTitle(r.gameTitle),
         }));
@@ -418,11 +424,16 @@ export default function AdminDashboard({ user, onLogout }) {
 
   useEffect(() => {
     fetchAllData(false);
+    const onRefresh = () => fetchAllData(true);
+    window.addEventListener('hood-admin-refresh', onRefresh);
     // Silent background poll every 5s so new deposits, cashouts, requests, & threads sync in real time
     const interval = setInterval(() => {
       fetchAllData(true);
     }, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('hood-admin-refresh', onRefresh);
+    };
   }, []);
 
   // Fetch individual chat conversation (supports silent sync)

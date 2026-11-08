@@ -86,6 +86,27 @@ export default function GameRequestModal({
       } else {
         setSuccessMsg(data.message);
         playTune('win');
+        try {
+          const staffChannel = new BroadcastChannel('hood_staff_alerts');
+          staffChannel.postMessage({
+            type: 'NEW_GAME_ID_REQUEST',
+            requestId: data.requestId,
+            request: data.request,
+            title: 'New game ID request',
+            tune: 'marimba',
+          });
+          staffChannel.close();
+        } catch {
+          /* ignore */
+        }
+        try {
+          localStorage.setItem(
+            'hood_staff_event',
+            JSON.stringify({ title: 'New game ID request', tune: 'marimba', t: Date.now() })
+          );
+        } catch {
+          /* ignore */
+        }
         if (onSuccess) onSuccess();
       }
     } catch (err) {

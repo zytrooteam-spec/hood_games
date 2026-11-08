@@ -6,6 +6,7 @@ import AccountRequestsView from './AccountRequestsView';
 import CoinOperationsDesk from './CoinOperationsDesk';
 import AffiliateManagementHub from './AffiliateManagementHub';
 import { diffSet } from '@/lib/fastDiff';
+import { staffApiFetch } from '@/lib/staffApiFetch';
 import { hoodAlert, hoodConfirm } from '@/lib/hoodAlert';
 import { generateGameCredentialPair } from '@/lib/gameCredentials';
 import {
@@ -29,11 +30,15 @@ export function AccountRequestsDesk({ onMutate }) {
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      const res = await fetch('/api/account-requests?status=all', { cache: 'no-store' });
+      const res = await staffApiFetch('/api/account-requests?status=all');
       const d = await res.json();
-      if (d.success && Array.isArray(d.accountRequests)) {
-        const creation = d.accountRequests.filter(
-          (r) => r.requestType !== 'COIN_LOAD' && Number(r.transferAmount || 0) <= 0
+      const rows = d.accountRequests || d.requests || [];
+      if (d.success && Array.isArray(rows)) {
+        const creation = rows.filter(
+          (r) =>
+            r.requestType !== 'COIN_LOAD' &&
+            String(r.requestType || '').toUpperCase() !== 'COIN_LOAD' &&
+            Number(r.transferAmount || 0) <= 0
         );
         diffSet(setRequests, creation);
       }

@@ -51,11 +51,6 @@ export default function LoadCoinsModal({ isOpen, onClose, game, user, userAccoun
     }
 
     setLoading(true);
-    onClose();
-    hoodAlert.success(
-      `$${amt.toFixed(2)} SC sent to the coin desk for ${gameTitle}.`,
-      'Coin load submitted'
-    );
 
     try {
       const res = await fetch('/api/account-requests', {
@@ -75,6 +70,11 @@ export default function LoadCoinsModal({ isOpen, onClose, game, user, userAccoun
       const data = await res.json();
 
       if (data.success) {
+        onClose();
+        hoodAlert.success(
+          data.message || `$${amt.toFixed(2)} SC sent to the coin desk for ${gameTitle}.`,
+          'Coin load submitted'
+        );
         window.dispatchEvent(new CustomEvent('hood-user-sync'));
         window.dispatchEvent(new CustomEvent('user-sync'));
         try {
@@ -88,6 +88,8 @@ export default function LoadCoinsModal({ isOpen, onClose, game, user, userAccoun
             userEmail: user?.email,
             gameAccountUsername,
             gameTitle,
+            title: 'New coin load request',
+            tune: 'marimba',
           });
           staffChannel.close();
         } catch {
