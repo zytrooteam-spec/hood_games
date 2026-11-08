@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Edit2, X, Search, RefreshCw, Check, Power, Megaphone, Gift, Link2, DollarSign } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Search, RefreshCw, Check, Power, Gift, Link2, DollarSign } from 'lucide-react';
 import AdminImageField from './AdminImageField';
 import { diffSet } from '@/lib/fastDiff';
 import { playTune } from '@/lib/soundAlerts';
@@ -495,7 +495,7 @@ export function StaffTab({ currentUser }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* 6. PROMOTIONS & PUSH BROADCAST                                     */
+/* 6. SITE PROMOTIONS (Players Paradise — no admin push dispatch)       */
 /* ------------------------------------------------------------------ */
 const EMPTY_PROMO = { title: '', badge: 'HOT', description: '', matchPercent: 50, category: 'bonus', active: true, priority: 10 };
 
@@ -503,10 +503,6 @@ export function PromosTab() {
   const [promos, setPromos] = useState([]);
   const [form, setForm] = useState(EMPTY_PROMO);
   const [saving, setSaving] = useState(false);
-  const [pushTitle, setPushTitle] = useState('');
-  const [pushBody, setPushBody] = useState('');
-  const [pushDispatching, setPushDispatching] = useState(false);
-
   const load = useCallback(() => {
     fetch('/api/promotions?admin=true', { cache: 'no-store' })
       .then((r) => r.json())
@@ -542,52 +538,19 @@ export function PromosTab() {
     load();
   };
 
-  const dispatchPush = async () => {
-    if (!pushTitle.trim() || !pushBody.trim()) return;
-    setPushDispatching(true);
-    try {
-      const res = await fetch('/api/notifications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ title: pushTitle.trim(), message: pushBody.trim(), channel: 'push', target: 'all' }),
-      });
-      const d = await res.json();
-      if (d.success) {
-        hoodAlert.success(d.message || 'Push sent', 'Broadcast');
-        setPushTitle('');
-        setPushBody('');
-      } else hoodAlert.error(d.error || 'Push failed');
-    } finally {
-      setPushDispatching(false);
-    }
-  };
-
   return (
     <div className="space-y-6 pt-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <form onSubmit={createPromo} className={`${cardCls} p-5 space-y-3`}>
-          <h3 className="text-sm font-black text-white flex items-center gap-2"><Gift size={16} className="text-[#2cb64e]" /> Create site promotion</h3>
-          <Field label="Title"><input required className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-          <Field label="Badge"><input className={inputCls} value={form.badge} onChange={(e) => setForm({ ...form, badge: e.target.value })} /></Field>
-          <Field label="Description"><textarea required className={`${inputCls} min-h-[80px]`} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="Match %"><input type="number" className={inputCls} value={form.matchPercent} onChange={(e) => setForm({ ...form, matchPercent: Number(e.target.value) })} /></Field>
-            <Field label="Priority"><input type="number" className={inputCls} value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} /></Field>
-          </div>
-          <button disabled={saving} className="w-full btn-hood-green py-2.5 rounded-xl text-xs font-black uppercase">{saving ? 'Saving...' : 'Publish promotion'}</button>
-        </form>
-
-        <div className={`${cardCls} p-5 space-y-3`}>
-          <h3 className="text-sm font-black text-white flex items-center gap-2"><Megaphone size={16} className="text-amber-300" /> Player push broadcast</h3>
-          <p className="text-[10px] text-gray-500">All subscribed APK / browser devices (same flow as Players Paradise).</p>
-          <input className={inputCls} placeholder="Push title" value={pushTitle} onChange={(e) => setPushTitle(e.target.value)} />
-          <textarea className={`${inputCls} min-h-[72px]`} placeholder="Push message" value={pushBody} onChange={(e) => setPushBody(e.target.value)} />
-          <button type="button" disabled={pushDispatching} onClick={dispatchPush} className="w-full btn-hood-green py-2.5 rounded-xl text-xs font-black uppercase">
-            {pushDispatching ? 'Sending...' : 'Send push to all players'}
-          </button>
+      <form onSubmit={createPromo} className={`${cardCls} p-5 space-y-3 max-w-xl`}>
+        <h3 className="text-sm font-black text-white flex items-center gap-2"><Gift size={16} className="text-[#2cb64e]" /> Create site promotion</h3>
+        <Field label="Title"><input required className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
+        <Field label="Badge"><input className={inputCls} value={form.badge} onChange={(e) => setForm({ ...form, badge: e.target.value })} /></Field>
+        <Field label="Description"><textarea required className={`${inputCls} min-h-[80px]`} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Match %"><input type="number" className={inputCls} value={form.matchPercent} onChange={(e) => setForm({ ...form, matchPercent: Number(e.target.value) })} /></Field>
+          <Field label="Priority"><input type="number" className={inputCls} value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} /></Field>
         </div>
-      </div>
+        <button disabled={saving} className="w-full btn-hood-green py-2.5 rounded-xl text-xs font-black uppercase">{saving ? 'Saving...' : 'Publish promotion'}</button>
+      </form>
 
       <div className={`overflow-x-auto ${cardCls}`}>
         <table className="w-full text-left text-xs min-w-[600px]">
