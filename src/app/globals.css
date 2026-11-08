@@ -166,23 +166,38 @@ h6,
   inset: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: rgba(4, 10, 22, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  padding: 16px;
+  padding: 12px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
   animation: hood-modal-fade-in 0.18s ease-out;
+}
+
+@media (min-width: 640px) {
+  .hood-modal-overlay {
+    align-items: center;
+    padding: 16px;
+  }
 }
 
 .hood-modal-card {
   background: linear-gradient(155deg, #0c1b38 0%, #09142a 52%, #070d1e 100%);
   border-radius: 22px;
-  padding: 22px 22px 20px;
-  max-height: 92vh;
+  padding: 18px 16px 16px;
+  max-height: min(92dvh, 92vh);
   overflow-y: auto;
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.88);
+}
+
+@media (min-width: 640px) {
+  .hood-modal-card {
+    padding: 22px 22px 20px;
+  }
 }
 
 .hood-modal-card--default {

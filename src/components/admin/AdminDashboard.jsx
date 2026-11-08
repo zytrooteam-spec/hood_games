@@ -42,6 +42,8 @@ import {
   Gift,
   Link2,
   Smartphone,
+  ChevronLeft,
+  PanelRight,
 } from 'lucide-react';
 import { compressImageFile } from '@/lib/imageCompress';
 import HoodChatMessageBubble from '@/components/chat/HoodChatMessageBubble';
@@ -101,6 +103,8 @@ export default function AdminDashboard({ user, onLogout }) {
   const [newLabelInput, setNewLabelInput] = useState('');
   const [newNoteInput, setNewNoteInput] = useState('');
   const [chatThreadQuery, setChatThreadQuery] = useState('');
+  /** Mobile/tablet chat: inbox → conversation → crm (desktop xl+ shows all columns). */
+  const [chatDeskPane, setChatDeskPane] = useState('inbox');
   const [threadPlayerDetail, setThreadPlayerDetail] = useState(null);
   const [usersList, setUsersList] = useState([]);
   const [gateways, setGateways] = useState([]);
@@ -436,6 +440,7 @@ export default function AdminDashboard({ user, onLogout }) {
     if (!isSilent) {
       setSelectedThreadUser(userId);
       setThreadPlayerDetail(null);
+      setChatDeskPane('conversation');
     }
     try {
       const res = await fetch(`/api/chat?userId=${encodeURIComponent(userId)}`);
@@ -914,7 +919,15 @@ export default function AdminDashboard({ user, onLogout }) {
     setActiveTab(tab);
     setMobileMenuOpen(false);
     playTune('click');
+    if (tab === 'chat') {
+      setChatDeskPane(selectedThreadUser ? 'conversation' : 'inbox');
+    } else {
+      setChatDeskPane('inbox');
+    }
   };
+
+  const chatPanelVisibility = (pane) =>
+    `${chatDeskPane === pane ? 'flex' : 'hidden'} xl:flex`;
 
   const siteLogo = settings?.logoUrl || '/logo.png';
 
@@ -1253,34 +1266,38 @@ export default function AdminDashboard({ user, onLogout }) {
       </aside>
 
       {/* Main Content Pane */}
-      <main className="flex-1 min-h-0 min-w-0 w-full p-4 sm:p-8 overflow-y-auto overscroll-contain md:ml-64">
+      <main className="flex flex-col flex-1 min-h-0 min-w-0 w-full p-3 sm:p-6 lg:p-8 overflow-y-auto overscroll-contain md:ml-64">
         {/* Top Header */}
-        <div className="flex items-center justify-between pb-6 border-b border-[#1a3363]">
-          <div>
-            <h1 className="text-2xl font-black text-white capitalize">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between pb-4 sm:pb-6 border-b border-[#1a3363]">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-black text-white leading-tight">
               {{
                 overview: 'Overview Desk',
                 finance: 'Finance & Cashier Queue',
-                gateways: 'Payment Gateways Management',
+                gateways: 'Payment Gateways',
                 game_loads: 'Game Credit Load Queue',
-                requests: 'Player Game ID Requests',
-                chat: 'Live VIP Support Desk (Labels & Notes)',
-                cards: '5 Quick Action Cards Customizer',
-                games_lib: 'Sweepstakes Games Library',
-                settings: 'Sunday Cashback & System Settings',
-                ledger: 'Master Financial Ledger & Audit',
-                users: 'Player Management & Balance Control',
-                staff: 'Staff & Role Access Control',
-              }[activeTab] || `${activeTab} Management`}
+                requests: 'Game ID Requests',
+                chat: 'Live VIP Support',
+                cards: 'Quick Action Cards',
+                games_lib: 'Games Library',
+                settings: 'Cashback & Settings',
+                ledger: 'Financial Ledger',
+                users: 'Player Management',
+                staff: 'Staff & Access',
+                promos: 'Promotions',
+                affiliates: 'Affiliates',
+                daily_spin: 'Daily Spin Wheel',
+                coins: 'Coins Allotment',
+              }[activeTab] || activeTab}
             </h1>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">
               Admin controls & real-time operations for Hood Games.
             </p>
           </div>
           <button
             type="button"
             onClick={fetchAllData}
-            className="p-2 rounded-xl bg-[#09142a] border border-[#1a3363] text-gray-300 hover:text-white"
+            className="self-end sm:self-auto p-2.5 rounded-xl bg-[#09142a] border border-[#1a3363] text-gray-300 hover:text-white shrink-0"
             title="Refresh Data"
           >
             <RefreshCw size={16} />
@@ -1398,15 +1415,15 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* 2. FINANCE TAB: DEPOSITS & CASHOUTS                      */}
         {/* ======================================================== */}
         {activeTab === 'finance' && (
-          <div className="space-y-8 pt-6">
+          <div className="space-y-6 sm:space-y-8 pt-4 sm:pt-6">
             {/* Deposits Section */}
             <div className="space-y-3">
-              <h3 className="text-lg font-black text-white flex items-center gap-2">
-                <Wallet size={18} className="text-[#2cb64e]" />
+              <h3 className="text-base sm:text-lg font-black text-white flex flex-wrap items-center gap-2">
+                <Wallet size={18} className="text-[#2cb64e] shrink-0" />
                 <span>Player Deposit Queue ({deposits.length})</span>
               </h3>
-              <div className="overflow-x-auto rounded-2xl border border-[#1a3363] bg-[#09142a]">
-                <table className="w-full text-left text-xs">
+              <div className="-mx-3 sm:mx-0 overflow-x-auto rounded-2xl border border-[#1a3363] bg-[#09142a] touch-pan-x">
+                <table className="w-full text-left text-xs min-w-[720px]">
                   <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
                     <tr>
                       <th className="p-3">Player</th>
@@ -1487,12 +1504,12 @@ export default function AdminDashboard({ user, onLogout }) {
 
             {/* Redemptions Section */}
             <div className="space-y-3">
-              <h3 className="text-lg font-black text-white flex items-center gap-2">
-                <ArrowUpRight size={18} className="text-blue-400" />
+              <h3 className="text-base sm:text-lg font-black text-white flex flex-wrap items-center gap-2">
+                <ArrowUpRight size={18} className="text-blue-400 shrink-0" />
                 <span>Player Redemption / Cashout Queue ({redemptions.length})</span>
               </h3>
-              <div className="overflow-x-auto rounded-2xl border border-[#1a3363] bg-[#09142a]">
-                <table className="w-full text-left text-xs">
+              <div className="-mx-3 sm:mx-0 overflow-x-auto rounded-2xl border border-[#1a3363] bg-[#09142a] touch-pan-x">
+                <table className="w-full text-left text-xs min-w-[640px]">
                   <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
                     <tr>
                       <th className="p-3">Player</th>
@@ -1554,16 +1571,19 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* 3. CHAT SUPPORT WITH LABELS & NOTES (KEY REQUIREMENT #9) */}
         {/* ======================================================== */}
         {activeTab === 'chat' && (
-          <div className="pt-6 space-y-4">
-            <div className="rounded-3xl border border-[#2cb64e]/25 bg-gradient-to-r from-[#0c1b38]/95 via-[#09142a] to-[#070d1e] p-5 sm:p-6 shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                <div className="space-y-1.5">
+          <div className="pt-4 sm:pt-6 space-y-3 sm:space-y-4 flex flex-col min-h-0 flex-1">
+            <div className="rounded-2xl sm:rounded-3xl border border-[#2cb64e]/25 bg-gradient-to-r from-[#0c1b38]/95 via-[#09142a] to-[#070d1e] p-4 sm:p-6 shadow-[0_12px_40px_rgba(0,0,0,0.45)] shrink-0">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+                <div className="space-y-1.5 min-w-0">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#2cb64e]/15 border border-[#2cb64e]/35 text-[#2cb64e] text-[10px] font-black uppercase tracking-wider">
                     <MessageSquare size={14} />
                     <span>VIP Concierge Desk</span>
                   </div>
-                  <h3 className="font-heading text-xl sm:text-2xl font-black text-white tracking-tight">Support chat</h3>
-                  <p className="text-xs text-gray-400 max-w-xl leading-relaxed">
+                  <h3 className="font-heading text-lg sm:text-2xl font-black text-white tracking-tight">Support chat</h3>
+                  <p className="text-[11px] sm:text-xs text-gray-400 max-w-xl leading-relaxed sm:hidden">
+                    Pick a thread, reply in the center, then open CRM for labels &amp; staff notes.
+                  </p>
+                  <p className="hidden sm:block text-xs text-gray-400 max-w-xl leading-relaxed">
                     Left: inbox (unread badge). Center: live thread — green bubbles = staff, gray = player. Right:
                     internal CRM — labels players see in chat; notes are staff-only.
                   </p>
@@ -1579,11 +1599,37 @@ export default function AdminDashboard({ user, onLogout }) {
                   </span>
                 </div>
               </div>
+              <div className="flex xl:hidden gap-1.5 mt-3 p-1 rounded-xl bg-[#070d1e]/80 border border-[#1a3363]">
+                {[
+                  { id: 'inbox', label: 'Inbox', icon: Inbox },
+                  { id: 'conversation', label: 'Chat', icon: MessageSquare, disabled: !selectedThreadUser },
+                  { id: 'crm', label: 'CRM', icon: Tag, disabled: !selectedThreadUser },
+                ].map(({ id, label, icon: Icon, disabled }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => !disabled && setChatDeskPane(id)}
+                    className={`flex-1 min-w-0 flex items-center justify-center gap-1 py-2 rounded-lg text-[10px] font-black uppercase transition-colors ${
+                      chatDeskPane === id
+                        ? 'bg-[#2cb64e] text-black'
+                        : disabled
+                          ? 'text-gray-600 cursor-not-allowed'
+                          : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <Icon size={12} className="shrink-0" />
+                    <span className="truncate">{label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="min-h-[620px] lg:min-h-[700px] grid grid-cols-1 xl:grid-cols-12 gap-4">
+            <div className="flex flex-col flex-1 min-h-0 gap-3 sm:gap-4 xl:grid xl:grid-cols-12 xl:min-h-[min(700px,calc(100dvh-12rem))]">
               {/* Left: inbox */}
-              <div className="xl:col-span-3 rounded-2xl bg-[#09142a] border border-[#1a3363] flex flex-col overflow-hidden shadow-lg">
+              <div
+                className={`xl:col-span-3 rounded-2xl bg-[#09142a] border border-[#1a3363] flex-col overflow-hidden shadow-lg min-h-0 max-xl:flex-1 ${chatPanelVisibility('inbox')}`}
+              >
                 <div className="p-3 bg-[#0c1b38] border-b border-[#1a3363] space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="text-xs font-black uppercase text-white tracking-wider flex items-center gap-1.5">
@@ -1657,9 +1703,20 @@ export default function AdminDashboard({ user, onLogout }) {
               </div>
 
               {/* Center: conversation */}
-              <div className="xl:col-span-6 rounded-2xl bg-[#09142a] border border-[#1a3363] flex flex-col overflow-hidden shadow-lg min-h-[480px]">
-                <div className="p-3.5 bg-[#0c1b38] border-b border-[#1a3363] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div className="min-w-0">
+              <div
+                className={`xl:col-span-6 rounded-2xl bg-[#09142a] border border-[#1a3363] flex-col overflow-hidden shadow-lg min-h-0 max-xl:flex-1 min-h-[min(420px,55dvh)] xl:min-h-[480px] ${chatPanelVisibility('conversation')}`}
+              >
+                <div className="p-3 sm:p-3.5 bg-[#0c1b38] border-b border-[#1a3363] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="min-w-0 flex items-center gap-2 w-full">
+                    <button
+                      type="button"
+                      className="xl:hidden shrink-0 p-2 rounded-lg bg-[#070d1e] border border-[#1a3363] text-gray-300 hover:text-white"
+                      onClick={() => setChatDeskPane('inbox')}
+                      aria-label="Back to inbox"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <div className="min-w-0 flex-1">
                     <h4 className="text-sm font-black text-white truncate">
                       {selectedThreadUser ? threadPlayerDetail?.username || 'Player' : 'Pick a thread'}
                     </h4>
@@ -1669,9 +1726,20 @@ export default function AdminDashboard({ user, onLogout }) {
                         {threadPlayerDetail.email}
                       </p>
                     )}
+                    </div>
+                    {selectedThreadUser && (
+                      <button
+                        type="button"
+                        className="xl:hidden shrink-0 p-2 rounded-lg bg-[#070d1e] border border-[#2cb64e]/40 text-[#2cb64e]"
+                        onClick={() => setChatDeskPane('crm')}
+                        aria-label="Labels and notes"
+                      >
+                        <PanelRight size={18} />
+                      </button>
+                    )}
                   </div>
                   {selectedThreadUser && threadPlayerDetail && (
-                    <div className="flex flex-wrap gap-2 text-[10px]">
+                    <div className="flex flex-wrap gap-2 text-[10px] w-full sm:w-auto">
                       <span className="px-2 py-1 rounded-lg bg-[#070d1e] border border-[#1a3363] text-gray-300 font-mono font-bold">
                         SC ${Number(threadPlayerDetail.balanceSC ?? 0).toFixed(2)}
                       </span>
@@ -1682,11 +1750,14 @@ export default function AdminDashboard({ user, onLogout }) {
                   )}
                 </div>
 
-                <div ref={adminChatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-gradient-to-b from-[#070d1e]/90 to-[#070d1e] min-h-[320px]">
+                <div ref={adminChatScrollRef} className="flex-1 p-3 sm:p-4 overflow-y-auto overscroll-contain space-y-3 bg-gradient-to-b from-[#070d1e]/90 to-[#070d1e] min-h-[200px]">
                   {!selectedThreadUser ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12 text-gray-500">
+                    <div className="h-full flex flex-col items-center justify-center text-center px-4 sm:px-6 py-8 sm:py-12 text-gray-500">
                       <MessageSquare size={40} className="text-[#2cb64e]/40 mb-3" />
-                      <p className="text-sm font-bold text-gray-400">Select a player on the left</p>
+                      <p className="text-sm font-bold text-gray-400">
+                        <span className="xl:hidden">Open Inbox and tap a player</span>
+                        <span className="hidden xl:inline">Select a player on the left</span>
+                      </p>
                       <p className="text-[11px] mt-1 max-w-xs">
                         Unread counts show how many player messages need a reply. Attach screenshots with the paperclip.
                       </p>
@@ -1720,7 +1791,7 @@ export default function AdminDashboard({ user, onLogout }) {
                         </button>
                       </div>
                     ) : null}
-                    <form onSubmit={handleSendReply} className="p-3 bg-[#0c1b38] border-t border-[#1a3363] flex gap-2">
+                    <form onSubmit={handleSendReply} className="p-2 sm:p-3 bg-[#0c1b38] border-t border-[#1a3363] flex items-center gap-2 min-w-0">
                       <input
                         ref={adminChatFileRef}
                         type="file"
@@ -1758,7 +1829,19 @@ export default function AdminDashboard({ user, onLogout }) {
               </div>
 
               {/* Right: labels + notes */}
-              <div className="xl:col-span-3 rounded-2xl bg-[#09142a] border border-[#1a3363] p-4 flex flex-col gap-5 overflow-y-auto shadow-lg min-h-[320px]">
+              <div
+                className={`xl:col-span-3 rounded-2xl bg-[#09142a] border border-[#1a3363] p-3 sm:p-4 flex-col gap-4 sm:gap-5 overflow-y-auto overscroll-contain shadow-lg min-h-0 max-xl:flex-1 min-h-[min(380px,50dvh)] xl:min-h-[320px] ${chatPanelVisibility('crm')}`}
+              >
+                <div className="flex items-center gap-2 xl:hidden shrink-0">
+                  <button
+                    type="button"
+                    className="p-2 rounded-lg bg-[#070d1e] border border-[#1a3363] text-gray-300 hover:text-white"
+                    onClick={() => setChatDeskPane('conversation')}
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <span className="text-xs font-black text-white">Back to chat</span>
+                </div>
                 <div className="rounded-xl bg-[#070d1e]/80 border border-[#1a3363] p-3">
                   <p className="text-[10px] text-gray-400 leading-relaxed">
                     <strong className="text-[#2cb64e]">Labels</strong> help you filter VIP / risk — they can appear on the player
@@ -1830,7 +1913,7 @@ export default function AdminDashboard({ user, onLogout }) {
                             <button
                               type="button"
                               onClick={() => handleDeleteNote(n.id)}
-                              className="text-rose-400 hover:text-rose-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="text-rose-400 hover:text-rose-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                             >
                               Delete
                             </button>
@@ -1975,18 +2058,18 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* 5. CASHBACK & SYSTEM SETTINGS (REQUIREMENT #7)           */}
         {/* ======================================================== */}
         {activeTab === 'settings' && (
-          <div className="space-y-8 pt-6">
+          <div className="space-y-6 sm:space-y-8 pt-4 sm:pt-6">
             {/* Sunday Cashback Operations Banner */}
-            <div className="p-6 rounded-3xl bg-gradient-to-r from-[#0d234d] via-[#091733] to-[#070d1e] border-2 border-[#2cb64e]/50 shadow-2xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+            <div className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-[#0d234d] via-[#091733] to-[#070d1e] border-2 border-[#2cb64e]/50 shadow-2xl flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 sm:gap-6">
               <div className="space-y-1">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#2cb64e]/20 text-[#2cb64e] border border-[#2cb64e]/40 text-xs font-black uppercase">
                   <Coins size={14} />
                   <span>Sunday Cashback Operations Hub</span>
                 </div>
-                <h3 className="text-2xl font-black text-white">
+                <h3 className="text-lg sm:text-2xl font-black text-white">
                   Disburse Sunday Net Cashback
                 </h3>
-                <p className="text-xs text-gray-300 max-w-xl">
+                <p className="text-[11px] sm:text-xs text-gray-300 max-w-xl">
                   Disburses weekly cashback directly to all qualified players’ balances with 0x wagering.
                   Calculated automatically as (Total Weekly Deposits − Total Weekly Cashouts) × {settings?.cashbackPercent || 10}%.
                 </p>
@@ -2024,8 +2107,8 @@ export default function AdminDashboard({ user, onLogout }) {
                 </span>
               </div>
 
-              <div className="overflow-x-auto rounded-2xl border border-[#1a3363] bg-[#09142a]">
-                <table className="w-full text-left text-xs">
+              <div className="-mx-3 sm:mx-0 overflow-x-auto rounded-2xl border border-[#1a3363] bg-[#09142a] touch-pan-x">
+                <table className="w-full text-left text-xs min-w-[800px]">
                   <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
                     <tr>
                       <th className="p-3">Player</th>
@@ -2248,9 +2331,9 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* 7. PLAYER MANAGEMENT                                     */}
         {/* ======================================================== */}
         {activeTab === 'users' && (
-          <div className="space-y-4 pt-6">
+          <div className="space-y-4 pt-4 sm:pt-6">
             <h3 className="text-base font-black text-white">Registered Players ({usersList.length})</h3>
-            <div className="overflow-x-auto rounded-2xl border border-[#1a3363] bg-[#09142a]">
+            <div className="-mx-3 sm:mx-0 overflow-x-auto rounded-2xl border border-[#1a3363] bg-[#09142a] touch-pan-x">
               <table className="w-full text-left text-xs min-w-[650px]">
                 <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
                   <tr>
@@ -2297,7 +2380,8 @@ export default function AdminDashboard({ user, onLogout }) {
                           className="btn-hood-green px-3 py-1 rounded text-[10px] font-bold inline-flex items-center gap-1 shadow-sm"
                         >
                           <Edit2 size={11} />
-                          <span>Adjust Balance</span>
+                          <span className="hidden sm:inline">Adjust Balance</span>
+                          <span className="sm:hidden">Edit</span>
                         </button>
                       </td>
                     </tr>

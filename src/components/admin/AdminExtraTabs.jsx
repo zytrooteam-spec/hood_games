@@ -295,7 +295,7 @@ export function GameLoadsTab() {
   return (
     <div className="space-y-4 pt-6">
       <h3 className="text-base font-black text-white">Game Credit Load Queue ({transfers.filter((t) => t.status === 'pending').length} pending)</h3>
-      <div className={`overflow-x-auto ${cardCls}`}>
+      <div className={`-mx-3 sm:mx-0 overflow-x-auto touch-pan-x ${cardCls}`}>
         <table className="w-full text-left text-xs min-w-[640px]">
           <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
             <tr><th className="p-3">Player</th><th className="p-3">Game</th><th className="p-3">Amount</th><th className="p-3">Requested</th><th className="p-3">Status</th><th className="p-3 text-right">Actions</th></tr>
@@ -384,7 +384,7 @@ export function LedgerTab() {
         <button onClick={exportCsv} className="btn-hood-green px-3 py-2 rounded-xl text-xs font-black">Export CSV</button>
       </div>
 
-      <div className={`overflow-x-auto ${cardCls}`}>
+      <div className={`-mx-3 sm:mx-0 overflow-x-auto touch-pan-x ${cardCls}`}>
         <table className="w-full text-left text-xs min-w-[720px]">
           <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
             <tr><th className="p-3">Date</th><th className="p-3">Type</th><th className="p-3">Player</th><th className="p-3">Amount</th><th className="p-3">Method</th><th className="p-3">Reference</th><th className="p-3">Status</th></tr>
@@ -468,7 +468,7 @@ export function StaffTab({ currentUser }) {
         <button disabled={saving} className="w-full btn-hood-green py-2.5 rounded-xl text-xs font-black uppercase">{saving ? 'Creating...' : 'Create Account'}</button>
       </form>
 
-      <div className={`overflow-x-auto ${cardCls} lg:col-span-8`}>
+      <div className={`-mx-3 sm:mx-0 overflow-x-auto touch-pan-x ${cardCls} lg:col-span-8`}>
         <table className="w-full text-left text-xs min-w-[520px]">
           <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
             <tr><th className="p-3">Username</th><th className="p-3">Email</th><th className="p-3">Role</th><th className="p-3">Created</th><th className="p-3 text-right">Actions</th></tr>
@@ -540,7 +540,7 @@ export function PromosTab() {
 
   return (
     <div className="space-y-6 pt-6">
-      <form onSubmit={createPromo} className={`${cardCls} p-5 space-y-3 max-w-xl`}>
+      <form onSubmit={createPromo} className={`${cardCls} p-4 sm:p-5 space-y-3 w-full max-w-xl`}>
         <h3 className="text-sm font-black text-white flex items-center gap-2"><Gift size={16} className="text-[#2cb64e]" /> Create site promotion</h3>
         <Field label="Title"><input required className={inputCls} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
         <Field label="Badge"><input className={inputCls} value={form.badge} onChange={(e) => setForm({ ...form, badge: e.target.value })} /></Field>
@@ -552,7 +552,7 @@ export function PromosTab() {
         <button disabled={saving} className="w-full btn-hood-green py-2.5 rounded-xl text-xs font-black uppercase">{saving ? 'Saving...' : 'Publish promotion'}</button>
       </form>
 
-      <div className={`overflow-x-auto ${cardCls}`}>
+      <div className={`-mx-3 sm:mx-0 overflow-x-auto touch-pan-x ${cardCls}`}>
         <table className="w-full text-left text-xs min-w-[600px]">
           <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
             <tr><th className="p-3">Title</th><th className="p-3">Badge</th><th className="p-3">Match</th><th className="p-3">Status</th><th className="p-3 text-right">Actions</th></tr>
@@ -623,7 +623,7 @@ export function AffiliatesTab() {
 
       <h3 className="text-sm font-black text-white flex items-center gap-2"><Link2 size={16} className="text-[#2cb64e]" /> Affiliate partners</h3>
       {loading ? <p className="text-xs text-gray-500">Loading affiliates...</p> : (
-        <div className={`overflow-x-auto ${cardCls}`}>
+        <div className={`-mx-3 sm:mx-0 overflow-x-auto touch-pan-x ${cardCls}`}>
           <table className="w-full text-left text-xs min-w-[720px]">
             <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
               <tr>
