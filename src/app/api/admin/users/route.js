@@ -32,7 +32,7 @@ export async function PUT(req) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Admin access required' }, { status: 403 });
     }
 
-    const { userId, balanceSC, balanceGC, role, status } = await req.json();
+    const { userId, balanceSC, balanceGC, role, status, unbindDevice } = await req.json();
     if (!userId) {
       return NextResponse.json({ success: false, error: 'User ID required' }, { status: 400 });
     }
@@ -43,6 +43,11 @@ export async function PUT(req) {
     if (balanceGC !== undefined) update.balanceGC = Number(balanceGC);
     if (role) update.role = role;
     if (status) update.status = status;
+    if (unbindDevice === true) {
+      update.deviceId = '';
+      update.lastLoginDevice = '';
+      update.boundDevices = [];
+    }
     update.updatedAt = new Date();
 
     await db.collection('users').updateOne(toIdQuery(userId), { $set: update });

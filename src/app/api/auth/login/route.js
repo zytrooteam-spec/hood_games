@@ -4,6 +4,13 @@ import { getDb } from '@/lib/mongodb';
 import { signToken, ROLES, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
+import { getDeviceIdFromRequest } from '@/lib/deviceServer';
+import {
+  findPlayerBoundToDevice,
+  deviceBindingErrorPayload,
+  deviceBindingUpdateFields,
+} from '@/lib/deviceBinding';
+import { toIdQuery } from '@/lib/mongodb';
 
 export const runtime = 'nodejs';
 
@@ -25,7 +32,7 @@ export async function POST(req) {
         { status: 503 }
       );
     }
-    const { identifier, password, isAdminLogin } = await req.json();
+    const { identifier, password, isAdminLogin, deviceId: rawDeviceId } = await req.json();
     const referer = req.headers.get('referer') || '';
     let pathname = '';
     try {
@@ -143,6 +150,19 @@ export async function POST(req) {
       );
     }
 
+    const deviceId = !isAdminPortal && !staff ? getDeviceIdFromRequest(req, rawDeviceId) : null;
+    if (deviceId) {
+      const boundUser = await findPlayerBoundToDevice(db.collection('users'), deviceId, user._id);
+      if (boundUser) {
+        return NextResponse.json(deviceBindingErrorPayload(boundUser), { status: 403 });
+      }
+      const bindFields = deviceBindingUpdateFields(deviceId);
+      await db.collection('users').updateOne(toIdQuery(user._id), {
+        $set: bindFields,
+        $addToSet: { boundDevices: deviceId },
+      });
+    }
+
     const token = signToken({
       userId: user._id.toString(),
       username: user.username,
@@ -164,6 +184,17 @@ export async function POST(req) {
     });
 
     attachSessionCookie(response, token, isAdminPortal, req);
+
+    if (deviceId) {
+      response.cookies.set('v1_device_id', deviceId, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 315360000,
+      });
+    }
+
     return response;
   } catch (err) {
     console.error('Login error:', err);

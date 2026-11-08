@@ -182,14 +182,16 @@ export default function AuthModal({
 
     try {
       if (tab === 'login') {
+        const deviceId = getOrCreateDeviceId();
         const res = await fetch('/api/auth/login', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-device-id': deviceId },
           credentials: 'include',
           body: JSON.stringify({
             identifier: identifier.trim(),
             password,
             isAdminLogin: false,
+            deviceId,
           }),
         });
         const data = await res.json().catch(() => ({}));

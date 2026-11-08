@@ -6,6 +6,7 @@ import { sendEmail, getWelcomeEmailTemplate } from '@/lib/email';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 import { getDeviceIdFromRequest } from '@/lib/deviceServer';
+import { findPlayerBoundToDevice, deviceBindingErrorPayload } from '@/lib/deviceBinding';
 
 export const runtime = 'nodejs';
 
@@ -120,18 +121,9 @@ export async function POST(req) {
 
     const deviceId = getDeviceIdFromRequest(req, rawDeviceId);
     if (deviceId) {
-      const boundUser = await usersCol.findOne({
-        role: ROLES.PLAYER,
-        $or: [{ deviceId }, { boundDevices: deviceId }, { lastLoginDevice: deviceId }],
-      });
+      const boundUser = await findPlayerBoundToDevice(usersCol, deviceId);
       if (boundUser) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `This device is already linked to ${boundUser.email}. One account per device.`,
-          },
-          { status: 403 }
-        );
+        return NextResponse.json(deviceBindingErrorPayload(boundUser), { status: 403 });
       }
     }
 

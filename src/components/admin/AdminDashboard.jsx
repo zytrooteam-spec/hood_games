@@ -41,6 +41,7 @@ import {
   Megaphone,
   Gift,
   Link2,
+  Smartphone,
 } from 'lucide-react';
 import { compressImageFile } from '@/lib/imageCompress';
 import HoodChatMessageBubble from '@/components/chat/HoodChatMessageBubble';
@@ -118,6 +119,7 @@ export default function AdminDashboard({ user, onLogout }) {
   const [editStatus, setEditStatus] = useState('active');
   const [editRole, setEditRole] = useState('player');
   const [savingPlayer, setSavingPlayer] = useState(false);
+  const [unbindingDevice, setUnbindingDevice] = useState(false);
 
   // Card editing states
   const [editingCards, setEditingCards] = useState([]);
@@ -862,6 +864,42 @@ export default function AdminDashboard({ user, onLogout }) {
       hoodAlert.error('Network error updating player');
     } finally {
       setSavingPlayer(false);
+    }
+  };
+
+  const handleUnbindPlayerDevice = async () => {
+    if (!selectedPlayerToEdit) return;
+    const bound =
+      selectedPlayerToEdit.deviceId ||
+      (Array.isArray(selectedPlayerToEdit.boundDevices) && selectedPlayerToEdit.boundDevices[0]);
+    if (!bound) {
+      hoodAlert.info('This player has no device linked.', 'Device');
+      return;
+    }
+    const ok = await hoodConfirm(
+      `Unbind device for ${selectedPlayerToEdit.username}? Another account will be able to use this phone after unbind.`,
+      'Unbind device'
+    );
+    if (!ok) return;
+    setUnbindingDevice(true);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedPlayerToEdit._id, unbindDevice: true }),
+      });
+      const data = await res.json();
+      if (data?.success) {
+        hoodAlert.success('Device unbound. Player can re-link on next login.', 'Device unbound');
+        setSelectedPlayerToEdit(null);
+        fetchAllData(true);
+      } else {
+        hoodAlert.error(data?.error || 'Could not unbind device');
+      }
+    } catch {
+      hoodAlert.error('Network error unbinding device');
+    } finally {
+      setUnbindingDevice(false);
     }
   };
 
@@ -2286,6 +2324,7 @@ export default function AdminDashboard({ user, onLogout }) {
                     <th className="p-3">Sweeps Balance</th>
                     <th className="p-3">Role</th>
                     <th className="p-3">Status</th>
+                    <th className="p-3">Device</th>
                     <th className="p-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -2302,6 +2341,13 @@ export default function AdminDashboard({ user, onLogout }) {
                         <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
                           {u.status || 'active'}
                         </span>
+                      </td>
+                      <td className="p-3 text-gray-400 font-mono text-[10px] max-w-[120px] truncate" title={u.deviceId || ''}>
+                        {u.deviceId
+                          ? `${String(u.deviceId).slice(0, 14)}…`
+                          : Array.isArray(u.boundDevices) && u.boundDevices.length
+                            ? `${String(u.boundDevices[0]).slice(0, 14)}…`
+                            : '—'}
                       </td>
                       <td className="p-3 text-right">
                         <button
@@ -2385,6 +2431,27 @@ export default function AdminDashboard({ user, onLogout }) {
                             <option value="admin">Admin</option>
                           </select>
                         </HoodAdminModalField>
+                      </div>
+                      <div className="rounded-xl border border-[#1a3363] bg-[#050a14] p-3 space-y-2">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                          <Smartphone size={12} />
+                          Device binding (1 account per phone)
+                        </p>
+                        <p className="text-xs text-gray-300 font-mono break-all">
+                          {selectedPlayerToEdit.deviceId ||
+                            (Array.isArray(selectedPlayerToEdit.boundDevices) &&
+                            selectedPlayerToEdit.boundDevices.length
+                              ? selectedPlayerToEdit.boundDevices.join(', ')
+                              : 'No device linked yet')}
+                        </p>
+                        <HoodAdminModalButton
+                          type="button"
+                          variant="ghost"
+                          disabled={unbindingDevice || savingPlayer}
+                          onClick={handleUnbindPlayerDevice}
+                        >
+                          {unbindingDevice ? 'Unbinding…' : 'Unbind device'}
+                        </HoodAdminModalButton>
                       </div>
                       <HoodAdminModalActions>
                         <HoodAdminModalButton type="button" variant="ghost" onClick={() => setSelectedPlayerToEdit(null)}>
