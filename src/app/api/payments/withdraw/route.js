@@ -3,6 +3,7 @@ import { getDb, toIdQuery } from '@/lib/mongodb';
 import { getSessionUser, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
+import { publishFinanceWithdraw } from '@/lib/realtimePublish';
 import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
 import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
 
@@ -127,6 +128,17 @@ export async function POST(req) {
       message: `Method: ${method} | Game: ${gameTitle || 'General'} | Destination: ${payoutAddress}`,
       type: 'redemption_request',
       data: { redemptionId: res.insertedId.toString() },
+    });
+
+    const uid = user.id || user._id?.toString?.() || String(user.userId || '');
+    publishFinanceWithdraw({
+      action: 'created',
+      status: 'pending',
+      redemptionId: res.insertedId.toString(),
+      amount: numAmount,
+      username: user.username,
+      userEmail,
+      userId: uid,
     });
 
     return NextResponse.json({

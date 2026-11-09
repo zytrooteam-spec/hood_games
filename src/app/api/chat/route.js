@@ -5,6 +5,7 @@ import { ensureDbInitialized } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { compressDataUrlIfNeeded } from '@/lib/serverImageCompress';
 import { requirePlayerDbUser } from '@/lib/requirePlayerDbUser';
+import { publishChatRealtime } from '@/lib/realtimePublish';
 
 function previewText(text, imageUrl) {
   const t = (text || '').trim();
@@ -69,9 +70,9 @@ export async function GET(req) {
             userEmail: m.userEmail || '',
             lastMessage: preview,
             lastMessageAt: m.createdAt,
-            unreadCount: m.senderRole === 'player' && !m.read ? 1 : 0,
+            unreadCount: m.senderRole === 'player' && m.read !== true ? 1 : 0,
           };
-        } else if (m.senderRole === 'player' && !m.read) {
+        } else if (m.senderRole === 'player' && m.read !== true) {
           threadsMap[m.userId].unreadCount++;
         }
       }
@@ -278,24 +279,26 @@ export async function POST(req) {
         type: 'chat_message',
         data: { userId: messageUid },
       });
-      try {
-        const ch = new BroadcastChannel('hood_staff_alerts');
-        ch.postMessage({
-          type: 'NEW_CHAT_MESSAGE',
-          username,
-          text: previewText(cleanText, cleanImageUrl),
-          userId: messageUid,
-          time: Date.now(),
-        });
-        ch.close();
-      } catch {
-        /* ignore */
-      }
     }
+
+    const insertedId = res.insertedId ? String(res.insertedId) : '';
+    publishChatRealtime({
+      conversationId: messageUid,
+      senderRole,
+      message: {
+        ...msgDoc,
+        id: insertedId,
+        _id: insertedId,
+        text: cleanText,
+        imageUrl: cleanImageUrl,
+      },
+      userEmail: playerEmail,
+      userId: messageUid,
+    });
 
     return NextResponse.json({
       success: true,
-      message: { ...msgDoc, _id: res.insertedId },
+      message: { ...msgDoc, _id: res.insertedId, id: insertedId },
     });
   } catch (err) {
     console.error('Chat POST error:', err);

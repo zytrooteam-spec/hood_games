@@ -75,7 +75,19 @@ export default function HoodChatPageContent({ user, onOpenAuth }) {
     } catch {
       bc = null;
     }
-    return () => bc?.close();
+    const onRealtime = (e) => {
+      const ev = e?.detail;
+      if (!ev || ev.type !== 'CHAT_MESSAGE') return;
+      if (ev.senderRole === 'staff') fetchRef.current?.();
+    };
+    const onInstant = () => fetchRef.current?.();
+    window.addEventListener('hood-realtime', onRealtime);
+    window.addEventListener('hood-instant-sync', onInstant);
+    return () => {
+      bc?.close();
+      window.removeEventListener('hood-realtime', onRealtime);
+      window.removeEventListener('hood-instant-sync', onInstant);
+    };
   }, []);
 
   useEffect(() => {

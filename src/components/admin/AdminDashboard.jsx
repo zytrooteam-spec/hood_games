@@ -63,6 +63,12 @@ import {
 } from '@/lib/gameCredentials';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import {
+  mergeChatThreadsPreservingUnread,
+  createChatInboxDedup,
+  applyInboundChatThreadBump,
+  dedupeChatMessagesById,
+} from '@/lib/hoodAdminChatInbox';
+import {
   GamesLibraryTab,
   GatewaysTab,
   LedgerTab,
@@ -140,6 +146,36 @@ export default function AdminDashboard({ user, onLogout }) {
   const seenLoadReqRef = React.useRef(new Set());
   const seenFreeplayReqRef = React.useRef(new Set());
   const seenChatKeysRef = React.useRef(new Set());
+  const activeTabRef = React.useRef(activeTab);
+  const selectedThreadUserRef = React.useRef(selectedThreadUser);
+  const claimChatInboxAlertRef = React.useRef(createChatInboxDedup());
+  const chatInboxRefreshTimerRef = React.useRef(null);
+
+  React.useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  React.useEffect(() => {
+    selectedThreadUserRef.current = selectedThreadUser;
+  }, [selectedThreadUser]);
+
+  const scheduleChatInboxRefresh = React.useCallback(() => {
+    if (chatInboxRefreshTimerRef.current) clearTimeout(chatInboxRefreshTimerRef.current);
+    chatInboxRefreshTimerRef.current = setTimeout(async () => {
+      try {
+        const chatRes = await fetch('/api/chat', { cache: 'no-store' }).then((r) => r.json());
+        if (chatRes.success && Array.isArray(chatRes.threads)) {
+          setChatThreads((prev) =>
+            mergeChatThreadsPreservingUnread(prev, chatRes.threads, {
+              exceptUserId: selectedThreadUserRef.current,
+            })
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+    }, 400);
+  }, []);
 
   const isPendingReq = (r) => String(r?.status || '').toLowerCase() === 'pending';
 
@@ -401,7 +437,13 @@ export default function AdminDashboard({ user, onLogout }) {
         diffSet(setSettings, setRes.settings);
         setEditingCards((prev) => (prev && prev.length > 0 ? prev : (setRes.settings.quickActionCards || [])));
       }
-      if (chatRes.success && Array.isArray(chatRes.threads)) diffSet(setChatThreads, chatRes.threads);
+      if (chatRes.success && Array.isArray(chatRes.threads)) {
+        setChatThreads((prev) =>
+          mergeChatThreadsPreservingUnread(prev, chatRes.threads, {
+            exceptUserId: selectedThreadUserRef.current,
+          })
+        );
+      }
       if (usrRes.success && Array.isArray(usrRes.users)) diffSet(setUsersList, usrRes.users);
       if (payRes.success && Array.isArray(payRes.methods)) diffSet(setGateways, payRes.methods);
       if (cbRes.success) diffSet(setCashbackReport, cbRes);
@@ -425,15 +467,55 @@ export default function AdminDashboard({ user, onLogout }) {
     fetchAllData(false);
     const onRefresh = () => fetchAllData(true);
     window.addEventListener('hood-admin-refresh', onRefresh);
-    // Silent background poll every 5s so new deposits, cashouts, requests, & threads sync in real time
+    // SSE = instant desk; poll = backup (~2s)
     const interval = setInterval(() => {
       fetchAllData(true);
-    }, 5000);
+    }, 2000);
     return () => {
       clearInterval(interval);
       window.removeEventListener('hood-admin-refresh', onRefresh);
     };
   }, []);
+
+  useEffect(() => {
+    const bumpCtx = { activeTabRef, selectedThreadUserRef };
+    const claim = claimChatInboxAlertRef.current;
+
+    const onStaffInstant = (payload) => {
+      if (!payload?.type) return;
+      if (payload.type === 'NEW_CHAT_MESSAGE') {
+        const uid = String(payload.userId || payload.conversationId || '').trim();
+        const msgId = String(payload.message?.id || payload.message?._id || '').trim();
+        const tsNum = Number(payload.timestamp || payload.time || Date.now());
+        const dedupKey = msgId ? `inbound:${uid}:${msgId}` : `inbound:${uid}:${Math.floor(tsNum / 3000)}`;
+        if (claim(dedupKey)) {
+          applyInboundChatThreadBump(setChatThreads, payload, bumpCtx);
+          playAdminChime('bell');
+        }
+        scheduleChatInboxRefresh();
+        return;
+      }
+      if (
+        payload.type === 'NEW_DEPOSIT' ||
+        payload.type === 'NEW_WITHDRAW' ||
+        payload.type === 'NEW_COIN_LOAD' ||
+        payload.type === 'NEW_GAME_ID_REQUEST'
+      ) {
+        fetchAllData(true);
+      }
+    };
+
+    const onDesk = () => fetchAllData(true);
+    const onStaffEv = (e) => onStaffInstant(e.detail);
+    window.addEventListener('hood-admin-desk-sync', onDesk);
+    window.addEventListener('hood_staff_event_local', onStaffEv);
+
+    return () => {
+      window.removeEventListener('hood-admin-desk-sync', onDesk);
+      window.removeEventListener('hood_staff_event_local', onStaffEv);
+      if (chatInboxRefreshTimerRef.current) clearTimeout(chatInboxRefreshTimerRef.current);
+    };
+  }, [playAdminChime, scheduleChatInboxRefresh]);
 
   // Fetch individual chat conversation (supports silent sync)
   const loadConversation = async (userId, isSilent = false) => {
@@ -446,7 +528,7 @@ export default function AdminDashboard({ user, onLogout }) {
       const res = await fetch(`/api/chat?userId=${encodeURIComponent(userId)}`);
       const data = await res.json();
       if (data?.success) {
-        diffSet(setThreadMessages, data.messages || []);
+        diffSet(setThreadMessages, dedupeChatMessagesById(data.messages || []));
         diffSet(setThreadMeta, data.threadMeta || { labels: [], staffNotes: [] });
         if (data.player) diffSet(setThreadPlayerDetail, data.player);
         else if (!isSilent) setThreadPlayerDetail(null);

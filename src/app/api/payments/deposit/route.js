@@ -5,6 +5,7 @@ import { ensureDbInitialized } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
 import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
+import { publishFinanceDeposit } from '@/lib/realtimePublish';
 
 export async function GET(req) {
   try {
@@ -100,6 +101,16 @@ export async function POST(req) {
       message: `Method: ${method || 'Cash App'} | Game: ${gameTitle || 'Wallet'} | Tag: ${senderTag || 'N/A'}`,
       type: 'deposit_request',
       data: { depositId: res.insertedId.toString() },
+    });
+
+    publishFinanceDeposit({
+      action: 'created',
+      status: 'pending',
+      depositId: res.insertedId.toString(),
+      amount: numAmount,
+      username,
+      userEmail,
+      userId,
     });
 
     return NextResponse.json({

@@ -7,6 +7,7 @@ import { sanitizeGameTitle } from '@/lib/fastDiff';
 import { mapAccountRequest } from '@/lib/mapAccountRequest';
 import { resolvePlayerDbUser } from '@/lib/resolvePlayerDbUser';
 import { getFreeplayAmountSC } from '@/lib/freeplayConfig.server';
+import { publishAccountRequestCreated } from '@/lib/realtimePublish';
 
 function buildStaffQuery(searchParams) {
   const query = {};
@@ -231,6 +232,17 @@ export async function POST(req) {
       message: `Player ${dbUser.username} — ${requestType === 'COIN_LOAD' ? 'load coins' : 'request credentials'}.`,
       type: requestType === 'COIN_LOAD' ? 'coin_load' : 'account_request',
       data: { requestId: res.insertedId.toString() },
+    });
+
+    publishAccountRequestCreated({
+      request: {
+        ...reqDoc,
+        _id: res.insertedId,
+        id: res.insertedId.toString(),
+        gameTitle: cleanGameTitle,
+      },
+      userEmail: dbUser.email,
+      userId: dbUser._id.toString(),
     });
 
     return NextResponse.json({
