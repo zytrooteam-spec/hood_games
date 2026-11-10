@@ -44,6 +44,7 @@ import {
   Smartphone,
   ChevronLeft,
   PanelRight,
+  Crown,
 } from 'lucide-react';
 import { compressImageFile } from '@/lib/imageCompress';
 import HoodChatMessageBubble from '@/components/chat/HoodChatMessageBubble';
@@ -54,6 +55,7 @@ import {
   sendDesktopNotification,
   requestDesktopNotificationPermission,
   AVAILABLE_TUNES,
+  setPlayerTouchTune,
 } from '@/lib/soundAlerts';
 import { hoodAlert, hoodConfirm, hoodPromptForm } from '@/lib/hoodAlert';
 import {
@@ -78,6 +80,7 @@ import {
 import { AccountRequestsDesk, CoinAllotmentDesk, AffiliatesDesk } from './HoodAdminDesks';
 import AdminImageField from './AdminImageField';
 import AdminDailySpinTab from './AdminDailySpinTab';
+import AdminVipTab from './AdminVipTab';
 import {
   HoodAdminModal,
   HoodAdminModalHeader,
@@ -150,6 +153,8 @@ export default function AdminDashboard({ user, onLogout }) {
   const selectedThreadUserRef = React.useRef(selectedThreadUser);
   const claimChatInboxAlertRef = React.useRef(createChatInboxDedup());
   const chatInboxRefreshTimerRef = React.useRef(null);
+  const processingDepositIdsRef = React.useRef(new Set());
+  const [processingDepositIds, setProcessingDepositIds] = useState(() => new Set());
 
   React.useEffect(() => {
     activeTabRef.current = activeTab;
@@ -174,7 +179,7 @@ export default function AdminDashboard({ user, onLogout }) {
       } catch {
         /* ignore */
       }
-    }, 400);
+    }, 180);
   }, []);
 
   const isPendingReq = (r) => String(r?.status || '').toLowerCase() === 'pending';
@@ -436,6 +441,11 @@ export default function AdminDashboard({ user, onLogout }) {
       if (setRes.success && setRes.settings) {
         diffSet(setSettings, setRes.settings);
         setEditingCards((prev) => (prev && prev.length > 0 ? prev : (setRes.settings.quickActionCards || [])));
+        const deskTune = setRes.settings.adminDefaultAlertTune;
+        if (deskTune && typeof window !== 'undefined' && !localStorage.getItem('hood_admin_alert_tune')) {
+          setAlertTune(deskTune);
+        }
+        if (setRes.settings.playerTouchTune) setPlayerTouchTune(setRes.settings.playerTouchTune);
       }
       if (chatRes.success && Array.isArray(chatRes.threads)) {
         setChatThreads((prev) =>
@@ -462,6 +472,22 @@ export default function AdminDashboard({ user, onLogout }) {
       if (!isSilent) setLoading(false);
     }
   };
+
+  const refreshFinanceQueue = React.useCallback(async () => {
+    try {
+      const [depRes, redRes] = await Promise.all([
+        fetch('/api/payments/deposit', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
+        fetch('/api/payments/withdraw', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
+      ]);
+      if (depRes.success && Array.isArray(depRes.deposits)) diffSet(setDeposits, depRes.deposits);
+      if (redRes.success && Array.isArray(redRes.redemptions)) diffSet(setRedemptions, redRes.redemptions);
+      const depList = depRes.success && Array.isArray(depRes.deposits) ? depRes.deposits : [];
+      const redList = redRes.success && Array.isArray(redRes.redemptions) ? redRes.redemptions : [];
+      syncAdminAlerts(depList, redList, accountRequests, chatThreads);
+    } catch {
+      /* ignore */
+    }
+  }, [accountRequests, chatThreads, syncAdminAlerts]);
 
   useEffect(() => {
     fetchAllData(false);
@@ -501,11 +527,11 @@ export default function AdminDashboard({ user, onLogout }) {
         payload.type === 'NEW_COIN_LOAD' ||
         payload.type === 'NEW_GAME_ID_REQUEST'
       ) {
-        fetchAllData(true);
+        refreshFinanceQueue();
       }
     };
 
-    const onDesk = () => fetchAllData(true);
+    const onDesk = () => refreshFinanceQueue();
     const onStaffEv = (e) => onStaffInstant(e.detail);
     window.addEventListener('hood-admin-desk-sync', onDesk);
     window.addEventListener('hood_staff_event_local', onStaffEv);
@@ -515,7 +541,7 @@ export default function AdminDashboard({ user, onLogout }) {
       window.removeEventListener('hood_staff_event_local', onStaffEv);
       if (chatInboxRefreshTimerRef.current) clearTimeout(chatInboxRefreshTimerRef.current);
     };
-  }, [playAdminChime, scheduleChatInboxRefresh]);
+  }, [playAdminChime, scheduleChatInboxRefresh, refreshFinanceQueue]);
 
   // Fetch individual chat conversation (supports silent sync)
   const loadConversation = async (userId, isSilent = false) => {
@@ -543,7 +569,7 @@ export default function AdminDashboard({ user, onLogout }) {
     if (!selectedThreadUser) return;
     const interval = setInterval(() => {
       loadConversation(selectedThreadUser, true);
-    }, 4000);
+    }, 1500);
     return () => clearInterval(interval);
   }, [selectedThreadUser]);
 
@@ -584,6 +610,19 @@ export default function AdminDashboard({ user, onLogout }) {
     setChatInput('');
     setChatAttachImage(null);
 
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticMsg = {
+      id: optimisticId,
+      _id: optimisticId,
+      text,
+      imageUrl,
+      senderRole: 'staff',
+      username: user?.username || 'Staff',
+      createdAt: new Date().toISOString(),
+      pending: true,
+    };
+    setThreadMessages((prev) => [...prev, optimisticMsg]);
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -592,14 +631,18 @@ export default function AdminDashboard({ user, onLogout }) {
       });
       const data = await res.json();
       if (data?.success) {
-        setThreadMessages((prev) => [...prev, data.message]);
+        setThreadMessages((prev) =>
+          prev.map((m) => (m.id === optimisticId || m._id === optimisticId ? data.message : m))
+        );
         playTune('coin');
       } else {
+        setThreadMessages((prev) => prev.filter((m) => m.id !== optimisticId && m._id !== optimisticId));
         hoodAlert.error(data.error || 'Failed to send reply', 'Reply failed');
         setChatInput(text);
         setChatAttachImage(imageUrl);
       }
     } catch (e) {
+      setThreadMessages((prev) => prev.filter((m) => m.id !== optimisticId && m._id !== optimisticId));
       console.error(e);
     }
   };
@@ -683,7 +726,19 @@ export default function AdminDashboard({ user, onLogout }) {
   };
 
   // Approve/Reject Deposit
+  const markDepositProcessing = (id, on) => {
+    const key = String(id);
+    const next = new Set(processingDepositIdsRef.current);
+    if (on) next.add(key);
+    else next.delete(key);
+    processingDepositIdsRef.current = next;
+    setProcessingDepositIds(new Set(next));
+  };
+
   const handleDepositAction = async (depositId, action) => {
+    const idKey = String(depositId);
+    if (processingDepositIdsRef.current.has(idKey)) return;
+
     let reason = null;
     if (action === 'reject') {
       const values = await hoodPromptForm({
@@ -704,21 +759,40 @@ export default function AdminDashboard({ user, onLogout }) {
       if (!values?.reason) return;
       reason = values.reason;
     }
+
+    markDepositProcessing(idKey, true);
+    const optimisticStatus = action === 'approve' ? 'approved' : 'rejected';
+    setDeposits((prev) =>
+      prev.map((d) => (String(d._id) === idKey ? { ...d, status: optimisticStatus } : d))
+    );
+
     try {
       const res = await fetch('/api/payments/deposit', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ depositId, action, rejectionReason: reason }),
+        body: JSON.stringify({ depositId: idKey, action, rejectionReason: reason }),
       });
       const data = await res.json();
       if (data.success) {
         hoodAlert.success(data.message, 'Deposit updated');
-        fetchAllData();
+        setDeposits((prev) =>
+          prev.map((d) => (String(d._id) === idKey ? { ...d, status: data.deposit?.status || optimisticStatus } : d))
+        );
+        refreshFinanceQueue();
       } else {
+        setDeposits((prev) =>
+          prev.map((d) => (String(d._id) === idKey ? { ...d, status: 'pending' } : d))
+        );
         hoodAlert.error(data.error, 'Deposit update failed');
+        refreshFinanceQueue();
       }
     } catch (e) {
+      setDeposits((prev) =>
+        prev.map((d) => (String(d._id) === idKey ? { ...d, status: 'pending' } : d))
+      );
       hoodAlert.error('Error updating deposit');
+    } finally {
+      markDepositProcessing(idKey, false);
     }
   };
 
@@ -888,6 +962,11 @@ export default function AdminDashboard({ user, onLogout }) {
       if (data.success) {
         hoodAlert.success('System settings and 5 Action Cards saved successfully!', 'Settings saved');
         setSettings(data.settings);
+        if (data.settings?.adminDefaultAlertTune) {
+          setAlertTune(data.settings.adminDefaultAlertTune);
+          localStorage.setItem('hood_admin_alert_tune', data.settings.adminDefaultAlertTune);
+        }
+        if (data.settings?.playerTouchTune) setPlayerTouchTune(data.settings.playerTouchTune);
       }
     } catch (e) {
       hoodAlert.error('Error saving settings');
@@ -1218,6 +1297,18 @@ export default function AdminDashboard({ user, onLogout }) {
             </button>
 
             <button
+              onClick={() => selectNavTab('vip_privilege')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'vip_privilege'
+                  ? 'btn-hood-green text-white shadow-md'
+                  : 'text-gray-300 hover:bg-[#0e2042]'
+              }`}
+            >
+              <Crown size={16} />
+              <span>VIP Privilege Page</span>
+            </button>
+
+            <button
               onClick={() => selectNavTab('settings')}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
                 activeTab === 'settings'
@@ -1369,6 +1460,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 promos: 'Promotions',
                 affiliates: 'Affiliates',
                 daily_spin: 'Daily Spin Wheel',
+                vip_privilege: 'VIP Privilege Page',
                 coins: 'Coins Allotment',
               }[activeTab] || activeTab}
             </h1>
@@ -1563,14 +1655,18 @@ export default function AdminDashboard({ user, onLogout }) {
                           {d.status === 'pending' && (
                             <>
                               <button
+                                type="button"
+                                disabled={processingDepositIds.has(String(d._id))}
                                 onClick={() => handleDepositAction(d._id, 'approve')}
-                                className="px-2.5 py-1 rounded bg-[#2cb64e] text-white font-bold text-[10px] hover:bg-emerald-600"
+                                className="px-2.5 py-1 rounded bg-[#2cb64e] text-white font-bold text-[10px] hover:bg-emerald-600 disabled:opacity-50 disabled:pointer-events-none"
                               >
-                                Approve
+                                {processingDepositIds.has(String(d._id)) ? '…' : 'Approve'}
                               </button>
                               <button
+                                type="button"
+                                disabled={processingDepositIds.has(String(d._id))}
                                 onClick={() => handleDepositAction(d._id, 'reject')}
-                                className="px-2.5 py-1 rounded bg-rose-600 text-white font-bold text-[10px] hover:bg-rose-700"
+                                className="px-2.5 py-1 rounded bg-rose-600 text-white font-bold text-[10px] hover:bg-rose-700 disabled:opacity-50 disabled:pointer-events-none"
                               >
                                 Reject
                               </button>
@@ -2136,6 +2232,19 @@ export default function AdminDashboard({ user, onLogout }) {
           </form>
         )}
 
+        {activeTab === 'vip_privilege' && (
+          <form onSubmit={handleSaveSettings} className="w-full max-w-5xl space-y-6">
+            <AdminVipTab settings={settings} setSettings={setSettings} />
+            <button
+              type="submit"
+              disabled={savingSettings}
+              className="btn-hood-green px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-wider"
+            >
+              {savingSettings ? 'Saving…' : 'Save VIP page to database'}
+            </button>
+          </form>
+        )}
+
         {/* ======================================================== */}
         {/* 5. CASHBACK & SYSTEM SETTINGS (REQUIREMENT #7)           */}
         {/* ======================================================== */}
@@ -2351,6 +2460,54 @@ export default function AdminDashboard({ user, onLogout }) {
                       }
                       className="hood-input w-full px-3 py-2 rounded-xl text-xs font-mono font-bold"
                     />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-[#09142a] border border-cyan-500/30 space-y-4 h-full sm:col-span-2">
+                <h4 className="text-sm font-black text-white">Sound preferences (site-wide)</h4>
+                <p className="text-[10px] text-gray-400 m-0">
+                  Desk alert = new deposit/chat on admin. Touch sound = player UI taps (buttons, nav).
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-300 block mb-1">Default admin desk alert</label>
+                    <select
+                      className="hood-input w-full py-2 px-2 rounded-lg text-xs font-bold"
+                      value={settings?.adminDefaultAlertTune || alertTune}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setSettings({ ...settings, adminDefaultAlertTune: v });
+                        setAlertTune(v);
+                        localStorage.setItem('hood_admin_alert_tune', v);
+                        playAdminChime(v);
+                      }}
+                    >
+                      {AVAILABLE_TUNES.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.icon} {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-300 block mb-1">Player touch / click sound</label>
+                    <select
+                      className="hood-input w-full py-2 px-2 rounded-lg text-xs font-bold"
+                      value={settings?.playerTouchTune || 'marimba'}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setSettings({ ...settings, playerTouchTune: v });
+                        setPlayerTouchTune(v);
+                        playTune('click');
+                      }}
+                    >
+                      {AVAILABLE_TUNES.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.icon} {t.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>

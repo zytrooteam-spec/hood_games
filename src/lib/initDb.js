@@ -3,6 +3,7 @@ import { getDb } from './mongodb';
 import { ROLES } from './auth';
 import { sanitizeGameTitle } from './fastDiff';
 import { getDefaultWheelConfig } from './wheelConfig';
+import { getDefaultVipConfig } from './vipConfig';
 
 let isDbInitialized = false;
 let initPromise = null;
@@ -202,6 +203,9 @@ export async function ensureDbInitialized() {
           restrictedStates: [],
           maintenanceMode: false,
           wheelConfig: getDefaultWheelConfig(),
+          vipConfig: getDefaultVipConfig(),
+          playerTouchTune: 'marimba',
+          adminDefaultAlertTune: 'chaching',
           createdAt: new Date(),
           updatedAt: new Date(),
         });
@@ -210,6 +214,10 @@ export async function ensureDbInitialized() {
       await settingsCol.updateOne(
         { key: 'general', wheelConfig: { $exists: false } },
         { $set: { wheelConfig: getDefaultWheelConfig(), updatedAt: new Date() } }
+      );
+      await settingsCol.updateOne(
+        { key: 'general', vipConfig: { $exists: false } },
+        { $set: { vipConfig: getDefaultVipConfig(), updatedAt: new Date() } }
       );
 
       // 3. Ensure Default Games Catalog

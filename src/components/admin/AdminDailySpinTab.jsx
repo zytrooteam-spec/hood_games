@@ -33,32 +33,52 @@ export default function AdminDailySpinTab({ settings, setSettings }) {
 
       <div className="p-5 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-3">
         <h4 className="text-sm font-black text-white m-0">Wheel segments ({slices.length})</h4>
+        <p className="text-[10px] text-gray-400 m-0">
+          <span className="text-cyan-300 font-bold">Wheel text</span> = any words ($1, Bad Luck, Try Again).{' '}
+          <span className="text-amber-300 font-bold">SC credit</span> = numbers only (0 when no payout).
+        </p>
+        <div className="hidden sm:grid grid-cols-12 gap-2 text-[9px] font-black uppercase text-gray-500 px-1">
+          <span className="col-span-1">#</span>
+          <span className="col-span-4">Wheel text</span>
+          <span className="col-span-2">SC credit</span>
+          <span className="col-span-3">No prize</span>
+        </div>
         <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
           {slices.map((sl, idx) => (
             <div key={idx} className="grid grid-cols-12 gap-2 items-center text-xs">
               <span className="col-span-1 font-mono text-gray-500">#{idx + 1}</span>
               <input
+                type="text"
+                inputMode="text"
                 className="hood-input col-span-4 py-2 px-2 rounded-lg font-bold"
-                value={sl.label || ''}
+                value={sl.label ?? ''}
                 onChange={(e) => {
                   const next = slices.map((s, i) => (i === idx ? { ...s, label: e.target.value } : s));
                   patchWheel({ slices: next });
                 }}
-                placeholder="Label"
+                placeholder="e.g. Bad Luck, Try Again, $2"
               />
               <input
                 type="number"
                 step="0.01"
                 className="hood-input col-span-2 py-2 px-2 rounded-lg font-mono"
-                value={sl.value ?? 0}
+                value={sl.isBadLuck ? 0 : sl.value ?? 0}
                 onChange={(e) => {
-                  const val = Number(e.target.value);
+                  const raw = e.target.value;
+                  const val = raw === '' ? 0 : Number(raw);
                   const next = slices.map((s, i) =>
-                    i === idx ? { ...s, value: val, isBadLuck: val <= 0 } : s
+                    i === idx
+                      ? {
+                          ...s,
+                          value: Number.isFinite(val) ? val : 0,
+                          isBadLuck: s.isBadLuck || val <= 0,
+                        }
+                      : s
                   );
                   patchWheel({ slices: next });
                 }}
-                title="SC prize (0 = bad luck)"
+                title="SC credited on win (0 = no SC)"
+                disabled={Boolean(sl.isBadLuck)}
               />
               <label className="col-span-3 flex items-center gap-1 text-gray-400">
                 <input

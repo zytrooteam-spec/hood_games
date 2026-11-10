@@ -356,9 +356,40 @@ const TUNE_ALIASES = {
   bell: 'bell',
 };
 
+const TOUCH_TUNE_KEY = 'hood_player_touch_tune';
+
+export function setPlayerTouchTune(tuneId) {
+  if (typeof window === 'undefined') return;
+  const id = String(tuneId || '').trim();
+  if (id) {
+    try {
+      localStorage.setItem(TOUCH_TUNE_KEY, id);
+    } catch {}
+    window.__hoodPlayerTouchTune = id;
+  }
+}
+
+export function getPlayerTouchTune() {
+  if (typeof window === 'undefined') return 'marimba';
+  if (window.__hoodPlayerTouchTune) return window.__hoodPlayerTouchTune;
+  try {
+    const stored = localStorage.getItem(TOUCH_TUNE_KEY);
+    if (stored) return stored;
+  } catch {}
+  return 'marimba';
+}
+
+/** UI tap / navigation feedback — uses admin-configured touch tune when set */
+export function playPlayerTouch(volume = 0.35) {
+  playTune(getPlayerTouchTune(), volume);
+}
+
 export function playTune(tuneId = 'chaching', volume = 0.7) {
   if (typeof window === 'undefined') return;
-  const resolvedTune = TUNE_ALIASES[tuneId] || tuneId || 'chaching';
+  let resolvedTune = TUNE_ALIASES[tuneId] || tuneId || 'chaching';
+  if (tuneId === 'click') {
+    resolvedTune = getPlayerTouchTune();
+  }
   const masterVol = Math.max(0.01, Math.min(1, volume));
 
   try {

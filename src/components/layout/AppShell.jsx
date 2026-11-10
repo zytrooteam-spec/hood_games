@@ -11,9 +11,8 @@ import HoodDailySpinModal from '@/components/games/HoodDailySpinModal';
 import HoodAppModal from '@/components/modals/HoodAppModal';
 import HoodNotificationsModal from '@/components/modals/HoodNotificationsModal';
 import FreeplayTaskModal from '@/components/modals/FreeplayTaskModal';
-import { unlockAudioContext } from '@/lib/soundAlerts';
+import { unlockAudioContext, playTune, setPlayerTouchTune } from '@/lib/soundAlerts';
 import { Headphones } from 'lucide-react';
-import { playTune } from '@/lib/soundAlerts';
 import { diffSet, areEqual } from '@/lib/fastDiff';
 import { broadcastPlayerSession, subscribePlayerSession } from '@/lib/sessionClient';
 import { normalizePlayerUser, fetchPlayerSession } from '@/lib/playerSession';
@@ -88,7 +87,12 @@ export default function AppShell({ children }) {
     const loadSiteSettings = () => {
       fetch('/api/admin/settings', { cache: 'no-store' })
         .then((r) => r.json())
-        .then((d) => d?.success && d.settings && setSiteSettings(d.settings))
+        .then((d) => {
+          if (d?.success && d.settings) {
+            setSiteSettings(d.settings);
+            if (d.settings.playerTouchTune) setPlayerTouchTune(d.settings.playerTouchTune);
+          }
+        })
         .catch(() => {});
     };
     loadSiteSettings();

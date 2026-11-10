@@ -139,37 +139,43 @@ export async function PUT(req) {
     }
 
     const db = await getDb();
-    const deposit = await db.collection('deposits').findOne(toIdQuery(depositId));
+    const pendingFilter = { ...toIdQuery(depositId), status: 'pending' };
+    const deposit = await db.collection('deposits').findOne(pendingFilter);
     if (!deposit) {
-      return NextResponse.json({ success: false, error: 'Deposit not found' }, { status: 404 });
-    }
-
-    if (deposit.status !== 'pending') {
-      return NextResponse.json({ success: false, error: `Deposit is already ${deposit.status}` }, { status: 400 });
+      const existing = await db.collection('deposits').findOne(toIdQuery(depositId));
+      if (!existing) {
+        return NextResponse.json({ success: false, error: 'Deposit not found' }, { status: 404 });
+      }
+      return NextResponse.json(
+        { success: false, error: `Deposit is already ${existing.status}` },
+        { status: 409 }
+      );
     }
 
     if (action === 'approve') {
       const creditAmount = Number(deposit.totalExpectedSC || deposit.amount);
+      const stamp = new Date();
 
-      // Credit player balance
-      await db.collection('users').updateOne(
-        toIdQuery(deposit.userId),
-        { $inc: { balanceSC: creditAmount, availableSpins: 2 } }
-      );
+      const lock = await db.collection('deposits').updateOne(pendingFilter, {
+        $set: {
+          status: 'approved',
+          approvedBy: user.username,
+          approvedAt: stamp,
+          updatedAt: stamp,
+        },
+      });
 
-      await db.collection('deposits').updateOne(
-        toIdQuery(depositId),
-        {
-          $set: {
-            status: 'approved',
-            approvedBy: user.username,
-            approvedAt: new Date(),
-            updatedAt: new Date(),
-          },
-        }
-      );
+      if (lock.matchedCount === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Deposit was already processed by another staff member' },
+          { status: 409 }
+        );
+      }
 
-      // Record in ledger
+      await db.collection('users').updateOne(toIdQuery(deposit.userId), {
+        $inc: { balanceSC: creditAmount, availableSpins: 2 },
+      });
+
       await db.collection('ledger').insertOne({
         userId: deposit.userId,
         username: deposit.username,
@@ -178,10 +184,9 @@ export async function PUT(req) {
         currency: 'SC',
         description: `Deposit via ${deposit.method} (Includes +$${deposit.bonusAmount} match bonus)`,
         referenceId: depositId,
-        createdAt: new Date(),
+        createdAt: stamp,
       });
 
-      // Notify player
       notifyPlayer({
         userId: deposit.userId,
         title: '💰 Deposit Approved & Credited!',
@@ -189,20 +194,39 @@ export async function PUT(req) {
         type: 'deposit_approved',
       });
 
-      return NextResponse.json({ success: true, message: 'Deposit approved and balance credited!' });
+      publishFinanceDeposit({
+        action: 'updated',
+        status: 'approved',
+        depositId: String(depositId),
+        amount: deposit.amount,
+        username: deposit.username,
+        userEmail: deposit.userEmail,
+        userId: deposit.userId,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Deposit approved and balance credited!',
+        deposit: { _id: depositId, status: 'approved' },
+      });
     } else if (action === 'reject') {
-      await db.collection('deposits').updateOne(
-        toIdQuery(depositId),
-        {
-          $set: {
-            status: 'rejected',
-            rejectionReason: rejectionReason || 'Payment could not be verified on our records.',
-            rejectedBy: user.username,
-            rejectedAt: new Date(),
-            updatedAt: new Date(),
-          },
-        }
-      );
+      const stamp = new Date();
+      const lock = await db.collection('deposits').updateOne(pendingFilter, {
+        $set: {
+          status: 'rejected',
+          rejectionReason: rejectionReason || 'Payment could not be verified on our records.',
+          rejectedBy: user.username,
+          rejectedAt: stamp,
+          updatedAt: stamp,
+        },
+      });
+
+      if (lock.matchedCount === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Deposit was already processed by another staff member' },
+          { status: 409 }
+        );
+      }
 
       notifyPlayer({
         userId: deposit.userId,
@@ -211,7 +235,21 @@ export async function PUT(req) {
         type: 'deposit_rejected',
       });
 
-      return NextResponse.json({ success: true, message: 'Deposit rejected' });
+      publishFinanceDeposit({
+        action: 'updated',
+        status: 'rejected',
+        depositId: String(depositId),
+        amount: deposit.amount,
+        username: deposit.username,
+        userEmail: deposit.userEmail,
+        userId: deposit.userId,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Deposit rejected',
+        deposit: { _id: depositId, status: 'rejected' },
+      });
     }
 
     return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });

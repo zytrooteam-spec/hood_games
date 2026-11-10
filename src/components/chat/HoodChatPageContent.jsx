@@ -63,7 +63,7 @@ export default function HoodChatPageContent({ user, onOpenAuth }) {
   useEffect(() => {
     fetchMessages();
     fetchRef.current = fetchMessages;
-    const interval = setInterval(fetchMessages, 3000);
+    const interval = setInterval(fetchMessages, 1500);
     return () => clearInterval(interval);
   }, [user?.email, user?.id]);
 
