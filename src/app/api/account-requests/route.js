@@ -8,6 +8,18 @@ import { mapAccountRequest } from '@/lib/mapAccountRequest';
 import { resolvePlayerDbUser } from '@/lib/resolvePlayerDbUser';
 import { getFreeplayAmountSC } from '@/lib/freeplayConfig.server';
 import { publishAccountRequestCreated } from '@/lib/realtimePublish';
+import { cache } from '@/lib/cache';
+import {
+  invalidateAccountRequestsCache,
+  invalidateAuthCache,
+  invalidateGameAccountsCache,
+} from '@/lib/authCache';
+
+function bustStaffRequestCaches({ userEmail, userId } = {}) {
+  invalidateAccountRequestsCache();
+  if (userEmail) invalidateGameAccountsCache(userEmail);
+  if (userId) invalidateAuthCache(String(userId));
+}
 
 function buildStaffQuery(searchParams) {
   const query = {};
@@ -68,6 +80,14 @@ export async function GET(req) {
 
     let requests;
     if (isStaff) {
+      const statusKey = searchParams.get('status') || 'all';
+      const typeKey = searchParams.get('type') || 'all';
+      const emailQ = searchParams.get('email');
+      const cacheKey = `hood_account_requests_${statusKey}_${typeKey}`;
+      if (!emailQ) {
+        const cached = cache.get(cacheKey);
+        if (cached) return NextResponse.json(cached);
+      }
       const query = buildStaffQuery(searchParams);
       requests = await db.collection('accountRequests').find(query).sort({ createdAt: -1 }).limit(250).toArray();
     } else {
@@ -85,11 +105,17 @@ export async function GET(req) {
     }
 
     const mapped = requests.map((r) => mapAccountRequest(r));
-    return NextResponse.json({
+    const payload = {
       success: true,
       requests: mapped,
       accountRequests: mapped,
-    });
+    };
+    if (isStaff && !searchParams.get('email')) {
+      const statusKey = searchParams.get('status') || 'all';
+      const typeKey = searchParams.get('type') || 'all';
+      cache.set(`hood_account_requests_${statusKey}_${typeKey}`, payload, 8);
+    }
+    return NextResponse.json(payload);
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
@@ -245,6 +271,9 @@ export async function POST(req) {
       userId: dbUser._id.toString(),
     });
 
+    invalidateAccountRequestsCache();
+    invalidateAuthCache(dbUser._id.toString());
+
     return NextResponse.json({
       success: true,
       requestId: res.insertedId.toString(),
@@ -366,6 +395,7 @@ export async function PUT(req) {
         type: 'freeplay_approved',
       });
 
+      bustStaffRequestCaches({ userEmail: reqDoc.userEmail, userId: reqDoc.userId });
       return NextResponse.json({ success: true, message: `Credited $${amount.toFixed(2)} SC freeplay to player wallet.` });
     }
 
@@ -414,6 +444,7 @@ export async function PUT(req) {
         message: `$${finalAmt.toFixed(2)} SC transferred into your ${reqDoc.gameTitle} account.`,
         type: 'coin_load_approved',
       });
+      bustStaffRequestCaches({ userEmail: reqDoc.userEmail, userId: reqDoc.userId });
       return NextResponse.json({
         success: true,
         message: `Coin load for ${reqDoc.gameTitle} approved ($${finalAmt.toFixed(2)} SC).`,
@@ -527,6 +558,7 @@ export async function PUT(req) {
           message: `$${queuedLoadAmount.toFixed(2)} SC waiting in Coins Allotment for ${reqDoc.gameTitle}`,
           type: 'coin_load',
         });
+        bustStaffRequestCaches({ userEmail: reqDoc.userEmail, userId: reqDoc.userId });
         return NextResponse.json({
           success: true,
           message: 'Game credentials issued successfully!',
@@ -536,6 +568,7 @@ export async function PUT(req) {
         });
       }
 
+      bustStaffRequestCaches({ userEmail: reqDoc.userEmail, userId: reqDoc.userId });
       return NextResponse.json({ success: true, message: 'Game credentials issued successfully!' });
     } else if (action === 'reject') {
       const isCoinLoadReject =
@@ -591,6 +624,7 @@ export async function PUT(req) {
         type: 'account_rejected',
       });
 
+      bustStaffRequestCaches({ userEmail: reqDoc.userEmail, userId: reqDoc.userId });
       return NextResponse.json({ success: true, message: 'Request rejected' });
     }
 
@@ -614,8 +648,10 @@ export async function DELETE(req) {
     const db = await getDb();
     const res = await db.collection('accountRequests').deleteOne(toIdQuery(id));
     if (res.deletedCount === 0) {
+      invalidateAccountRequestsCache();
       return NextResponse.json({ success: true, alreadyDeleted: true, message: 'Already removed' });
     }
+    invalidateAccountRequestsCache();
     return NextResponse.json({ success: true, message: 'Request dismissed' });
   } catch (err) {
     return NextResponse.json({ success: false, message: err.message }, { status: 500 });

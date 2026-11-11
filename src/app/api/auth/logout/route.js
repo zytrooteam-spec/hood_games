@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
+import { verifyToken } from '@/lib/auth';
+import { invalidateAuthCache } from '@/lib/authCache';
 
 export const runtime = 'nodejs';
 
@@ -20,6 +22,18 @@ export async function POST(req) {
 
   const referer = req.headers.get('referer') || '';
   const isAdminLogout = Boolean(body.isAdminLogout || referer.includes('/admin'));
+
+  try {
+    const cookieHeader = req.headers.get('cookie') || '';
+    const pick =
+      (isAdminLogout ? cookieHeader.match(/admin_session=([^;]+)/) : cookieHeader.match(/players_session=([^;]+)/)) ||
+      cookieHeader.match(/token=([^;]+)/);
+    const raw = pick?.[1];
+    if (raw) {
+      const decoded = verifyToken(decodeURIComponent(raw));
+      if (decoded?.userId) invalidateAuthCache(decoded.userId);
+    }
+  } catch {}
 
   const response = NextResponse.json({ success: true, message: 'Logged out successfully' });
   const clear = clearCookieOpts(req);

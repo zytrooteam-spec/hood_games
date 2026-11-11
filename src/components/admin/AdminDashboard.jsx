@@ -89,6 +89,7 @@ import {
   HoodAdminModalActions,
   HoodAdminModalButton,
 } from './HoodAdminModal';
+import Player360ProfileModal from './Player360ProfileModal';
 
 export default function AdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -122,6 +123,9 @@ export default function AdminDashboard({ user, onLogout }) {
   const [viewingProof, setViewingProof] = useState(null);
   // Player editing modal states
   const [selectedPlayerToEdit, setSelectedPlayerToEdit] = useState(null);
+  const [player360Id, setPlayer360Id] = useState(null);
+  const [playerSearch, setPlayerSearch] = useState('');
+  const [usersListLoading, setUsersListLoading] = useState(false);
   const [editBalanceSC, setEditBalanceSC] = useState('');
   const [editBalanceGC, setEditBalanceGC] = useState('');
   const [editStatus, setEditStatus] = useState('active');
@@ -439,7 +443,6 @@ export default function AdminDashboard({ user, onLogout }) {
         })
       );
     }
-    if (Array.isArray(data.users)) diffSet(setUsersList, data.users);
     if (Array.isArray(data.methods)) diffSet(setGateways, data.methods);
 
     const depList = Array.isArray(data.deposits) ? data.deposits : [];
@@ -547,6 +550,26 @@ export default function AdminDashboard({ user, onLogout }) {
       loadCashbackReport();
     }
   }, [activeTab, cashbackReport, loadCashbackReport]);
+
+  const loadPlayerDirectory = React.useCallback(async (search = '') => {
+    setUsersListLoading(true);
+    try {
+      const qs = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+      const res = await fetch(`/api/users${qs}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users)) diffSet(setUsersList, data.users);
+    } catch {
+      /* ignore */
+    } finally {
+      setUsersListLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'users') return;
+    const t = setTimeout(() => loadPlayerDirectory(playerSearch), playerSearch ? 350 : 0);
+    return () => clearTimeout(t);
+  }, [activeTab, playerSearch, loadPlayerDirectory]);
 
   useEffect(() => {
     const bumpCtx = { activeTabRef, selectedThreadUserRef };
@@ -1962,7 +1985,14 @@ export default function AdminDashboard({ user, onLogout }) {
                     )}
                   </div>
                   {selectedThreadUser && threadPlayerDetail && (
-                    <div className="flex flex-wrap gap-2 text-[10px] w-full sm:w-auto">
+                    <div className="flex flex-wrap gap-2 text-[10px] w-full sm:w-auto items-center">
+                      <button
+                        type="button"
+                        onClick={() => setPlayer360Id(String(threadPlayerDetail.id || selectedThreadUser))}
+                        className="px-2 py-1 rounded-lg border border-[#2cb64e]/45 text-[#2cb64e] font-black uppercase tracking-wide hover:bg-[#2cb64e]/10"
+                      >
+                        360° Profile
+                      </button>
                       <span className="px-2 py-1 rounded-lg bg-[#070d1e] border border-[#1a3363] text-gray-300 font-mono font-bold">
                         SC ${Number(threadPlayerDetail.balanceSC ?? 0).toFixed(2)}
                       </span>
@@ -2616,7 +2646,22 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {activeTab === 'users' && (
           <div className="space-y-4 pt-4 sm:pt-6">
-            <h3 className="text-base font-black text-white">Registered Players ({usersList.length})</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h3 className="text-base font-black text-white">
+                Registered Players ({usersList.length})
+                {usersListLoading ? <span className="text-gray-500 text-xs ml-2">Loading…</span> : null}
+              </h3>
+              <p className="text-[10px] text-gray-500 max-w-md">
+                Same as Player Paradise: open <strong className="text-[#2cb64e]">360° Profile</strong> for deposits, cashouts, game IDs, referrals &amp; ledger — loaded only when you click (fast desk).
+              </p>
+              <input
+                type="search"
+                value={playerSearch}
+                onChange={(e) => setPlayerSearch(e.target.value)}
+                placeholder="Search username, email, referral…"
+                className="hood-input w-full sm:w-72 text-sm"
+              />
+            </div>
             <div className="-mx-3 sm:mx-0 overflow-x-auto rounded-2xl border border-[#1a3363] bg-[#09142a] touch-pan-x">
               <table className="w-full text-left text-xs min-w-[650px]">
                 <thead className="bg-[#0c1b38] text-gray-300 border-b border-[#1a3363]">
@@ -2651,7 +2696,15 @@ export default function AdminDashboard({ user, onLogout }) {
                             ? `${String(u.boundDevices[0]).slice(0, 14)}…`
                             : '—'}
                       </td>
-                      <td className="p-3 text-right">
+                      <td className="p-3 text-right space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => setPlayer360Id(String(u._id || u.id))}
+                          className="px-3 py-1 rounded text-[10px] font-bold inline-flex items-center gap-1 border border-[#2cb64e]/50 text-[#2cb64e] hover:bg-[#2cb64e]/10"
+                        >
+                          <Eye size={11} />
+                          <span>360° Profile</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => {
@@ -2664,7 +2717,7 @@ export default function AdminDashboard({ user, onLogout }) {
                           className="btn-hood-green px-3 py-1 rounded text-[10px] font-bold inline-flex items-center gap-1 shadow-sm"
                         >
                           <Edit2 size={11} />
-                          <span className="hidden sm:inline">Adjust Balance</span>
+                          <span className="hidden sm:inline">Quick edit</span>
                           <span className="sm:hidden">Edit</span>
                         </button>
                       </td>
@@ -2825,6 +2878,22 @@ export default function AdminDashboard({ user, onLogout }) {
             </HoodAdminModalButton>
           </HoodAdminModalActions>
         </HoodAdminModal>
+
+        {player360Id && (
+          <Player360ProfileModal
+            userId={player360Id}
+            onClose={() => setPlayer360Id(null)}
+            onUserUpdated={() => {
+              loadPlayerDirectory(playerSearch);
+              if (selectedThreadUser) loadConversation(selectedThreadUser, true);
+            }}
+            onOpenChat={(p) => {
+              if (!p?.id) return;
+              setActiveTab('chat');
+              loadConversation(String(p.id), false);
+            }}
+          />
+        )}
       </main>
     </div>
   );

@@ -7,6 +7,7 @@ import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
 import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
 import { publishFinanceDeposit } from '@/lib/realtimePublish';
 import { listStaffDeposits } from '@/lib/staffDeposits.server';
+import { invalidateAuthCache, invalidateGameAccountsCache } from '@/lib/authCache';
 
 export async function GET(req) {
   try {
@@ -204,6 +205,9 @@ export async function PUT(req) {
         userEmail: deposit.userEmail,
         userId: deposit.userId,
       });
+
+      if (deposit.userId) invalidateAuthCache(String(deposit.userId));
+      if (deposit.userEmail) invalidateGameAccountsCache(deposit.userEmail);
 
       return NextResponse.json({
         success: true,

@@ -11,6 +11,7 @@ import {
   deviceBindingUpdateFields,
 } from '@/lib/deviceBinding';
 import { toIdQuery } from '@/lib/mongodb';
+import { invalidateAuthCache } from '@/lib/authCache';
 
 export const runtime = 'nodejs';
 
@@ -83,11 +84,16 @@ export async function POST(req) {
         $or: [{ username: new RegExp(`^${activeUser}$`, 'i') }, { email: activeEmail }],
       });
 
+      const staffId = staffUser?._id?.toString() || `${activeUser}_id`;
+      invalidateAuthCache(staffId);
       const token = signToken({
-        userId: staffUser?._id?.toString() || `${activeUser}_id`,
+        userId: staffId,
         username: activeUser,
         email: activeEmail,
         role: activeRole,
+        balanceSC: staffUser?.balanceSC ?? 99999,
+        balanceGC: staffUser?.balanceGC ?? 1000000,
+        status: 'active',
       });
 
       const response = NextResponse.json({
@@ -163,11 +169,16 @@ export async function POST(req) {
       });
     }
 
+    const uid = user._id.toString();
+    invalidateAuthCache(uid);
     const token = signToken({
-      userId: user._id.toString(),
+      userId: uid,
       username: user.username,
       email: user.email,
       role: user.role || 'player',
+      balanceSC: Number(user.balanceSC || 0),
+      balanceGC: Number(user.balanceGC || 0),
+      status: user.status || 'active',
     });
 
     const response = NextResponse.json({

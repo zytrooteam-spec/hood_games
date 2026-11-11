@@ -64,6 +64,26 @@ function readCookie(req, name) {
   return parsed[name] || null;
 }
 
+/** JWT-only session (Player Paradise pattern) — no Mongo round-trip per API call. */
+export function userFromDecoded(decoded) {
+  if (!decoded || !decoded.userId) return null;
+  const uid = String(decoded.userId);
+  return {
+    _id: uid,
+    id: uid,
+    userId: uid,
+    username: decoded.username || '',
+    email: decoded.email || '',
+    role: decoded.role || 'player',
+    balanceSC: Number(decoded.balanceSC ?? 0),
+    balanceGC: Number(decoded.balanceGC ?? 0),
+    frozenBalance: Number(decoded.frozenBalance ?? 0),
+    availableSpins: Number(decoded.availableSpins ?? 0),
+    isVerified: Boolean(decoded.isVerified),
+    status: decoded.status || 'active',
+  };
+}
+
 export async function loadUserFromToken(decoded) {
   if (!decoded || !decoded.userId) return null;
 
@@ -184,7 +204,7 @@ export async function getSessionUser(req, preferredType = 'auto') {
 
     const decoded = verifyToken(token);
     if (!decoded) return null;
-    const user = await loadUserFromToken(decoded);
+    const user = userFromDecoded(decoded);
     if (!user) return null;
 
     if (preferredType === 'player' && isStaffRole(user.role)) {

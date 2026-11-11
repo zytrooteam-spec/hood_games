@@ -27,7 +27,6 @@ export async function GET(req) {
       requests,
       settings,
       threads,
-      users,
       methods,
     ] = await Promise.all([
       computeAdminStats(db),
@@ -46,20 +45,6 @@ export async function GET(req) {
         .toArray(),
       db.collection('system_settings').findOne({ key: 'general' }),
       buildStaffChatThreads(db),
-      db
-        .collection('users')
-        .find(
-          {},
-          {
-            projection: {
-              password: 0,
-              boundDevices: 0,
-            },
-          }
-        )
-        .sort({ createdAt: -1 })
-        .limit(500)
-        .toArray(),
       db.collection('payment_methods').find({}).sort({ name: 1 }).toArray(),
     ]);
 
@@ -78,11 +63,6 @@ export async function GET(req) {
         accountRequests: mappedRequests,
         settings: settings || null,
         threads,
-        users: users.map((u) => ({
-          ...u,
-          _id: u._id?.toString?.() || u._id,
-          id: u._id?.toString?.() || u._id,
-        })),
         methods,
       },
       {

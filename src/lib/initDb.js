@@ -460,10 +460,12 @@ async function runHeavyDbSeed() {
 
 }
 
-/** Legacy entry — no longer blocks on seeding (runs in background after ready). */
+/** Player Paradise pattern: first call warms DB; later calls are instant. */
 export async function ensureDbInitialized() {
+  if (global._hoodDbInitialized) return true;
   const ready = await ensureDbReady();
   if (!ready) return false;
   scheduleHeavyDbSeed();
+  global._hoodDbInitialized = true;
   return true;
 }

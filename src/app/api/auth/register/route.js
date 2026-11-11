@@ -4,6 +4,7 @@ import { getDb } from '@/lib/mongodb';
 import { signToken, ROLES } from '@/lib/auth';
 import { sendEmail, getWelcomeEmailTemplate } from '@/lib/email';
 import { ensureDbReady } from '@/lib/initDb';
+import { invalidateAuthCache } from '@/lib/authCache';
 import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 import { getDeviceIdFromRequest } from '@/lib/deviceServer';
 import { findPlayerBoundToDevice, deviceBindingErrorPayload } from '@/lib/deviceBinding';
@@ -166,12 +167,16 @@ export async function POST(req) {
       html: getWelcomeEmailTemplate(cleanUser),
     }).catch(() => {});
 
+    invalidateAuthCache(userId);
     const token = signToken({
       userId,
       username: cleanUser,
       email: cleanEmail,
       role: ROLES.PLAYER,
       sessionVersion,
+      balanceSC: 0,
+      balanceGC: 10000,
+      status: 'active',
     });
 
     const response = NextResponse.json({

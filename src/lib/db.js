@@ -315,7 +315,10 @@ export async function getDb() {
     }
     const connectedClient = await clientPromise;
     const dbName = process.env.MONGODB_DB_NAME || 'hood_games';
-    return connectedClient.db(dbName);
+    if (!global._hoodCachedDb) {
+      global._hoodCachedDb = connectedClient.db(dbName);
+    }
+    return global._hoodCachedDb;
   } catch (err) {
     if (!allowJsonFallback()) {
       console.error('MongoDB connection failed (production):', err.message);
