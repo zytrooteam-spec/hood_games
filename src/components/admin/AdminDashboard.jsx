@@ -90,12 +90,17 @@ import {
   HoodAdminModalButton,
 } from './HoodAdminModal';
 import Player360ProfileModal from './Player360ProfileModal';
+import { HOOD_ADMIN_BOOTSTRAP, readJson, writeJson } from '@/lib/clientCache';
 
 export default function AdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const cached = readJson(HOOD_ADMIN_BOOTSTRAP);
+    return !cached?.data?.success;
+  });
 
   // Data states
   const [deposits, setDeposits] = useState([]);
@@ -472,6 +477,7 @@ export default function AdminDashboard({ user, onLogout }) {
       const res = await fetch('/api/admin/bootstrap', { credentials: 'include', cache: 'no-store' });
       const data = await res.json();
       applyBootstrapPayload(data);
+      if (data?.success) writeJson(HOOD_ADMIN_BOOTSTRAP, { data, t: Date.now() });
     } catch (err) {
       console.error(err);
     } finally {
@@ -531,7 +537,9 @@ export default function AdminDashboard({ user, onLogout }) {
   }, [refreshDeskQueues]);
 
   useEffect(() => {
-    fetchAllData(false);
+    const cached = readJson(HOOD_ADMIN_BOOTSTRAP);
+    if (cached?.data?.success) applyBootstrapPayload(cached.data);
+    fetchAllData(Boolean(cached?.data?.success));
     const onRefresh = () => scheduleLightAdminSync();
     window.addEventListener('hood-admin-refresh', onRefresh);
     // SSE = instant; light poll backup only (avoids hammering VPS)
@@ -1771,8 +1779,10 @@ export default function AdminDashboard({ user, onLogout }) {
                       <tr key={r._id} className="hover:bg-[#0e2042]/50">
                         <td className="p-3 font-bold text-white">{r.username}</td>
                         <td className="p-3 font-mono font-black text-blue-300">${r.amount} SC</td>
-                        <td className="p-3 text-gray-300">{r.method}</td>
-                        <td className="p-3 font-mono text-white select-all">{r.payoutAddress}</td>
+                        <td className="p-3 text-gray-300">{r.payoutMethod || r.method}</td>
+                        <td className="p-3 font-mono text-white select-all">
+                          {r.destinationTag || r.payoutAddress}
+                        </td>
                         <td className="p-3">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
@@ -1787,7 +1797,9 @@ export default function AdminDashboard({ user, onLogout }) {
                           </span>
                         </td>
                         <td className="p-3 text-right space-x-1">
-                          {r.status === 'pending' && (
+                          {r.status === 'pending' &&
+                            (r.stage === 'finance_payout' || !r.stage) &&
+                            r.status !== 'pending_coin' && (
                             <>
                               <button
                                 onClick={() => handleRedemptionAction(r._id, 'approve')}

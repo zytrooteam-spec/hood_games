@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import AppShell, { useAppShell } from '@/components/layout/AppShell';
+import { useAppShell } from '@/components/layout/AppShell';
 import { Gift, Sparkles, Trophy, Clock, Wallet, ArrowRight, ShieldCheck } from 'lucide-react';
 import { WHEEL_SLICES } from '@/lib/wheelConstants';
 import { playTune } from '@/lib/soundAlerts';
@@ -297,9 +297,5 @@ function WheelSpinPageContent() {
 }
 
 export default function WheelSpinPage() {
-  return (
-    <AppShell>
-      <WheelSpinPageContent />
-    </AppShell>
-  );
+  return <WheelSpinPageContent />;
 }

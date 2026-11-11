@@ -201,8 +201,10 @@ export default function LoadCoinsModal({ isOpen, onClose, game, user, userAccoun
                   );
                 })}
               </div>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#2cb64e] font-black">$</span>
+              <div className="hood-input-prefix rounded-xl font-mono font-bold">
+                <span className="hood-input-prefix__symbol" aria-hidden>
+                  $
+                </span>
                 <input
                   type="number"
                   step="0.01"
@@ -212,7 +214,7 @@ export default function LoadCoinsModal({ isOpen, onClose, game, user, userAccoun
                   onChange={(e) =>
                     setLoadAmount(Math.min(availableBalance, Math.max(0, Number(e.target.value))))
                   }
-                  className="hood-input w-full pl-8 font-mono font-bold"
+                  className="font-bold"
                   required
                 />
               </div>

@@ -2374,8 +2374,10 @@ export default function CoinOperationsDesk({
               tone="accent"
               required
             >
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#2cb64e] font-black text-sm">$</span>
+              <div className="hood-input-prefix rounded-xl font-mono font-bold">
+                <span className="hood-input-prefix__symbol" aria-hidden>
+                  $
+                </span>
                 <input
                   type="number"
                   step="0.01"
@@ -2383,7 +2385,7 @@ export default function CoinOperationsDesk({
                   value={approveLoadModal.transferAmount}
                   onChange={(e) => setApproveLoadModal({ ...approveLoadModal, transferAmount: e.target.value })}
                   required
-                  className="hood-input w-full pl-8 font-mono font-bold"
+                  className="font-bold"
                 />
               </div>
               <HoodAdminModalHint>Adjust if needed — this exact amount is deducted from the player wallet.</HoodAdminModalHint>

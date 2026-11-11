@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import AppShell, { useAppShell } from '@/components/layout/AppShell';
+import { useAppShell } from '@/components/layout/AppShell';
 import { getDefaultVipConfig, resolveVipConfig } from '@/lib/vipConfig';
 import {
   Crown,
@@ -236,9 +236,5 @@ function VipPageContent() {
 }
 
 export default function VipPage() {
-  return (
-    <AppShell>
-      <VipPageContent />
-    </AppShell>
-  );
+  return <VipPageContent />;
 }

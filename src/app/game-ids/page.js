@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import AppShell, { useAppShell } from '@/components/layout/AppShell';
+import { useAppShell } from '@/components/layout/AppShell';
 import { RequireGuestOrUser } from '@/components/auth/SessionGate';
 import GameRequestModal from '@/components/modals/GameRequestModal';
 import LoadCoinsModal from '@/components/modals/LoadCoinsModal';
@@ -317,9 +317,5 @@ function GameIdsContent() {
 }
 
 export default function GameIdsPage() {
-  return (
-    <AppShell>
-      <GameIdsContent />
-    </AppShell>
-  );
+  return <GameIdsContent />;
 }

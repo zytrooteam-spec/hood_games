@@ -141,6 +141,48 @@ h6,
   box-shadow: 0 0 0 3px rgba(44, 182, 78, 0.25);
 }
 
+/* Dollar / prefix + amount — flex row (modal field padding was breaking absolute $) */
+.hood-input-prefix {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  background: rgba(9, 20, 42, 0.85);
+  border: 1px solid rgba(26, 51, 99, 0.8);
+  color: #ffffff;
+  transition: all 0.2s ease;
+}
+.hood-input-prefix:focus-within {
+  outline: none;
+  border-color: #2cb64e;
+  box-shadow: 0 0 0 3px rgba(44, 182, 78, 0.25);
+}
+.hood-input-prefix__symbol {
+  flex-shrink: 0;
+  color: #2cb64e;
+  font-weight: 900;
+  line-height: 1;
+  user-select: none;
+}
+.hood-input-prefix input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font-size: inherit;
+  line-height: 1.25;
+  outline: none;
+  appearance: textfield;
+}
+.hood-input-prefix input::-webkit-outer-spin-button,
+.hood-input-prefix input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 /* Animations */
 @keyframes pulse-subtle {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -313,4 +355,10 @@ h6,
 .hood-modal-field select.hood-input {
   padding: 0.65rem 0.9rem;
   font-size: 0.8125rem;
+}
+
+.hood-modal-field .hood-input-prefix {
+  padding: 0.65rem 0.9rem;
+  font-size: 0.8125rem;
+  border-radius: 0.75rem;
 }

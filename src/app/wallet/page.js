@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import AppShell from '@/components/layout/AppShell';
+import { useAppShell } from '@/components/layout/AppShell';
 import {
   Wallet,
   ArrowUpRight,
@@ -20,6 +20,7 @@ import { playTune } from '@/lib/soundAlerts';
 import { hoodAlert } from '@/lib/hoodAlert';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import HoodCashierGameSelect from '@/components/wallet/HoodCashierGameSelect';
+import HoodRedeemPanel from '@/components/wallet/HoodRedeemPanel';
 import { getAvailableGamePlatforms } from '@/lib/gamePlatforms';
 import { playerApiFetch } from '@/lib/playerApiFetch';
 
@@ -46,6 +47,7 @@ function WalletAccountSync({ user, onAccounts }) {
 }
 
 function WalletPageInner() {
+  const { user, fetchUser, openAuth } = useAppShell();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState('deposit');
   const [methods, setMethods] = useState([]);
@@ -77,12 +79,6 @@ function WalletPageInner() {
     };
     reader.readAsDataURL(file);
   };
-
-  // Withdraw Form
-  const [withdrawAmount, setWithdrawAmount] = useState('50');
-  const [withdrawAddress, setWithdrawAddress] = useState('');
-  const [submittingWithdraw, setSubmittingWithdraw] = useState(false);
-  const [withdrawSuccess, setWithdrawSuccess] = useState(null);
 
   // History
   const [deposits, setDeposits] = useState([]);
@@ -206,57 +202,11 @@ function WalletPageInner() {
     }
   };
 
-  const handleWithdraw = async (e, user, fetchUser) => {
-    e.preventDefault();
-    if (!user) {
-      hoodAlert.warning('Please sign in first', 'Login required');
-      return;
-    }
-    const num = Number(withdrawAmount);
-    if (isNaN(num) || num < 50) {
-      hoodAlert.warning('Minimum redemption is $50.00 SC', 'Redemption amount');
-      return;
-    }
-    if (!withdrawAddress.trim()) {
-      hoodAlert.warning('Please provide your payout address or cashtag', 'Payout details');
-      return;
-    }
-
-    setSubmittingWithdraw(true);
-    playTune('click');
-
-    try {
-      const res = await playerApiFetch('/api/payments/withdraw', {
-        method: 'POST',
-        body: JSON.stringify({
-          amount: num,
-          method: selectedMethod?.name || 'Cash App',
-          payoutAddress: withdrawAddress.trim(),
-          gameTitle: selectedGameWithdraw,
-        }),
-      });
-      const data = await res.json();
-      if (!data.success) {
-        hoodAlert.error(data.error || 'Withdrawal failed', 'Withdrawal failed');
-      } else {
-        setWithdrawSuccess(data.message);
-        playTune('win');
-        if (fetchUser) fetchUser();
-      }
-    } catch {
-      hoodAlert.error('Network error submitting redemption');
-    } finally {
-      setSubmittingWithdraw(false);
-    }
-  };
-
   const numDep = Number(depositAmount) || 0;
   const matchBonusSC = Number((numDep * 3.0).toFixed(2));
   const totalCreditedSC = Number((numDep + matchBonusSC).toFixed(2));
 
   return (
-    <AppShell>
-      {({ user, fetchUser, openAuth }) => (
         <div className="space-y-8 animate-in fade-in max-w-4xl mx-auto">
           <WalletAccountSync user={user} onAccounts={setUserGameAccounts} />
           {/* Header Card */}
@@ -521,81 +471,26 @@ function WalletPageInner() {
           {/* Tab 2: Withdraw */}
           {activeTab === 'withdraw' && (
             <div className="p-6 sm:p-8 rounded-3xl bg-[#09142a] border-2 border-[#1a3363] shadow-2xl space-y-5">
-              {withdrawSuccess ? (
-                <div className="p-8 rounded-2xl bg-blue-950/40 border border-blue-500 text-center space-y-3">
-                  <div className="w-14 h-14 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center mx-auto">
-                    <Check size={28} />
-                  </div>
-                  <h4 className="text-xl font-black text-white">Cashout Submitted!</h4>
-                  <p className="text-xs text-gray-300">{withdrawSuccess}</p>
-                  <button
-                    type="button"
-                    onClick={() => setWithdrawSuccess(null)}
-                    className="px-6 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold"
-                  >
-                    Done
-                  </button>
-                </div>
+              {user ? (
+                <HoodRedeemPanel
+                  user={user}
+                  fetchUser={fetchUser}
+                  adminGames={adminGames}
+                  userGameAccounts={userGameAccounts}
+                  selectedGameWithdraw={selectedGameWithdraw}
+                  onSelectGameWithdraw={setSelectedGameWithdraw}
+                />
               ) : (
-                <form onSubmit={(e) => handleWithdraw(e, user, fetchUser)} className="space-y-5">
-                  <div className="p-3.5 rounded-xl bg-[#070d1e] border border-[#1a3363] text-xs text-gray-300 flex items-center gap-2">
-                    <Clock size={16} className="text-blue-400 shrink-0" />
-                    <span>Redemptions are settled within 15–30 minutes directly to your account.</span>
-                  </div>
-
-                  <HoodCashierGameSelect
-                    adminGames={adminGames}
-                    userGameAccounts={userGameAccounts}
-                    selectedGame={selectedGameWithdraw}
-                    onSelectGame={setSelectedGameWithdraw}
-                    label="Redeem winnings from game"
-                  />
-
-                  <div>
-                    <label className="text-xs font-bold text-gray-300 block mb-2">
-                      Payout Destination Tag / Address
-                    </label>
-                    <input
-                      type="text"
-                      value={withdrawAddress}
-                      onChange={(e) => setWithdrawAddress(e.target.value)}
-                      className="hood-input w-full px-4 py-3 rounded-2xl text-xs font-mono"
-                      placeholder="e.g. $MyCashAppTag or Zelle Email"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-gray-300 flex items-center justify-between mb-1.5">
-                      <span>Redeem Amount (Min $50.00 SC)</span>
-                      <span className="text-[10px] text-gray-400 font-mono">1 SC = 1 USD</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="50"
-                      value={withdrawAmount}
-                      onChange={(e) => setWithdrawAmount(e.target.value)}
-                      className="hood-input w-full px-4 py-3 rounded-2xl font-mono text-sm font-bold"
-                      placeholder="50"
-                      required
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={submittingWithdraw}
-                    className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl"
-                  >
-                    <ArrowUpRight size={16} />
-                    <span>{submittingWithdraw ? 'Processing Request...' : 'REQUEST CASHOUT (15-30 MINS)'}</span>
-                  </button>
-                </form>
+                <div className="text-center py-8 text-sm text-gray-400">
+                  <button type="button" onClick={() => openAuth?.('login')} className="text-[#2cb64e] font-bold underline">
+                    Sign in
+                  </button>{' '}
+                  to request a cashout.
+                </div>
               )}
             </div>
           )}
         </div>
-      )}
-    </AppShell>
   );
 }
 
@@ -603,9 +498,7 @@ export default function WalletPage() {
   return (
     <Suspense
       fallback={
-        <AppShell>
           <div className="max-w-4xl mx-auto py-16 text-center text-gray-400 text-sm">Loading wallet…</div>
-        </AppShell>
       }
     >
       <WalletPageInner />

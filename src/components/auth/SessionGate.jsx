@@ -16,7 +16,7 @@ export function SessionLoading() {
 
 export function RequireGuestOrUser({ guest, children }) {
   const { user, sessionReady } = useAppShell();
-  if (!sessionReady) return <SessionLoading />;
+  if (!sessionReady && !user) return <SessionLoading />;
   if (!user) return guest;
   return children;
 }

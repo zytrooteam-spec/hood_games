@@ -33,7 +33,7 @@ export async function GET(req) {
       listStaffDeposits(db),
       db
         .collection('redemptions')
-        .find({}, { projection: { proofImage: 0 } })
+        .find({}, { projection: { proofImage: 0, gameScreenshot: 0, qrCodeImage: 0 } })
         .sort({ createdAt: -1 })
         .limit(STAFF_LIST_LIMIT)
         .toArray(),

@@ -16,6 +16,7 @@ import { Headphones } from 'lucide-react';
 import { diffSet, areEqual } from '@/lib/fastDiff';
 import { broadcastPlayerSession, subscribePlayerSession } from '@/lib/sessionClient';
 import { normalizePlayerUser, fetchPlayerSession } from '@/lib/playerSession';
+import { readSessionSnapshot, writeSessionSnapshot } from '@/lib/clientCache';
 
 export const AppShellContext = createContext({
   user: null,
@@ -36,8 +37,11 @@ export default function AppShell({ children }) {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [user, setUser] = useState(null);
-  const [sessionReady, setSessionReady] = useState(false);
+  const [user, setUser] = useState(() => readSessionSnapshot());
+  const [sessionReady, setSessionReady] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return Boolean(readSessionSnapshot());
+  });
 
   // Global modals (Auth & Chat can still be triggered when needed, while all 9 items have dedicated pages)
   const [cashierModal, setCashierModal] = useState({ open: false, tab: 'deposit' });
@@ -54,16 +58,18 @@ export default function AppShell({ children }) {
       const player = await fetchPlayerSession();
       if (player) {
         diffSet(setUser, player);
+        writeSessionSnapshot(player);
         return;
       }
       if (!isSilent) {
         diffSet(setUser, null);
         setUnreadNotifs(0);
+        writeSessionSnapshot(null);
       }
     } catch {
-      if (!isSilent) diffSet(setUser, null);
+      if (!isSilent && !readSessionSnapshot()) diffSet(setUser, null);
     } finally {
-      if (!isSilent) setSessionReady(true);
+      setSessionReady(true);
     }
   };
 
@@ -82,7 +88,7 @@ export default function AppShell({ children }) {
 
   useEffect(() => {
     unlockAudioContext();
-    fetchUser();
+    fetchUser(Boolean(readSessionSnapshot()));
     fetchUnreadNotifs();
     const loadSiteSettings = () => {
       fetch('/api/admin/settings', { cache: 'no-store' })
@@ -112,8 +118,11 @@ export default function AppShell({ children }) {
 
     const handleUserSync = (e) => {
       if (e?.detail) {
-        diffSet(setUser, normalizePlayerUser(e.detail));
+        const player = normalizePlayerUser(e.detail);
+        diffSet(setUser, player);
+        writeSessionSnapshot(player);
       } else {
+        writeSessionSnapshot(null);
         fetchUser(true);
       }
     };
@@ -121,7 +130,11 @@ export default function AppShell({ children }) {
     window.addEventListener('hood-user-sync', handleUserSync);
     const unsubPlayer = subscribePlayerSession((detail) => {
       if (detail === undefined) fetchUser(true);
-      else diffSet(setUser, normalizePlayerUser(detail));
+      else {
+        const player = normalizePlayerUser(detail);
+        diffSet(setUser, player);
+        writeSessionSnapshot(player);
+      }
     });
 
     return () => {
@@ -142,6 +155,7 @@ export default function AppShell({ children }) {
       body: JSON.stringify({ isAdminLogout: false }),
     });
     diffSet(setUser, null);
+    writeSessionSnapshot(null);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('user-sync', { detail: null }));
       window.dispatchEvent(new CustomEvent('hood-user-sync', { detail: null }));
@@ -260,8 +274,11 @@ export default function AppShell({ children }) {
           }}
           onSuccess={(u) => {
             const player = normalizePlayerUser(u);
-            if (player) diffSet(setUser, player);
-            fetchUser();
+            if (player) {
+              diffSet(setUser, player);
+              writeSessionSnapshot(player);
+            }
+            fetchUser(true);
           }}
         />
 
@@ -277,7 +294,7 @@ export default function AppShell({ children }) {
           onClose={() => setFreeplayOpen(false)}
           user={user}
           freeplayAmount={Number(siteSettings?.freeplayAmountSC ?? 5)}
-          onSuccess={() => fetchUser()}
+          onSuccess={() => fetchUser(true)}
         />
       </div>
     </AppShellContext.Provider>

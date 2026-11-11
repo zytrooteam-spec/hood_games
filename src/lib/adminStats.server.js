@@ -11,7 +11,10 @@ export async function computeAdminStats(db) {
   ] = await Promise.all([
     db.collection('users').countDocuments({ role: 'player' }),
     db.collection('deposits').countDocuments({ status: 'pending' }),
-    db.collection('redemptions').countDocuments({ status: 'pending' }),
+    db.collection('redemptions').countDocuments({
+      status: 'pending',
+      $or: [{ stage: 'finance_payout' }, { stage: { $exists: false } }, { stage: null }],
+    }),
     db.collection('accountRequests').countDocuments({
       status: { $in: ['pending', 'PENDING', 'Pending'] },
     }),

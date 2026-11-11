@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import AppShell, { useAppShell } from '@/components/layout/AppShell';
+import { useAppShell } from '@/components/layout/AppShell';
 import {
   Coins,
   Calculator,
@@ -466,9 +466,5 @@ function CashbackPageContent() {
 }
 
 export default function CashbackPage() {
-  return (
-    <AppShell>
-      <CashbackPageContent />
-    </AppShell>
-  );
+  return <CashbackPageContent />;
 }

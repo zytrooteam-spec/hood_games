@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import AppShell, { useAppShell } from '@/components/layout/AppShell';
+import { useAppShell } from '@/components/layout/AppShell';
 import {
   Users,
   Copy,
@@ -234,9 +234,5 @@ function ReferralPageContent() {
 }
 
 export default function ReferralPage() {
-  return (
-    <AppShell>
-      <ReferralPageContent />
-    </AppShell>
-  );
+  return <ReferralPageContent />;
 }

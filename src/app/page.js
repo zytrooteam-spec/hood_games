@@ -49,6 +49,7 @@ import { playTune } from '@/lib/soundAlerts';
 import { broadcastPlayerSession, subscribePlayerSession } from '@/lib/sessionClient';
 import { playerApiFetch } from '@/lib/playerApiFetch';
 import { normalizePlayerUser, fetchPlayerSession } from '@/lib/playerSession';
+import { readSessionSnapshot, writeSessionSnapshot } from '@/lib/clientCache';
 
 export default function HomePage() {
   const router = useRouter();
@@ -70,8 +71,11 @@ export default function HomePage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // User state
-  const [user, setUser] = useState(null);
-  const [sessionReady, setSessionReady] = useState(false);
+  const [user, setUser] = useState(() => readSessionSnapshot());
+  const [sessionReady, setSessionReady] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return Boolean(readSessionSnapshot());
+  });
   const [settings, setSettings] = useState(null);
   const [games, setGames] = useState(() => readGamesCache() || []);
   const [loadingGames, setLoadingGames] = useState(() => !(readGamesCache()?.length > 0));
@@ -95,14 +99,18 @@ export default function HomePage() {
       const player = await fetchPlayerSession();
       if (player) {
         diffSet(setUser, player);
+        writeSessionSnapshot(player);
         if (player.email) loadUserAccounts(player.email);
         return;
       }
-      if (!isSilent) diffSet(setUser, null);
+      if (!isSilent) {
+        diffSet(setUser, null);
+        writeSessionSnapshot(null);
+      }
     } catch {
-      if (!isSilent) diffSet(setUser, null);
+      if (!isSilent && !readSessionSnapshot()) diffSet(setUser, null);
     } finally {
-      if (!isSilent) setSessionReady(true);
+      setSessionReady(true);
     }
   };
 
@@ -159,7 +167,7 @@ export default function HomePage() {
 
   useEffect(() => {
     unlockAudioContext();
-    fetchUser();
+    fetchUser(Boolean(readSessionSnapshot()));
     const cached = readGamesCache();
     if (cached?.length) {
       diffSet(

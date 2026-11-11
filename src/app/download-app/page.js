@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import AppShell from '@/components/layout/AppShell';
 import {
   Download,
   Smartphone,
@@ -252,9 +251,5 @@ function DownloadAppContent() {
 }
 
 export default function DownloadAppPage() {
-  return (
-    <AppShell>
-      <DownloadAppContent />
-    </AppShell>
-  );
+  return <DownloadAppContent />;
 }

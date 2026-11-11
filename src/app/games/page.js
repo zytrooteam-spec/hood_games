@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import AppShell, { useAppShell } from '@/components/layout/AppShell';
+import { useAppShell } from '@/components/layout/AppShell';
 import HoodGameGrid from '@/components/games/HoodGameGrid';
 import HoodCashbackCalculator from '@/components/games/HoodCashbackCalculator';
 import HoodDailySpinModal from '@/components/games/HoodDailySpinModal';
@@ -197,9 +197,5 @@ function GamesContent() {
 }
 
 export default function GamesPage() {
-  return (
-    <AppShell>
-      <GamesContent />
-    </AppShell>
-  );
+  return <GamesContent />;
 }
