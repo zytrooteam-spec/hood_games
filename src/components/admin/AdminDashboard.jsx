@@ -1517,9 +1517,9 @@ export default function AdminDashboard({ user, onLogout }) {
       {/* Main Content Pane */}
       <main className="flex flex-col flex-1 min-h-0 min-w-0 w-full p-3 sm:p-6 lg:p-8 overflow-y-auto overscroll-contain md:ml-64">
         {/* Top Header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between pb-4 sm:pb-6 border-b border-[#1a3363]">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-xl lg:text-2xl font-black text-white leading-tight">
+        <div className="flex items-center justify-between gap-3 pb-4 sm:pb-6 border-b border-[#1a3363]">
+          <div className="min-w-0 flex-1 flex items-center gap-2 sm:gap-3 flex-nowrap overflow-hidden">
+            <h1 className="text-base sm:text-lg lg:text-xl font-black text-white leading-none shrink-0">
               {{
                 overview: 'Overview Desk',
                 finance: 'Finance & Cashier Queue',
@@ -1540,14 +1540,17 @@ export default function AdminDashboard({ user, onLogout }) {
                 coins: 'Coins Allotment',
               }[activeTab] || activeTab}
             </h1>
-            <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">
-              Admin controls & real-time operations for Hood Games.
+            <span className="hidden sm:inline text-gray-600 select-none" aria-hidden>
+              ·
+            </span>
+            <p className="text-[10px] sm:text-xs text-gray-400 leading-none truncate min-w-0">
+              Admin controls &amp; real-time operations for Hood Games.
             </p>
           </div>
           <button
             type="button"
             onClick={fetchAllData}
-            className="self-end sm:self-auto p-2.5 rounded-xl bg-[#09142a] border border-[#1a3363] text-gray-300 hover:text-white shrink-0"
+            className="p-2.5 rounded-xl bg-[#09142a] border border-[#1a3363] text-gray-300 hover:text-white shrink-0"
             title="Refresh Data"
           >
             <RefreshCw size={16} />
