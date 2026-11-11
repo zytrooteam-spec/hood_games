@@ -153,19 +153,22 @@ export default function AuthModal({
         setError(data.error || 'Registration failed.');
         return;
       }
-      const session = await confirmPlayerSession(data.user);
+      const session = confirmPlayerSession(data.user);
       if (!session.ok) {
         setError(session.error);
         return;
       }
       playTune('win');
+      setLoading(false);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('user-sync', { detail: session.user }));
         window.dispatchEvent(new CustomEvent('hood-user-sync', { detail: session.user }));
+        window.dispatchEvent(new CustomEvent('hood-player-session-ready'));
         broadcastPlayerSession(session.user);
       }
       onSuccess?.(session.user);
       handleClose();
+      return;
     } catch {
       setError('Registration failed. Check your connection.');
     } finally {
@@ -203,19 +206,22 @@ export default function AuthModal({
           setError('Login response invalid. Please try again.');
           return;
         }
-        const session = await confirmPlayerSession(data.user);
+        const session = confirmPlayerSession(data.user);
         if (!session.ok) {
           setError(session.error);
           return;
         }
         playTune('win');
+        setLoading(false);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('user-sync', { detail: session.user }));
           window.dispatchEvent(new CustomEvent('hood-user-sync', { detail: session.user }));
+          window.dispatchEvent(new CustomEvent('hood-player-session-ready'));
           broadcastPlayerSession(session.user);
         }
         onSuccess?.(session.user);
         handleClose();
+        return;
       }
     } catch {
       setError('Connection failed. Please check your network.');

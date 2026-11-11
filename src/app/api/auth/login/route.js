@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { getDb } from '@/lib/mongodb';
 import { signToken, ROLES, isStaffRole } from '@/lib/auth';
-import { ensureDbReady } from '@/lib/initDb';
+import { connectDbFast } from '@/lib/initDb';
+import { after } from 'next/server';
 import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 import { getDeviceIdFromRequest } from '@/lib/deviceServer';
 import {
@@ -15,6 +15,29 @@ import { invalidateAuthCache } from '@/lib/authCache';
 
 export const runtime = 'nodejs';
 
+const LOGIN_USER_PROJECTION = {
+  password: 1,
+  username: 1,
+  email: 1,
+  role: 1,
+  status: 1,
+  balanceSC: 1,
+  balanceGC: 1,
+  isVerified: 1,
+};
+
+async function findLoginUser(db, identifier) {
+  const raw = String(identifier || '').trim();
+  const lower = raw.toLowerCase();
+  if (lower.includes('@')) {
+    return db.collection('users').findOne({ email: lower }, { projection: LOGIN_USER_PROJECTION });
+  }
+  return (
+    (await db.collection('users').findOne({ username: lower }, { projection: LOGIN_USER_PROJECTION })) ||
+    (await db.collection('users').findOne({ username: raw }, { projection: LOGIN_USER_PROJECTION }))
+  );
+}
+
 function attachSessionCookie(response, token, isAdminPortal, req) {
   const opts = getSessionCookieOptions(req);
   if (isAdminPortal) {
@@ -26,13 +49,6 @@ function attachSessionCookie(response, token, isAdminPortal, req) {
 
 export async function POST(req) {
   try {
-    const dbReady = await ensureDbReady();
-    if (!dbReady) {
-      return NextResponse.json(
-        { success: false, error: 'Database not ready. Verify MONGODB_URI on the server.' },
-        { status: 503 }
-      );
-    }
     const { identifier, password, isAdminLogin, deviceId: rawDeviceId } = await req.json();
     const referer = req.headers.get('referer') || '';
     let pathname = '';
@@ -51,7 +67,7 @@ export async function POST(req) {
     }
 
     const cleanId = String(identifier).trim().toLowerCase();
-    const db = await getDb();
+    const db = await connectDbFast();
 
     const envAdminUser = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
     const envAdminPass = process.env.ADMIN_PASSWORD || 'HoodGamesAdmin@2026!';
@@ -80,9 +96,10 @@ export async function POST(req) {
       const activeUser = isEnvAdmin ? envAdminUser : envStaffUser;
       const activeEmail = isEnvAdmin ? envAdminEmail : envStaffEmail;
 
-      let staffUser = await db.collection('users').findOne({
-        $or: [{ username: new RegExp(`^${activeUser}$`, 'i') }, { email: activeEmail }],
-      });
+      let staffUser = await db.collection('users').findOne(
+        { $or: [{ username: activeUser }, { email: activeEmail }] },
+        { projection: { balanceSC: 1, balanceGC: 1 } }
+      );
 
       const staffId = staffUser?._id?.toString() || `${activeUser}_id`;
       invalidateAuthCache(staffId);
@@ -112,9 +129,7 @@ export async function POST(req) {
       return response;
     }
 
-    const user = await db.collection('users').findOne({
-      $or: [{ email: cleanId }, { username: new RegExp(`^${cleanId}$`, 'i') }],
-    });
+    const user = await findLoginUser(db, identifier);
 
     if (!user) {
       return NextResponse.json({ success: false, error: 'Invalid username or password' }, { status: 401 });
@@ -163,9 +178,16 @@ export async function POST(req) {
         return NextResponse.json(deviceBindingErrorPayload(boundUser), { status: 403 });
       }
       const bindFields = deviceBindingUpdateFields(deviceId);
-      await db.collection('users').updateOne(toIdQuery(user._id), {
-        $set: bindFields,
-        $addToSet: { boundDevices: deviceId },
+      const uidForBind = user._id;
+      after(async () => {
+        try {
+          await db.collection('users').updateOne(toIdQuery(uidForBind), {
+            $set: bindFields,
+            $addToSet: { boundDevices: deviceId },
+          });
+        } catch (err) {
+          console.warn('Device bind after login:', err?.message || err);
+        }
       });
     }
 

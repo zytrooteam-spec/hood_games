@@ -304,8 +304,8 @@ export async function getDb() {
   try {
     if (!clientPromise) {
       client = new MongoClient(uri, {
-        serverSelectionTimeoutMS: 8000,
-        connectTimeoutMS: 10000,
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 8000,
         maxPoolSize: 40,
         minPoolSize: 2,
         maxIdleTimeMS: 60_000,

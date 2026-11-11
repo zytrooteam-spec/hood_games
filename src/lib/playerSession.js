@@ -32,7 +32,7 @@ export async function fetchPlayerSession() {
 }
 
 /** After login/register API success — validate role (no extra /me round-trips). */
-export async function confirmPlayerSession(apiUser) {
+export function confirmPlayerSession(apiUser) {
   const optimistic = normalizePlayerUser(apiUser);
   if (!optimistic) {
     return {

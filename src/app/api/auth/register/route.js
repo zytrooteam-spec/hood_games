@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { getDb } from '@/lib/mongodb';
 import { signToken, ROLES } from '@/lib/auth';
 import { sendEmail, getWelcomeEmailTemplate } from '@/lib/email';
-import { ensureDbReady } from '@/lib/initDb';
+import { connectDbFast } from '@/lib/initDb';
 import { invalidateAuthCache } from '@/lib/authCache';
 import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 import { getDeviceIdFromRequest } from '@/lib/deviceServer';
@@ -13,13 +12,7 @@ export const runtime = 'nodejs';
 
 export async function POST(req) {
   try {
-    const dbReady = await ensureDbReady();
-    if (!dbReady) {
-      return NextResponse.json(
-        { success: false, error: 'Database not ready. Verify MONGODB_URI on the server.' },
-        { status: 503 }
-      );
-    }
+    await connectDbFast();
 
     const body = await req.json();
     const {
@@ -68,7 +61,7 @@ export async function POST(req) {
       );
     }
 
-    const db = await getDb();
+    const db = await connectDbFast();
     const otpsCol = db.collection('otps');
     const usersCol = db.collection('users');
 

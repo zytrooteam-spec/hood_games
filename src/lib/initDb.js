@@ -10,52 +10,57 @@ let isDbInitialized = false;
 let readyPromise = null;
 let heavySeedPromise = null;
 
-async function ensureIndexes(db) {
-  try {
-    if (db && typeof db.collection === 'function') {
-      await Promise.allSettled([
-        db.collection('users').createIndex({ email: 1 }),
-        db.collection('users').createIndex({ username: 1 }),
-        db.collection('users').createIndex({ deviceId: 1 }),
-        db.collection('deposits').createIndex({ status: 1, createdAt: -1 }),
-        db.collection('deposits').createIndex({ userId: 1, createdAt: -1 }),
-        db.collection('redemptions').createIndex({ status: 1, createdAt: -1 }),
-        db.collection('redemptions').createIndex({ userId: 1, createdAt: -1 }),
-        db.collection('accountRequests').createIndex({ status: 1, createdAt: -1 }),
-        db.collection('accountRequests').createIndex({ userEmail: 1 }),
-        db.collection('notifications').createIndex({ target: 1, createdAt: -1 }),
-        db.collection('notifications').createIndex({ email: 1, createdAt: -1 }),
-        db.collection('subscriptions').createIndex({ email: 1 }),
-        db.collection('subscriptions').createIndex({ fcmToken: 1 }),
-        db.collection('subscriptions').createIndex({ userId: 1 }),
-        db.collection('otps').createIndex({ email: 1 }),
-        db.collection('games').createIndex({ isActive: 1 }),
-        db.collection('payment_methods').createIndex({ active: 1 }),
-        db.collection('ledger').createIndex({ userId: 1, createdAt: -1 }),
-        db.collection('chat_messages').createIndex({ userId: 1, createdAt: -1 }),
-        db.collection('chat_messages').createIndex({ senderRole: 1, read: 1 }),
-        db.collection('chat_threads').createIndex({ lastMessageAt: -1 }),
-        db.collection('chat_threads').createIndex({ userId: 1 }, { unique: true }),
-        db.collection('chat_messages').createIndex({ senderRole: 1, read: 1 }),
-        db.collection('chat_threads').createIndex({ lastMessageAt: -1 }),
-        db.collection('chat_threads').createIndex({ userId: 1 }, { unique: true }),
-      ]);
-    }
-  } catch (idxErr) {
-    console.warn('Index initialization note:', idxErr.message);
-  }
+/** Player Paradise pattern: indexes in background — never block login. */
+function scheduleIndexes(db) {
+  if (global._hoodIndexesScheduled || !db?.collection) return;
+  global._hoodIndexesScheduled = true;
+
+  Promise.allSettled([
+    db.collection('users').createIndex({ email: 1 }),
+    db.collection('users').createIndex({ username: 1 }),
+    db.collection('users').createIndex({ deviceId: 1 }),
+    db.collection('deposits').createIndex({ status: 1, createdAt: -1 }),
+    db.collection('deposits').createIndex({ userId: 1, createdAt: -1 }),
+    db.collection('redemptions').createIndex({ status: 1, createdAt: -1 }),
+    db.collection('redemptions').createIndex({ userId: 1, createdAt: -1 }),
+    db.collection('accountRequests').createIndex({ status: 1, createdAt: -1 }),
+    db.collection('accountRequests').createIndex({ userEmail: 1 }),
+    db.collection('notifications').createIndex({ target: 1, createdAt: -1 }),
+    db.collection('notifications').createIndex({ email: 1, createdAt: -1 }),
+    db.collection('subscriptions').createIndex({ email: 1 }),
+    db.collection('subscriptions').createIndex({ fcmToken: 1 }),
+    db.collection('subscriptions').createIndex({ userId: 1 }),
+    db.collection('otps').createIndex({ email: 1 }),
+    db.collection('games').createIndex({ isActive: 1 }),
+    db.collection('payment_methods').createIndex({ active: 1 }),
+    db.collection('ledger').createIndex({ userId: 1, createdAt: -1 }),
+    db.collection('chat_messages').createIndex({ userId: 1, createdAt: -1 }),
+    db.collection('chat_messages').createIndex({ senderRole: 1, read: 1 }),
+    db.collection('chat_threads').createIndex({ lastMessageAt: -1 }),
+    db.collection('chat_threads').createIndex({ userId: 1 }, { unique: true }),
+  ]).catch((idxErr) => {
+    console.warn('Background index note:', idxErr?.message || idxErr);
+  });
 }
 
-/** Fast path for login / hot APIs — connect + indexes only. */
+/** Hot path: connect only — login/register never wait on indexes/seed. */
+export async function connectDbFast() {
+  const db = await getDb();
+  scheduleIndexes(db);
+  if (!isDbReady) {
+    isDbReady = true;
+    scheduleHeavyDbSeed();
+  }
+  return db;
+}
+
+/** Fast path for login / hot APIs — connect; indexes run in background. */
 export async function ensureDbReady() {
   if (isDbReady) return true;
   if (readyPromise) return readyPromise;
 
   readyPromise = (async () => {
-    const db = await getDb();
-    await ensureIndexes(db);
-    isDbReady = true;
-    scheduleHeavyDbSeed();
+    await connectDbFast();
     return true;
   })();
 
