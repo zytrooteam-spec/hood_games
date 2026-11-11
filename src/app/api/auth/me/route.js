@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, isStaffRole } from '@/lib/auth';
-import { ensureDbInitialized } from '@/lib/initDb';
+import { ensureDbReady } from '@/lib/initDb';
 
 export const runtime = 'nodejs';
 
 export async function GET(req) {
   try {
-    await ensureDbInitialized();
+    await ensureDbReady();
     const { searchParams } = new URL(req.url);
     const referer = req.headers.get('referer') || '';
     let pathname = '';

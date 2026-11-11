@@ -4,6 +4,7 @@ import { getSessionUser, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { publishFinanceWithdraw } from '@/lib/realtimePublish';
+import { STAFF_LIST_LIMIT } from '@/lib/adminStats.server';
 import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
 import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
 
@@ -22,7 +23,12 @@ export async function GET(req) {
     let redemptions;
     if (isStaff) {
       const filter = statusParam && statusParam !== 'all' ? { status: statusParam } : {};
-      redemptions = await db.collection('redemptions').find(filter).sort({ createdAt: -1 }).limit(300).toArray();
+      redemptions = await db
+        .collection('redemptions')
+        .find(filter, { projection: { proofImage: 0 } })
+        .sort({ createdAt: -1 })
+        .limit(STAFF_LIST_LIMIT)
+        .toArray();
     } else {
       const uid = dbUser?._id?.toString() || user.userId || user.id || user._id?.toString?.();
       const email = (dbUser?.email || user.email || '').toLowerCase().trim();

@@ -1,17 +1,22 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/mongodb';
 import { getSessionUser } from '@/lib/auth';
-import { ensureDbInitialized } from '@/lib/initDb';
+import { ensureDbReady } from '@/lib/initDb';
+import { cache } from '@/lib/cache';
+
+const SETTINGS_CACHE_KEY = 'hood_settings_general';
 
 export async function GET(req) {
   try {
-    await ensureDbInitialized();
+    await ensureDbReady();
+    const cached = cache.get(SETTINGS_CACHE_KEY);
+    if (cached) {
+      return NextResponse.json({ success: true, settings: cached });
+    }
     const db = await getDb();
     const settings = await db.collection('system_settings').findOne({ key: 'general' });
-
-    return NextResponse.json({
-      success: true,
-      settings: settings || {
+    const payload =
+      settings || {
         siteName: 'Hood Games',
         logoUrl: '/logo.png',
         heroBackgroundUrl: '/images/casino-hero-bg.jpg',
@@ -20,7 +25,12 @@ export async function GET(req) {
         welcomeBonusPercent: 300,
         regularBonusPercent: 50,
         quickActionCards: [],
-      },
+      };
+    cache.set(SETTINGS_CACHE_KEY, payload, 25);
+
+    return NextResponse.json({
+      success: true,
+      settings: payload,
     });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
@@ -29,7 +39,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
-    await ensureDbInitialized();
+    await ensureDbReady();
     const user = await getSessionUser(req, 'admin');
     if (!user || !['admin', 'superadmin', 'staff'].includes(String(user.role || '').toLowerCase())) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Admin access required' }, { status: 403 });
@@ -53,7 +63,9 @@ export async function POST(req) {
       { upsert: true }
     );
 
+    cache.del(SETTINGS_CACHE_KEY);
     const updated = await db.collection('system_settings').findOne({ key: 'general' });
+    if (updated) cache.set(SETTINGS_CACHE_KEY, updated, 25);
     return NextResponse.json({ success: true, settings: updated });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

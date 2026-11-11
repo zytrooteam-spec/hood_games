@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { getDb } from '@/lib/mongodb';
 import { signToken, ROLES, isStaffRole } from '@/lib/auth';
-import { ensureDbInitialized } from '@/lib/initDb';
+import { ensureDbReady } from '@/lib/initDb';
 import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 import { getDeviceIdFromRequest } from '@/lib/deviceServer';
 import {
@@ -25,7 +25,7 @@ function attachSessionCookie(response, token, isAdminPortal, req) {
 
 export async function POST(req) {
   try {
-    const dbReady = await ensureDbInitialized();
+    const dbReady = await ensureDbReady();
     if (!dbReady) {
       return NextResponse.json(
         { success: false, error: 'Database not ready. Verify MONGODB_URI on the server.' },

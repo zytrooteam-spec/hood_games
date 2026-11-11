@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { getDb } from '@/lib/mongodb';
 import { signToken, ROLES } from '@/lib/auth';
 import { sendEmail, getWelcomeEmailTemplate } from '@/lib/email';
-import { ensureDbInitialized } from '@/lib/initDb';
+import { ensureDbReady } from '@/lib/initDb';
 import { getSessionCookieOptions } from '@/lib/sessionCookies.server';
 import { getDeviceIdFromRequest } from '@/lib/deviceServer';
 import { findPlayerBoundToDevice, deviceBindingErrorPayload } from '@/lib/deviceBinding';
@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 
 export async function POST(req) {
   try {
-    const dbReady = await ensureDbInitialized();
+    const dbReady = await ensureDbReady();
     if (!dbReady) {
       return NextResponse.json(
         { success: false, error: 'Database not ready. Verify MONGODB_URI on the server.' },

@@ -153,6 +153,8 @@ export default function AdminDashboard({ user, onLogout }) {
   const selectedThreadUserRef = React.useRef(selectedThreadUser);
   const claimChatInboxAlertRef = React.useRef(createChatInboxDedup());
   const chatInboxRefreshTimerRef = React.useRef(null);
+  const adminLightSyncTimerRef = React.useRef(null);
+  const fetchInFlightRef = React.useRef(false);
   const processingDepositIdsRef = React.useRef(new Set());
   const [processingDepositIds, setProcessingDepositIds] = useState(() => new Set());
 
@@ -409,66 +411,68 @@ export default function AdminDashboard({ user, onLogout }) {
     );
   };
 
-  // Fetch all admin data (silent polling does not trigger loading indicator)
+  const applyBootstrapPayload = React.useCallback((data) => {
+    if (!data?.success) return;
+    if (data.stats) diffSet(setStats, data.stats);
+    if (Array.isArray(data.deposits)) diffSet(setDeposits, data.deposits);
+    if (Array.isArray(data.redemptions)) diffSet(setRedemptions, data.redemptions);
+    const reqRows = data.requests || data.accountRequests;
+    if (Array.isArray(reqRows)) {
+      diffSet(
+        setAccountRequests,
+        reqRows.map((r) => ({ ...r, gameTitle: sanitizeGameTitle(r.gameTitle) }))
+      );
+    }
+    if (data.settings) {
+      diffSet(setSettings, data.settings);
+      setEditingCards((prev) => (prev && prev.length > 0 ? prev : (data.settings.quickActionCards || [])));
+      const deskTune = data.settings.adminDefaultAlertTune;
+      if (deskTune && typeof window !== 'undefined' && !localStorage.getItem('hood_admin_alert_tune')) {
+        setAlertTune(deskTune);
+      }
+      if (data.settings.playerTouchTune) setPlayerTouchTune(data.settings.playerTouchTune);
+    }
+    if (Array.isArray(data.threads)) {
+      setChatThreads((prev) =>
+        mergeChatThreadsPreservingUnread(prev, data.threads, {
+          exceptUserId: selectedThreadUserRef.current,
+        })
+      );
+    }
+    if (Array.isArray(data.users)) diffSet(setUsersList, data.users);
+    if (Array.isArray(data.methods)) diffSet(setGateways, data.methods);
+
+    const depList = Array.isArray(data.deposits) ? data.deposits : [];
+    const redList = Array.isArray(data.redemptions) ? data.redemptions : [];
+    const reqList = Array.isArray(reqRows)
+      ? reqRows.map((r) => ({ ...r, gameTitle: sanitizeGameTitle(r.gameTitle) }))
+      : [];
+    const threadList = Array.isArray(data.threads) ? data.threads : [];
+    syncAdminAlerts(depList, redList, reqList, threadList);
+  }, [syncAdminAlerts]);
+
+  const loadCashbackReport = React.useCallback(async () => {
+    try {
+      const cbRes = await fetch('/api/cashback?adminReport=true', { cache: 'no-store' }).then((r) => r.json());
+      if (cbRes?.success) diffSet(setCashbackReport, cbRes);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // One HTTP round-trip on boot; SSE handles instant updates (poll = rare backup)
   const fetchAllData = async (isSilent = false) => {
+    if (fetchInFlightRef.current) return;
+    fetchInFlightRef.current = true;
     if (!isSilent) setLoading(true);
     try {
-      const [statsRes, depRes, redRes, reqRes, setRes, chatRes, usrRes, payRes, cbRes] = await Promise.all([
-        fetch('/api/admin/stats').then((r) => r.json()).catch(() => ({})),
-        fetch('/api/payments/deposit').then((r) => r.json()).catch(() => ({})),
-        fetch('/api/payments/withdraw').then((r) => r.json()).catch(() => ({})),
-        fetch('/api/account-requests?status=all', { credentials: 'include', cache: 'no-store' })
-          .then((r) => r.json())
-          .catch(() => ({})),
-        fetch('/api/admin/settings').then((r) => r.json()).catch(() => ({})),
-        fetch('/api/chat').then((r) => r.json()).catch(() => ({})),
-        fetch('/api/admin/users').then((r) => r.json()).catch(() => ({})),
-        fetch('/api/payments/methods').then((r) => r.json()).catch(() => ({})),
-        fetch('/api/cashback?adminReport=true').then((r) => r.json()).catch(() => ({})),
-      ]);
-
-      if (statsRes.success) diffSet(setStats, statsRes.stats);
-      if (depRes.success && Array.isArray(depRes.deposits)) diffSet(setDeposits, depRes.deposits);
-      if (redRes.success && Array.isArray(redRes.redemptions)) diffSet(setRedemptions, redRes.redemptions);
-      const reqRows = reqRes.requests || reqRes.accountRequests;
-      if (reqRes.success && Array.isArray(reqRows)) {
-        const sanitizedRequests = reqRows.map((r) => ({
-          ...r,
-          gameTitle: sanitizeGameTitle(r.gameTitle),
-        }));
-        diffSet(setAccountRequests, sanitizedRequests);
-      }
-      if (setRes.success && setRes.settings) {
-        diffSet(setSettings, setRes.settings);
-        setEditingCards((prev) => (prev && prev.length > 0 ? prev : (setRes.settings.quickActionCards || [])));
-        const deskTune = setRes.settings.adminDefaultAlertTune;
-        if (deskTune && typeof window !== 'undefined' && !localStorage.getItem('hood_admin_alert_tune')) {
-          setAlertTune(deskTune);
-        }
-        if (setRes.settings.playerTouchTune) setPlayerTouchTune(setRes.settings.playerTouchTune);
-      }
-      if (chatRes.success && Array.isArray(chatRes.threads)) {
-        setChatThreads((prev) =>
-          mergeChatThreadsPreservingUnread(prev, chatRes.threads, {
-            exceptUserId: selectedThreadUserRef.current,
-          })
-        );
-      }
-      if (usrRes.success && Array.isArray(usrRes.users)) diffSet(setUsersList, usrRes.users);
-      if (payRes.success && Array.isArray(payRes.methods)) diffSet(setGateways, payRes.methods);
-      if (cbRes.success) diffSet(setCashbackReport, cbRes);
-
-      const depList = depRes.success && Array.isArray(depRes.deposits) ? depRes.deposits : [];
-      const redList = redRes.success && Array.isArray(redRes.redemptions) ? redRes.redemptions : [];
-      const reqList =
-        reqRes.success && Array.isArray(reqRes.requests)
-          ? reqRes.requests.map((r) => ({ ...r, gameTitle: sanitizeGameTitle(r.gameTitle) }))
-          : [];
-      const threadList = chatRes.success && Array.isArray(chatRes.threads) ? chatRes.threads : [];
-      syncAdminAlerts(depList, redList, reqList, threadList);
+      const res = await fetch('/api/admin/bootstrap', { credentials: 'include', cache: 'no-store' });
+      const data = await res.json();
+      applyBootstrapPayload(data);
     } catch (err) {
       console.error(err);
     } finally {
+      fetchInFlightRef.current = false;
       if (!isSilent) setLoading(false);
     }
   };
@@ -489,19 +493,60 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   }, [accountRequests, chatThreads, syncAdminAlerts]);
 
+  const refreshDeskQueues = React.useCallback(async () => {
+    try {
+      const [depRes, redRes, reqRes] = await Promise.all([
+        fetch('/api/payments/deposit', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
+        fetch('/api/payments/withdraw', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
+        fetch('/api/account-requests?status=all', { credentials: 'include', cache: 'no-store' })
+          .then((r) => r.json())
+          .catch(() => ({})),
+      ]);
+      if (depRes.success && Array.isArray(depRes.deposits)) diffSet(setDeposits, depRes.deposits);
+      if (redRes.success && Array.isArray(redRes.redemptions)) diffSet(setRedemptions, redRes.redemptions);
+      const reqRows = reqRes.requests || reqRes.accountRequests;
+      if (reqRes.success && Array.isArray(reqRows)) {
+        diffSet(
+          setAccountRequests,
+          reqRows.map((r) => ({ ...r, gameTitle: sanitizeGameTitle(r.gameTitle) }))
+        );
+      }
+      const depList = depRes.success && Array.isArray(depRes.deposits) ? depRes.deposits : [];
+      const redList = redRes.success && Array.isArray(redRes.redemptions) ? redRes.redemptions : [];
+      const reqList = reqRes.success && Array.isArray(reqRows) ? reqRows : [];
+      syncAdminAlerts(depList, redList, reqList, chatThreads);
+    } catch {
+      /* ignore */
+    }
+  }, [chatThreads, syncAdminAlerts]);
+
+  const scheduleLightAdminSync = React.useCallback(() => {
+    if (adminLightSyncTimerRef.current) clearTimeout(adminLightSyncTimerRef.current);
+    adminLightSyncTimerRef.current = setTimeout(() => {
+      refreshDeskQueues();
+    }, 350);
+  }, [refreshDeskQueues]);
+
   useEffect(() => {
     fetchAllData(false);
-    const onRefresh = () => fetchAllData(true);
+    const onRefresh = () => scheduleLightAdminSync();
     window.addEventListener('hood-admin-refresh', onRefresh);
-    // SSE = instant desk; poll = backup (~2s)
+    // SSE = instant; light poll backup only (avoids hammering VPS)
     const interval = setInterval(() => {
-      fetchAllData(true);
-    }, 2000);
+      if (!document.hidden) fetchAllData(true);
+    }, 28000);
     return () => {
       clearInterval(interval);
       window.removeEventListener('hood-admin-refresh', onRefresh);
+      if (adminLightSyncTimerRef.current) clearTimeout(adminLightSyncTimerRef.current);
     };
-  }, []);
+  }, [scheduleLightAdminSync]);
+
+  useEffect(() => {
+    if (activeTab === 'settings' && !cashbackReport) {
+      loadCashbackReport();
+    }
+  }, [activeTab, cashbackReport, loadCashbackReport]);
 
   useEffect(() => {
     const bumpCtx = { activeTabRef, selectedThreadUserRef };
@@ -527,11 +572,11 @@ export default function AdminDashboard({ user, onLogout }) {
         payload.type === 'NEW_COIN_LOAD' ||
         payload.type === 'NEW_GAME_ID_REQUEST'
       ) {
-        refreshFinanceQueue();
+        refreshDeskQueues();
       }
     };
 
-    const onDesk = () => refreshFinanceQueue();
+    const onDesk = () => scheduleLightAdminSync();
     const onStaffEv = (e) => onStaffInstant(e.detail);
     window.addEventListener('hood-admin-desk-sync', onDesk);
     window.addEventListener('hood_staff_event_local', onStaffEv);
@@ -541,7 +586,7 @@ export default function AdminDashboard({ user, onLogout }) {
       window.removeEventListener('hood_staff_event_local', onStaffEv);
       if (chatInboxRefreshTimerRef.current) clearTimeout(chatInboxRefreshTimerRef.current);
     };
-  }, [playAdminChime, scheduleChatInboxRefresh, refreshFinanceQueue]);
+  }, [playAdminChime, scheduleChatInboxRefresh, refreshDeskQueues, scheduleLightAdminSync]);
 
   // Fetch individual chat conversation (supports silent sync)
   const loadConversation = async (userId, isSilent = false) => {
@@ -568,8 +613,8 @@ export default function AdminDashboard({ user, onLogout }) {
   useEffect(() => {
     if (!selectedThreadUser) return;
     const interval = setInterval(() => {
-      loadConversation(selectedThreadUser, true);
-    }, 1500);
+      if (!document.hidden) loadConversation(selectedThreadUser, true);
+    }, 5000);
     return () => clearInterval(interval);
   }, [selectedThreadUser]);
 

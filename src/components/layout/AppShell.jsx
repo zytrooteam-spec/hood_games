@@ -96,12 +96,19 @@ export default function AppShell({ children }) {
         .catch(() => {});
     };
     loadSiteSettings();
-    // Silent background poll every 6s so balance & status stay in sync without flicker
+    const onInstant = () => {
+      fetchUser(true);
+      fetchUnreadNotifs();
+    };
+    window.addEventListener('hood-instant-sync', onInstant);
+    window.addEventListener('balanceUpdate', onInstant);
+    // SSE first; gentle backup poll when tab visible
     const interval = setInterval(() => {
+      if (document.hidden) return;
       fetchUser(true);
       fetchUnreadNotifs();
       loadSiteSettings();
-    }, 6000);
+    }, 18000);
 
     const handleUserSync = (e) => {
       if (e?.detail) {
@@ -119,6 +126,8 @@ export default function AppShell({ children }) {
 
     return () => {
       clearInterval(interval);
+      window.removeEventListener('hood-instant-sync', onInstant);
+      window.removeEventListener('balanceUpdate', onInstant);
       window.removeEventListener('user-sync', handleUserSync);
       window.removeEventListener('hood-user-sync', handleUserSync);
       unsubPlayer();

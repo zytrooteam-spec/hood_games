@@ -306,6 +306,10 @@ export async function getDb() {
       client = new MongoClient(uri, {
         serverSelectionTimeoutMS: 8000,
         connectTimeoutMS: 10000,
+        maxPoolSize: 40,
+        minPoolSize: 2,
+        maxIdleTimeMS: 60_000,
+        compressors: ['zlib'],
       });
       clientPromise = client.connect();
     }

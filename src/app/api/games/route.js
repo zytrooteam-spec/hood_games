@@ -4,6 +4,7 @@ import { getSessionUser, isStaffRole } from '@/lib/auth';
 import { ensureDbInitialized } from '@/lib/initDb';
 import { sanitizeGameTitle } from '@/lib/fastDiff';
 import { compressDataUrlIfNeeded } from '@/lib/serverImageCompress';
+import { cache } from '@/lib/cache';
 
 async function resolveStoredImage(raw) {
   if (!raw || typeof raw !== 'string') return raw || '';
@@ -38,15 +39,27 @@ export async function GET(req) {
 
     const db = await getDb();
     const query = isAdmin && all ? {} : { isActive: { $ne: false }, active: { $ne: false } };
+    const cacheKey = isAdmin && all ? 'hood_games_admin_all' : 'hood_games_public';
+
+    const cached = !(isAdmin && all) ? cache.get(cacheKey) : null;
+    if (cached) {
+      return NextResponse.json(
+        { success: true, games: cached },
+        { headers: { 'Cache-Control': 'private, max-age=30' } }
+      );
+    }
 
     const games = await db.collection('games').find(query).sort({ priority: 1, title: 1 }).toArray();
     const sanitized = games.map(mapGameForClient);
+    if (!(isAdmin && all)) {
+      cache.set(cacheKey, sanitized, 45);
+    }
 
     return NextResponse.json(
       { success: true, games: sanitized },
       {
         headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Cache-Control': isAdmin && all ? 'no-store' : 'private, max-age=30',
         },
       }
     );
@@ -95,6 +108,8 @@ export async function POST(req) {
       });
     }
 
+    cache.del('hood_games');
+    cache.del('hood_games');
     const updated = await db.collection('games').find({}).sort({ priority: 1 }).toArray();
     return NextResponse.json({
       success: true,
@@ -117,6 +132,7 @@ export async function DELETE(req) {
     if (!id) return NextResponse.json({ success: false, error: 'id required' }, { status: 400 });
     const db = await getDb();
     await db.collection('games').deleteOne(toIdQuery(id));
+    cache.del('hood_games');
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

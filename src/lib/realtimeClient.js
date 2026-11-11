@@ -34,7 +34,6 @@ export function buildRealtimeUrl() {
 
 function adminDeskPulse(event) {
   window.dispatchEvent(new CustomEvent('hood-admin-desk-sync', { detail: event }));
-  window.dispatchEvent(new CustomEvent('hood-admin-refresh', { detail: event }));
 }
 
 function playerInstantPulse() {

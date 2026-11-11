@@ -6,6 +6,7 @@ import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { compressDataUrlIfNeeded } from '@/lib/serverImageCompress';
 import { requirePlayerDbUser } from '@/lib/requirePlayerDbUser';
 import { publishChatRealtime } from '@/lib/realtimePublish';
+import { buildStaffChatThreads, touchChatThreadOnMessage } from '@/lib/chatThreads.server';
 
 function previewText(text, imageUrl) {
   const t = (text || '').trim();
@@ -58,40 +59,7 @@ export async function GET(req) {
         });
       }
 
-      const messages = await db.collection('chat_messages').find({}).sort({ createdAt: -1 }).toArray();
-
-      const threadsMap = {};
-      for (const m of messages) {
-        const preview = previewText(m.text, m.imageUrl);
-        if (!threadsMap[m.userId]) {
-          threadsMap[m.userId] = {
-            userId: m.userId,
-            username: m.username || 'Player',
-            userEmail: m.userEmail || '',
-            lastMessage: preview,
-            lastMessageAt: m.createdAt,
-            unreadCount: m.senderRole === 'player' && m.read !== true ? 1 : 0,
-          };
-        } else if (m.senderRole === 'player' && m.read !== true) {
-          threadsMap[m.userId].unreadCount++;
-        }
-      }
-
-      const threadMetas = await db.collection('chat_threads').find({}).toArray();
-      const metaMap = {};
-      threadMetas.forEach((tm) => {
-        metaMap[tm.userId] = tm;
-      });
-
-      const threads = Object.values(threadsMap).map((t) => {
-        const meta = metaMap[t.userId];
-        return {
-          ...t,
-          labels: meta?.labels || [],
-          staffNotes: meta?.staffNotes || [],
-        };
-      });
-
+      const threads = await buildStaffChatThreads(db);
       return NextResponse.json({ success: true, threads });
     }
 
@@ -257,6 +225,14 @@ export async function POST(req) {
     };
 
     const res = await db.collection('chat_messages').insertOne(msgDoc);
+    await touchChatThreadOnMessage(db, {
+      userId: messageUid,
+      username: isStaffReply ? username : username,
+      userEmail: playerEmail,
+      text: cleanText,
+      imageUrl: cleanImageUrl,
+      senderRole,
+    });
 
     if (isStaffReply) {
       notifyPlayer({

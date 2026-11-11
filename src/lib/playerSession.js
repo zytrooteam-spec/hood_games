@@ -31,7 +31,7 @@ export async function fetchPlayerSession() {
   return null;
 }
 
-/** After login/register API success — validate role & confirm session cookie. */
+/** After login/register API success — validate role (no extra /me round-trips). */
 export async function confirmPlayerSession(apiUser) {
   const optimistic = normalizePlayerUser(apiUser);
   if (!optimistic) {
@@ -41,10 +41,8 @@ export async function confirmPlayerSession(apiUser) {
     };
   }
 
-  for (let attempt = 0; attempt < 4; attempt++) {
-    await new Promise((r) => setTimeout(r, 50 * (attempt + 1)));
-    const confirmed = await fetchPlayerSession();
-    if (confirmed) return { ok: true, user: confirmed };
+  if (typeof window !== 'undefined') {
+    void fetchPlayerSession().catch(() => {});
   }
 
   return { ok: true, user: optimistic };

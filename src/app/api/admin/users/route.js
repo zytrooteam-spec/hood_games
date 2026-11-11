@@ -14,10 +14,16 @@ export async function GET(req) {
     const db = await getDb();
     const rawUsers = await db
       .collection('users')
-      .find({})
+      .find(
+        {},
+        {
+          projection: { password: 0, boundDevices: 0 },
+        }
+      )
       .sort({ createdAt: -1 })
+      .limit(500)
       .toArray();
-    const users = rawUsers.map(({ password, ...rest }) => rest);
+    const users = rawUsers;
     return NextResponse.json({ success: true, users });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

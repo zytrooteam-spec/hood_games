@@ -6,6 +6,7 @@ import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
 import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
 import { publishFinanceDeposit } from '@/lib/realtimePublish';
+import { listStaffDeposits } from '@/lib/staffDeposits.server';
 
 export async function GET(req) {
   try {
@@ -19,7 +20,7 @@ export async function GET(req) {
 
     let deposits;
     if (isStaff) {
-      deposits = await db.collection('deposits').find({}).sort({ createdAt: -1 }).toArray();
+      deposits = await listStaffDeposits(db);
     } else {
       const uid = dbUser?._id?.toString() || user.userId || user.id || user._id?.toString?.();
       const email = (dbUser?.email || user.email || '').toLowerCase().trim();

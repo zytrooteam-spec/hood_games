@@ -181,7 +181,7 @@ export default function CoinOperationsDesk({
     // Silent polling for real-time live desk operations
     const interval = setInterval(() => {
       if (!document.hidden) fetchData(true);
-    }, 4000);
+    }, 12000);
 
     const handleLiveEvent = (payload) => {
       if (!payload || !payload.type) return;

@@ -5,44 +5,76 @@ import { sanitizeGameTitle } from './fastDiff';
 import { getDefaultWheelConfig } from './wheelConfig';
 import { getDefaultVipConfig } from './vipConfig';
 
+let isDbReady = false;
 let isDbInitialized = false;
-let initPromise = null;
+let readyPromise = null;
+let heavySeedPromise = null;
 
-export async function ensureDbInitialized() {
-  if (isDbInitialized) return true;
-  if (initPromise) return initPromise;
+async function ensureIndexes(db) {
+  try {
+    if (db && typeof db.collection === 'function') {
+      await Promise.allSettled([
+        db.collection('users').createIndex({ email: 1 }),
+        db.collection('users').createIndex({ username: 1 }),
+        db.collection('users').createIndex({ deviceId: 1 }),
+        db.collection('deposits').createIndex({ status: 1, createdAt: -1 }),
+        db.collection('deposits').createIndex({ userId: 1, createdAt: -1 }),
+        db.collection('redemptions').createIndex({ status: 1, createdAt: -1 }),
+        db.collection('redemptions').createIndex({ userId: 1, createdAt: -1 }),
+        db.collection('accountRequests').createIndex({ status: 1, createdAt: -1 }),
+        db.collection('accountRequests').createIndex({ userEmail: 1 }),
+        db.collection('notifications').createIndex({ target: 1, createdAt: -1 }),
+        db.collection('notifications').createIndex({ email: 1, createdAt: -1 }),
+        db.collection('subscriptions').createIndex({ email: 1 }),
+        db.collection('subscriptions').createIndex({ fcmToken: 1 }),
+        db.collection('subscriptions').createIndex({ userId: 1 }),
+        db.collection('otps').createIndex({ email: 1 }),
+        db.collection('games').createIndex({ isActive: 1 }),
+        db.collection('payment_methods').createIndex({ active: 1 }),
+        db.collection('ledger').createIndex({ userId: 1, createdAt: -1 }),
+        db.collection('chat_messages').createIndex({ userId: 1, createdAt: -1 }),
+        db.collection('chat_messages').createIndex({ senderRole: 1, read: 1 }),
+        db.collection('chat_threads').createIndex({ lastMessageAt: -1 }),
+        db.collection('chat_threads').createIndex({ userId: 1 }, { unique: true }),
+        db.collection('chat_messages').createIndex({ senderRole: 1, read: 1 }),
+        db.collection('chat_threads').createIndex({ lastMessageAt: -1 }),
+        db.collection('chat_threads').createIndex({ userId: 1 }, { unique: true }),
+      ]);
+    }
+  } catch (idxErr) {
+    console.warn('Index initialization note:', idxErr.message);
+  }
+}
 
-  initPromise = (async () => {
-    try {
-      const db = await getDb();
+/** Fast path for login / hot APIs — connect + indexes only. */
+export async function ensureDbReady() {
+  if (isDbReady) return true;
+  if (readyPromise) return readyPromise;
 
-      // Ensure MongoDB Indexes
-      try {
-        if (db && typeof db.collection === 'function') {
-          await Promise.allSettled([
-            db.collection('users').createIndex({ email: 1 }),
-            db.collection('users').createIndex({ username: 1 }),
-            db.collection('deposits').createIndex({ status: 1, createdAt: -1 }),
-            db.collection('deposits').createIndex({ userId: 1, createdAt: -1 }),
-            db.collection('redemptions').createIndex({ status: 1, createdAt: -1 }),
-            db.collection('redemptions').createIndex({ userId: 1, createdAt: -1 }),
-            db.collection('accountRequests').createIndex({ status: 1, createdAt: -1 }),
-            db.collection('accountRequests').createIndex({ userEmail: 1 }),
-            db.collection('notifications').createIndex({ target: 1, createdAt: -1 }),
-            db.collection('notifications').createIndex({ email: 1, createdAt: -1 }),
-            db.collection('subscriptions').createIndex({ email: 1 }),
-            db.collection('subscriptions').createIndex({ fcmToken: 1 }),
-            db.collection('subscriptions').createIndex({ userId: 1 }),
-            db.collection('otps').createIndex({ email: 1 }),
-            db.collection('games').createIndex({ isActive: 1 }),
-            db.collection('payment_methods').createIndex({ active: 1 }),
-            db.collection('ledger').createIndex({ userId: 1, createdAt: -1 }),
-            db.collection('chat_messages').createIndex({ userId: 1, createdAt: -1 }),
-          ]);
-        }
-      } catch (idxErr) {
-        console.warn('Index initialization note:', idxErr.message);
-      }
+  readyPromise = (async () => {
+    const db = await getDb();
+    await ensureIndexes(db);
+    isDbReady = true;
+    scheduleHeavyDbSeed();
+    return true;
+  })();
+
+  return readyPromise;
+}
+
+function scheduleHeavyDbSeed() {
+  if (heavySeedPromise || isDbInitialized) return;
+  heavySeedPromise = runHeavyDbSeed()
+    .then(() => {
+      isDbInitialized = true;
+    })
+    .catch((err) => {
+      console.error('Background DB seed error:', err);
+    });
+}
+
+async function runHeavyDbSeed() {
+  const db = await getDb();
 
       // 1. DYNAMIC ADMIN & STAFF SEEDING (Credentials strictly read from ENV, NEVER hardcoded!)
       const usersCol = db.collection('users');
@@ -54,52 +86,37 @@ export async function ensureDbInitialized() {
       const staffPassword = process.env.STAFF_PASSWORD || 'HoodStaff@2026!';
       const staffEmail = process.env.STAFF_EMAIL || 'staff@hoodgames.com';
 
-      const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
-      const staffPasswordHash = await bcrypt.hash(staffPassword, 10);
+      const existingAdmin = await usersCol.findOne({ username: adminUsername });
+      if (!existingAdmin) {
+        await usersCol.insertOne({
+          username: adminUsername,
+          email: adminEmail,
+          password: await bcrypt.hash(adminPassword, 10),
+          role: ROLES.ADMIN,
+          isVerified: true,
+          balanceSC: 99999.0,
+          balanceGC: 1000000,
+          status: 'active',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
 
-      // Ensure Super Admin
-      await usersCol.updateOne(
-        { username: adminUsername },
-        {
-          $set: {
-            username: adminUsername,
-            email: adminEmail,
-            password: adminPasswordHash,
-            role: ROLES.ADMIN,
-            isVerified: true,
-            balanceSC: 99999.0,
-            balanceGC: 1000000,
-            status: 'active',
-            updatedAt: new Date(),
-          },
-          $setOnInsert: {
-            createdAt: new Date(),
-          },
-        },
-        { upsert: true }
-      );
-
-      // Ensure Staff User
-      await usersCol.updateOne(
-        { username: staffUsername },
-        {
-          $set: {
-            username: staffUsername,
-            email: staffEmail,
-            password: staffPasswordHash,
-            role: ROLES.STAFF,
-            isVerified: true,
-            balanceSC: 5000.0,
-            balanceGC: 100000,
-            status: 'active',
-            updatedAt: new Date(),
-          },
-          $setOnInsert: {
-            createdAt: new Date(),
-          },
-        },
-        { upsert: true }
-      );
+      const existingStaff = await usersCol.findOne({ username: staffUsername });
+      if (!existingStaff) {
+        await usersCol.insertOne({
+          username: staffUsername,
+          email: staffEmail,
+          password: await bcrypt.hash(staffPassword, 10),
+          role: ROLES.STAFF,
+          isVerified: true,
+          balanceSC: 5000.0,
+          balanceGC: 100000,
+          status: 'active',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
 
       // 2. Default System Settings (Fully dynamic, all editable via Admin Panel)
       const settingsCol = db.collection('system_settings');
@@ -441,12 +458,12 @@ export async function ensureDbInitialized() {
         }
       }
 
-      isDbInitialized = true;
-      return true;
-    } catch (err) {
-      console.error('Error during Hood Games database initialization:', err);
-      return false;
-    }
-  })();
-  return initPromise;
+}
+
+/** Legacy entry — no longer blocks on seeding (runs in background after ready). */
+export async function ensureDbInitialized() {
+  const ready = await ensureDbReady();
+  if (!ready) return false;
+  scheduleHeavyDbSeed();
+  return true;
 }
