@@ -4,8 +4,22 @@ import { getSessionUser, isStaffRole } from '@/lib/auth';
 import { ensureDbReady, ensureDbInitialized } from '@/lib/initDb';
 import { ADMIN_BOOTSTRAP_HEAVY_LIMIT } from '@/lib/adminBootstrap.server';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
-import { publishFinanceWithdraw } from '@/lib/realtimePublish';
+import { publishFinanceWithdraw, publishWalletSync } from '@/lib/realtimePublish';
 import { pulseStaffStatsAsync, pulseStaffScope } from '@/lib/staffDeskPulse.server';
+
+function pulseRedemptionDesk(redemption, patch = {}) {
+  publishFinanceWithdraw({
+    action: 'updated',
+    redemptionId: String(redemption._id),
+    amount: redemption.amount,
+    username: redemption.username,
+    userEmail: redemption.userEmail,
+    userId: redemption.userId,
+    ...patch,
+  });
+  pulseStaffStatsAsync();
+  pulseStaffScope('finance');
+}
 import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
 import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
 import { findUserGameAccount } from '@/lib/gameAccounts';
@@ -350,6 +364,7 @@ export async function PUT(req) {
         message: `Your $${redemption.amount} SC cashout from ${redemption.gameTitle} was verified and sent to finance for payout.`,
         type: 'withdraw_coin_approved',
       });
+      pulseRedemptionDesk(redemption, { status: 'pending', stage: 'finance_payout' });
       return NextResponse.json({
         success: true,
         message: 'Game score verified! Passed to finance for payout.',
@@ -383,6 +398,7 @@ export async function PUT(req) {
         message: `${reason} Your balance escrow was released.`,
         type: 'withdraw_rejected_by_coin',
       });
+      pulseRedemptionDesk(redemption, { status: 'rejected_by_coin' });
       return NextResponse.json({ success: true, message: 'Cashout rejected; escrow released.' });
     }
 
@@ -443,6 +459,20 @@ export async function PUT(req) {
         type: 'redemption_approved',
       });
 
+      const updatedPlayer = await db.collection('users').findOne(toIdQuery(redemption.userId), {
+        projection: { balanceSC: 1, balanceGC: 1, frozenBalance: 1, email: 1 },
+      });
+      if (updatedPlayer) {
+        publishWalletSync({
+          userId: String(redemption.userId),
+          userEmail: redemption.userEmail || updatedPlayer.email,
+          balanceSC: Number(updatedPlayer.balanceSC || 0),
+          balanceGC: Number(updatedPlayer.balanceGC || 0),
+          frozenBalance: Number(updatedPlayer.frozenBalance || 0),
+        });
+      }
+      pulseRedemptionDesk(redemption, { status: 'approved' });
+
       return NextResponse.json({ success: true, message: 'Redemption marked as paid!' });
     }
 
@@ -479,6 +509,7 @@ export async function PUT(req) {
         message: `Your $${redemption.amount} cashout was not approved. Escrow released. ${reason}`,
         type: 'redemption_rejected',
       });
+      pulseRedemptionDesk(redemption, { status: 'rejected' });
       return NextResponse.json({ success: true, message: 'Redemption rejected and escrow released.' });
     }
 

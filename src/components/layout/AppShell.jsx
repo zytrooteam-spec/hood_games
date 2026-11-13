@@ -23,6 +23,7 @@ import {
   writeJson,
   HOOD_SETTINGS_SNAPSHOT,
 } from '@/lib/clientCache';
+import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 
 export const AppShellContext = createContext({
   user: null,
@@ -136,11 +137,13 @@ export default function AppShell({ children }) {
     window.addEventListener('hood-instant-sync', onInstant);
     window.addEventListener('balanceUpdate', onInstant);
     // SSE first; gentle backup poll when tab visible
-    const interval = setInterval(() => {
-      if (document.hidden || sseLiveRef.current) return;
-      fetchUser(true);
-      fetchUnreadNotifs();
-    }, 120000);
+    const stopPoll = startSseBackedPoll(
+      () => {
+        fetchUser(true);
+        fetchUnreadNotifs();
+      },
+      { whenDisconnected: 90_000, whenConnected: 300_000, runOnStart: false }
+    );
 
     const handleUserSync = (e) => {
       if (e?.detail) {
@@ -164,7 +167,7 @@ export default function AppShell({ children }) {
     });
 
     return () => {
-      clearInterval(interval);
+      stopPoll();
       window.removeEventListener('hood-instant-sync', onInstant);
       window.removeEventListener('balanceUpdate', onInstant);
       window.removeEventListener('user-sync', handleUserSync);

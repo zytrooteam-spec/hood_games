@@ -6,7 +6,7 @@ import { ADMIN_BOOTSTRAP_HEAVY_LIMIT } from '@/lib/adminBootstrap.server';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
 import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
-import { publishFinanceDeposit } from '@/lib/realtimePublish';
+import { publishFinanceDeposit, publishWalletSync } from '@/lib/realtimePublish';
 import { pulseStaffStatsAsync, pulseStaffScope } from '@/lib/staffDeskPulse.server';
 import { listStaffDeposits } from '@/lib/staffDeposits.server';
 import { invalidateAuthCache, invalidateGameAccountsCache } from '@/lib/authCache';
@@ -214,6 +214,19 @@ export async function PUT(req) {
 
       if (deposit.userId) invalidateAuthCache(String(deposit.userId));
       if (deposit.userEmail) invalidateGameAccountsCache(deposit.userEmail);
+
+      const updatedPlayer = await db.collection('users').findOne(toIdQuery(deposit.userId), {
+        projection: { balanceSC: 1, balanceGC: 1, frozenBalance: 1, email: 1 },
+      });
+      if (updatedPlayer) {
+        publishWalletSync({
+          userId: String(deposit.userId),
+          userEmail: deposit.userEmail || updatedPlayer.email,
+          balanceSC: Number(updatedPlayer.balanceSC || 0),
+          balanceGC: Number(updatedPlayer.balanceGC || 0),
+          frozenBalance: Number(updatedPlayer.frozenBalance || 0),
+        });
+      }
 
       return NextResponse.json({
         success: true,

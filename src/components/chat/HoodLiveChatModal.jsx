@@ -5,6 +5,8 @@ import { MessageSquare, Send, X, ShieldCheck, User, Headphones } from 'lucide-re
 import { playTune } from '@/lib/soundAlerts';
 import { playerApiFetch } from '@/lib/playerApiFetch';
 import { diffSet } from '@/lib/fastDiff';
+import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import { REALTIME_TYPES } from '@/lib/realtimePublish';
 
 export default function HoodLiveChatModal({
   isOpen,
@@ -34,8 +36,20 @@ export default function HoodLiveChatModal({
       return;
     }
     fetchMessages();
-    const interval = setInterval(fetchMessages, 3000);
-    return () => clearInterval(interval);
+    const stop = startSseBackedPoll(fetchMessages, {
+      whenDisconnected: 20_000,
+      whenConnected: 240_000,
+      runOnStart: false,
+    });
+    const onRt = (e) => {
+      const ev = e?.detail;
+      if (ev?.type === REALTIME_TYPES.CHAT_MESSAGE && ev.senderRole === 'staff') fetchMessages();
+    };
+    window.addEventListener('hood-realtime', onRt);
+    return () => {
+      stop();
+      window.removeEventListener('hood-realtime', onRt);
+    };
   }, [isOpen]);
 
   useEffect(() => {

@@ -71,8 +71,12 @@ export function applyRealtimeEvent(event) {
           },
         })
       );
+      window.dispatchEvent(new CustomEvent('hood-game-accounts-refresh', { detail: event }));
       break;
     }
+    case REALTIME_TYPES.ACCOUNT_REQUEST_UPDATED:
+      window.dispatchEvent(new CustomEvent('hood-game-accounts-refresh', { detail: event }));
+      break;
     case REALTIME_TYPES.CHAT_MESSAGE: {
       if (event.senderRole === 'staff') {
         try {
@@ -134,12 +138,19 @@ export function applyRealtimeEvent(event) {
         );
       }
       break;
-    default:
+    case REALTIME_TYPES.COIN_DESK:
+      window.dispatchEvent(new CustomEvent('hood-coin-desk-refresh', { detail: event }));
+      break;
+  default:
       break;
   }
 
   if (ADMIN_PULSE_TYPES.has(event.type)) {
     adminDeskPulse(event);
+  }
+
+  if (event.type === REALTIME_TYPES.WALLET) {
+    window.dispatchEvent(new CustomEvent('hood-wallet-sync', { detail: event }));
   }
 
   if (PLAYER_PULSE_TYPES.has(event.type) || event.userEmail || event.userId) {

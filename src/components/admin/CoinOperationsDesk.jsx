@@ -21,6 +21,7 @@ import {
   Maximize2
 } from 'lucide-react';
 import { diffSet } from '@/lib/fastDiff';
+import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 import AdminPagination from '@/components/admin/AdminPagination';
 import {
   HoodAdminModal,
@@ -178,10 +179,11 @@ export default function CoinOperationsDesk({
 
   useEffect(() => {
     fetchData(true);
-    // Silent polling for real-time live desk operations
-    const interval = setInterval(() => {
-      if (!document.hidden) fetchData(true);
-    }, 12000);
+    const stopPoll = startSseBackedPoll(() => fetchData(true), {
+      whenDisconnected: 45_000,
+      whenConnected: 240_000,
+      runOnStart: false,
+    });
 
     const handleLiveEvent = (payload) => {
       if (!payload || !payload.type) return;
@@ -241,11 +243,17 @@ export default function CoinOperationsDesk({
       }
     };
     window.addEventListener('storage', handleStorage);
+    const onDesk = () => fetchData(true, true);
+    const onCoin = () => fetchData(true, true);
+    window.addEventListener('hood-admin-desk-sync', onDesk);
+    window.addEventListener('hood-coin-desk-refresh', onCoin);
 
     return () => {
-      clearInterval(interval);
+      stopPoll();
       if (channel) channel.close();
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('hood-admin-desk-sync', onDesk);
+      window.removeEventListener('hood-coin-desk-refresh', onCoin);
     };
   }, []);
 

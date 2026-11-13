@@ -23,6 +23,7 @@ import HoodCashierGameSelect from '@/components/wallet/HoodCashierGameSelect';
 import HoodRedeemPanel from '@/components/wallet/HoodRedeemPanel';
 import { getAvailableGamePlatforms } from '@/lib/gamePlatforms';
 import { playerApiFetch } from '@/lib/playerApiFetch';
+import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 
 function WalletAccountSync({ user, onAccounts }) {
   const load = useCallback(() => {
@@ -132,9 +133,26 @@ function WalletPageInner() {
         }
       })
       .catch(() => {});
-    const interval = setInterval(loadPaymentData, 6000);
-    return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const sync = () => loadPaymentData();
+    const stop = startSseBackedPoll(sync, {
+      whenDisconnected: 25_000,
+      whenConnected: 180_000,
+      runOnStart: false,
+    });
+    const onWallet = () => sync();
+    window.addEventListener('hood-instant-sync', onWallet);
+    window.addEventListener('hood-wallet-sync', onWallet);
+    window.addEventListener('hood-cashier-refresh', onWallet);
+    return () => {
+      stop();
+      window.removeEventListener('hood-instant-sync', onWallet);
+      window.removeEventListener('hood-wallet-sync', onWallet);
+      window.removeEventListener('hood-cashier-refresh', onWallet);
+    };
+  }, [loadPaymentData]);
 
   useEffect(() => {
     const names = getAvailableGamePlatforms(adminGames, userGameAccounts);

@@ -7,6 +7,7 @@ import CoinOperationsDesk from './CoinOperationsDesk';
 import AffiliateManagementHub from './AffiliateManagementHub';
 import { diffSet } from '@/lib/fastDiff';
 import { staffApiFetch } from '@/lib/staffApiFetch';
+import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 import { hoodAlert, hoodConfirm } from '@/lib/hoodAlert';
 import { generateGameCredentialPair } from '@/lib/gameCredentials';
 import {
@@ -403,8 +404,19 @@ export function CoinAllotmentDesk({ sessionUser, onMutate }) {
 
   useEffect(() => {
     refresh();
-    const i = setInterval(refresh, 5000);
-    return () => clearInterval(i);
+    const stop = startSseBackedPoll(refresh, {
+      whenDisconnected: 40_000,
+      whenConnected: 240_000,
+      runOnStart: false,
+    });
+    const onDesk = () => refresh();
+    window.addEventListener('hood-coin-desk-refresh', onDesk);
+    window.addEventListener('hood-admin-desk-sync', onDesk);
+    return () => {
+      stop();
+      window.removeEventListener('hood-coin-desk-refresh', onDesk);
+      window.removeEventListener('hood-admin-desk-sync', onDesk);
+    };
   }, [refresh]);
 
   return (
@@ -448,8 +460,11 @@ export function AffiliatesDesk({ mode = 'affiliates', onRefresh }) {
 
   useEffect(() => {
     load();
-    const i = setInterval(load, 15000);
-    return () => clearInterval(i);
+    return startSseBackedPoll(load, {
+      whenDisconnected: 60_000,
+      whenConnected: 300_000,
+      runOnStart: false,
+    });
   }, [load]);
 
   return (

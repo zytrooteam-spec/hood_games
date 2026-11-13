@@ -7,7 +7,11 @@ import { sanitizeGameTitle } from '@/lib/fastDiff';
 import { mapAccountRequest } from '@/lib/mapAccountRequest';
 import { resolvePlayerDbUser } from '@/lib/resolvePlayerDbUser';
 import { getFreeplayAmountSC } from '@/lib/freeplayConfig.server';
-import { publishAccountRequestCreated, publishAccountRequestUpdated } from '@/lib/realtimePublish';
+import {
+  publishAccountRequestCreated,
+  publishAccountRequestUpdated,
+  publishCoinDeskPulse,
+} from '@/lib/realtimePublish';
 import { pulseStaffStatsAsync, pulseStaffScope } from '@/lib/staffDeskPulse.server';
 import {
   invalidateAccountRequestsCache,
@@ -262,6 +266,7 @@ export async function POST(req) {
     });
     pulseStaffStatsAsync();
     pulseStaffScope('requests');
+    if (requestType === 'COIN_LOAD') publishCoinDeskPulse({ requestId: res.insertedId.toString() });
 
     invalidateAccountRequestsCache();
     invalidateAuthCache(dbUser._id.toString());

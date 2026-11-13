@@ -30,6 +30,7 @@ import { readGamesCache, writeGamesCache } from '@/lib/gameAssets';
 import HoodNotificationsModal from '@/components/modals/HoodNotificationsModal';
 import FreeplayTaskModal from '@/components/modals/FreeplayTaskModal';
 import { unlockAudioContext } from '@/lib/soundAlerts';
+import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 
 import {
   Sparkles,
@@ -198,15 +199,17 @@ export default function HomePage() {
       }
     });
 
-    // Silent background polling every 6s (no loading spinners, no re-render flicker)
-    const interval = setInterval(() => {
-      fetchUser(true);
-      fetchSiteData(true);
-      fetchUnreadNotifs();
-    }, 6000);
+    const stopPoll = startSseBackedPoll(
+      () => {
+        fetchUser(true);
+        fetchSiteData(true);
+        fetchUnreadNotifs();
+      },
+      { whenDisconnected: 35_000, whenConnected: 180_000, runOnStart: false }
+    );
 
     return () => {
-      clearInterval(interval);
+      stopPoll();
       window.removeEventListener('user-sync', handleUserSync);
       window.removeEventListener('hood-user-sync', handleUserSync);
       unsubPlayer();

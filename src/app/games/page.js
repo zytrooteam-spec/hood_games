@@ -13,6 +13,7 @@ import { playTune } from '@/lib/soundAlerts';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import { readGamesCache, writeGamesCache } from '@/lib/gameAssets';
 import { playerApiFetch } from '@/lib/playerApiFetch';
+import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 
 function GamesContent() {
   const { user, fetchUser, openAuth } = useAppShell();
@@ -59,16 +60,30 @@ function GamesContent() {
     const cached = readGamesCache();
     if (cached?.length) diffSet(setGames, cached.map((g) => ({ ...g, title: sanitizeGameTitle(g.title) })));
     loadGames(Boolean(cached?.length));
-    const interval = setInterval(() => loadGames(true), 8000);
-    return () => clearInterval(interval);
+    return startSseBackedPoll(() => loadGames(true), {
+      whenDisconnected: 60_000,
+      whenConnected: 300_000,
+      runOnStart: false,
+    });
   }, []);
 
   useEffect(() => {
-    if (user?.email) {
-      loadUserAccounts(user.email);
-      const interval = setInterval(() => loadUserAccounts(user.email), 6000);
-      return () => clearInterval(interval);
-    }
+    if (!user?.email) return;
+    const syncAccounts = () => loadUserAccounts(user.email);
+    syncAccounts();
+    const stop = startSseBackedPoll(syncAccounts, {
+      whenDisconnected: 25_000,
+      whenConnected: 180_000,
+      runOnStart: false,
+    });
+    const onRefresh = () => syncAccounts();
+    window.addEventListener('hood-game-accounts-refresh', onRefresh);
+    window.addEventListener('hood-instant-sync', onRefresh);
+    return () => {
+      stop();
+      window.removeEventListener('hood-game-accounts-refresh', onRefresh);
+      window.removeEventListener('hood-instant-sync', onRefresh);
+    };
   }, [user?.email]);
 
   return (

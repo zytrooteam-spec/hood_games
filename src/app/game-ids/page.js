@@ -11,6 +11,7 @@ import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import { getGameThumbnail, readGamesCache, writeGamesCache } from '@/lib/gameAssets';
 import { findGameForAccount } from '@/lib/matchGameAccount';
 import { playerApiFetch } from '@/lib/playerApiFetch';
+import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 
 function GameIdsContent() {
   const { user, openAuth } = useAppShell();
@@ -62,9 +63,21 @@ function GameIdsContent() {
 
   useEffect(() => {
     if (user?.email) {
-      loadData(user.email);
-      const interval = setInterval(() => loadData(user.email, true), 5000);
-      return () => clearInterval(interval);
+      const sync = () => loadData(user.email, true);
+      sync();
+      const stop = startSseBackedPoll(sync, {
+        whenDisconnected: 25_000,
+        whenConnected: 180_000,
+        runOnStart: false,
+      });
+      const onEv = () => sync();
+      window.addEventListener('hood-game-accounts-refresh', onEv);
+      window.addEventListener('hood-instant-sync', onEv);
+      return () => {
+        stop();
+        window.removeEventListener('hood-game-accounts-refresh', onEv);
+        window.removeEventListener('hood-instant-sync', onEv);
+      };
     }
     setLoadingDesk(false);
   }, [user?.email]);

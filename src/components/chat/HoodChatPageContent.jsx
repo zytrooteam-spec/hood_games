@@ -18,6 +18,8 @@ import { hoodAlert } from '@/lib/hoodAlert';
 import { compressImageFile } from '@/lib/imageCompress';
 import { diffSet } from '@/lib/fastDiff';
 import HoodChatMessageBubble from '@/components/chat/HoodChatMessageBubble';
+import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import { REALTIME_TYPES } from '@/lib/realtimePublish';
 
 const STAFF_ROLES = new Set(['admin', 'superadmin', 'staff', 'coin_manager', 'financial_manager', 'support_admin']);
 
@@ -63,10 +65,11 @@ export default function HoodChatPageContent({ user, onOpenAuth }) {
   useEffect(() => {
     fetchMessages();
     fetchRef.current = fetchMessages;
-    const interval = setInterval(() => {
-      if (!document.hidden) fetchMessages();
-    }, 8000);
-    return () => clearInterval(interval);
+    return startSseBackedPoll(() => fetchMessages(), {
+      whenDisconnected: 30_000,
+      whenConnected: 300_000,
+      runOnStart: false,
+    });
   }, [user?.email, user?.id]);
 
   useEffect(() => {
@@ -79,7 +82,7 @@ export default function HoodChatPageContent({ user, onOpenAuth }) {
     }
     const onRealtime = (e) => {
       const ev = e?.detail;
-      if (!ev || ev.type !== 'CHAT_MESSAGE') return;
+      if (!ev || ev.type !== REALTIME_TYPES.CHAT_MESSAGE) return;
       if (ev.senderRole === 'staff') fetchRef.current?.();
     };
     const onInstant = () => fetchRef.current?.();

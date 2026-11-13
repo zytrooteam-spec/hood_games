@@ -1,3 +1,9 @@
+/**
+ * Server SSE publishers — pair with RealtimeBridge + startSseBackedPoll (client backup).
+ * Staff events: finance, account-requests, chat, coin desk, admin stats.
+ * Player events: wallet, finance, account/chat, broadcast.
+ */
+
 import {
   getRealtimeHub,
   staffChannel,
@@ -121,4 +127,25 @@ export function publishAdminStatsSnapshot(stats) {
     stats,
     targets: { staff: true },
   });
+}
+
+export function publishWalletSync({ userId, userEmail, balanceSC, balanceGC, frozenBalance }) {
+  publishRealtimeEvent({
+    type: REALTIME_TYPES.WALLET,
+    userId,
+    userEmail,
+    balanceSC,
+    balanceGC,
+    frozenBalance,
+    targets: { userEmail, userId },
+  });
+}
+
+export function publishCoinDeskPulse(extra = {}) {
+  publishRealtimeEvent({
+    type: REALTIME_TYPES.COIN_DESK,
+    ...extra,
+    targets: { staff: true },
+  });
+  publishStaffDeskPulse('finance', extra);
 }
