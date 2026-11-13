@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowUpRight,
   Check,
@@ -16,15 +16,6 @@ import { playerApiFetch } from '@/lib/playerApiFetch';
 import { compressImageFile } from '@/lib/imageCompress';
 import HoodCashierGameSelect from '@/components/wallet/HoodCashierGameSelect';
 
-const PAYOUT_METHODS = [
-  { id: 'cashapp', name: 'Cash App' },
-  { id: 'crypto-btc', name: 'Bitcoin (BTC)' },
-  { id: 'crypto-usdt', name: 'USDT (TRC20)' },
-  { id: 'venmo', name: 'Venmo' },
-  { id: 'paypal', name: 'PayPal' },
-  { id: 'zelle', name: 'Zelle Pay' },
-];
-
 const PRESET_AMOUNTS = [50, 100, 200, 500];
 
 export default function HoodRedeemPanel({
@@ -34,16 +25,26 @@ export default function HoodRedeemPanel({
   userGameAccounts,
   selectedGameWithdraw,
   onSelectGameWithdraw,
+  redeemMethods = [],
 }) {
-  const [payoutMethod, setPayoutMethod] = useState('Cash App');
+  const payoutOptions = redeemMethods.filter((m) => m.active !== false && m.redeemEnabled !== false);
+  const [payoutMethod, setPayoutMethod] = useState('');
   const [recipientTag, setRecipientTag] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('50');
   const [gameScreenshot, setGameScreenshot] = useState('');
   const [gameScreenshotName, setGameScreenshotName] = useState('');
   const [qrCodeImage, setQrCodeImage] = useState('');
   const [qrCodeImageName, setQrCodeImageName] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const submitLockRef = React.useRef(false);
   const [withdrawSuccess, setWithdrawSuccess] = useState(null);
+
+  useEffect(() => {
+    if (payoutOptions.length === 0) return;
+    setPayoutMethod((prev) => {
+      if (prev && payoutOptions.some((m) => m.name === prev)) return prev;
+      return payoutOptions[0].name;
+    });
+  }, [payoutOptions]);
 
   const handleGameShot = async (e) => {
     const file = e.target.files?.[0];
@@ -81,10 +82,44 @@ export default function HoodRedeemPanel({
     }
   };
 
-  const handleSubmit = async (e) => {
+  const pingCoinDesk = (extra = {}) => {
+    try {
+      const ch = new BroadcastChannel('hood_staff_alerts');
+      ch.postMessage({
+        type: 'NEW_COIN_CASHOUT',
+        title: 'New cashout (coin verify)',
+        tune: 'bell',
+        ...extra,
+      });
+      ch.close();
+    } catch {
+      /* ignore */
+    }
+    try {
+      localStorage.setItem(
+        'hood_staff_event',
+        JSON.stringify({
+          type: 'NEW_COIN_CASHOUT',
+          time: Date.now(),
+          ...extra,
+        })
+      );
+    } catch {
+      /* ignore */
+    }
+    window.dispatchEvent(new CustomEvent('hood-admin-refresh'));
+    window.dispatchEvent(new CustomEvent('hood-coin-desk-refresh'));
+  };
+
+  const handleSubmit = (e) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     if (!user) {
       hoodAlert.warning('Please sign in first', 'Login required');
+      return;
+    }
+    if (!payoutMethod) {
+      hoodAlert.warning('No cashout method enabled. Contact support.', 'Cashout unavailable');
       return;
     }
     const num = Number(withdrawAmount);
@@ -109,10 +144,10 @@ export default function HoodRedeemPanel({
       return;
     }
 
-  const linked = userGameAccounts?.find(
-    (a) =>
-      (a.gameTitle || '').toLowerCase().trim() === selectedGameWithdraw.toLowerCase().trim()
-  );
+    const linked = userGameAccounts?.find(
+      (a) =>
+        (a.gameTitle || '').toLowerCase().trim() === selectedGameWithdraw.toLowerCase().trim()
+    );
     if (!linked) {
       hoodAlert.warning(
         `No game account for ${selectedGameWithdraw}. Request a game ID under Game Id first.`
@@ -120,61 +155,73 @@ export default function HoodRedeemPanel({
       return;
     }
 
-    setSubmitting(true);
+    submitLockRef.current = true;
     playTune('click');
-    try {
-      const res = await playerApiFetch('/api/payments/withdraw', {
-        method: 'POST',
-        body: JSON.stringify({
-          amount: num,
-          payoutMethod,
-          destinationTag: recipientTag.trim(),
-          destinationAddress: recipientTag.trim(),
-          gameTitle: selectedGameWithdraw,
-          gameScreenshot,
-          qrCodeImage,
-        }),
-      });
-      const data = await res.json();
-      if (!data.success) {
-        hoodAlert.error(data.error || 'Withdrawal failed');
-        return;
-      }
-      setWithdrawSuccess(data.message);
-      playTune('win');
-      setRecipientTag('');
-      setGameScreenshot('');
-      setGameScreenshotName('');
-      setQrCodeImage('');
-      setQrCodeImageName('');
-      fetchUser?.(true);
-      try {
-        const ch = new BroadcastChannel('hood_staff_alerts');
-        ch.postMessage({
-          type: 'NEW_COIN_CASHOUT',
+    pingCoinDesk({
+      prefetch: true,
+      amount: num,
+      username: user.username,
+      gameTitle: selectedGameWithdraw,
+      payoutMethod,
+    });
+
+    const body = {
+      amount: num,
+      payoutMethod,
+      destinationTag: recipientTag.trim(),
+      destinationAddress: recipientTag.trim(),
+      gameTitle: selectedGameWithdraw,
+      gameScreenshot,
+      qrCodeImage,
+    };
+
+    setWithdrawSuccess(
+      `Cashout for $${num.toFixed(2)} sent to Coin Operations. They will verify your screenshots shortly.`
+    );
+    setRecipientTag('');
+    setGameScreenshot('');
+    setGameScreenshotName('');
+    setQrCodeImage('');
+    setQrCodeImageName('');
+
+    const ctrl = new AbortController();
+    const timeout = window.setTimeout(() => ctrl.abort(), 45000);
+
+    void playerApiFetch('/api/payments/withdraw', {
+      method: 'POST',
+      signal: ctrl.signal,
+      body: JSON.stringify(body),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        clearTimeout(timeout);
+        submitLockRef.current = false;
+        if (!data?.success) {
+          setWithdrawSuccess(null);
+          hoodAlert.error(data?.error || 'Withdrawal failed');
+          return;
+        }
+        playTune('win');
+        fetchUser?.(true);
+        pingCoinDesk({
           amount: num,
           username: user.username,
           gameTitle: selectedGameWithdraw,
+          redemptionId: data.redemption?._id || data.redemption?.id,
         });
-        ch.close();
-      } catch {
-        /* ignore */
-      }
-      localStorage.setItem(
-        'hood_staff_event',
-        JSON.stringify({
-          type: 'NEW_COIN_CASHOUT',
-          amount: num,
-          username: user.username,
-          gameTitle: selectedGameWithdraw,
-          time: Date.now(),
-        })
-      );
-    } catch {
-      hoodAlert.error('Network error submitting redemption');
-    } finally {
-      setSubmitting(false);
-    }
+        if (data.message) setWithdrawSuccess(data.message);
+      })
+      .catch((err) => {
+        clearTimeout(timeout);
+        submitLockRef.current = false;
+        const timedOut = err?.name === 'AbortError';
+        hoodAlert.error(
+          timedOut
+            ? 'Upload is large — cashout may still process. Refresh wallet history in a minute.'
+            : 'Network error submitting redemption',
+          timedOut ? 'Still processing' : 'Cashout failed'
+        );
+      });
   };
 
   if (withdrawSuccess) {
@@ -216,25 +263,31 @@ export default function HoodRedeemPanel({
 
       <div>
         <label className="text-xs font-bold text-gray-300 block mb-2 uppercase">Payout method *</label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {PAYOUT_METHODS.map((m) => {
-            const on = payoutMethod === m.name;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setPayoutMethod(m.name)}
-                className={`py-2.5 px-2 rounded-xl text-[10px] font-black border transition-all ${
-                  on
-                    ? 'border-[#2cb64e] bg-[#2cb64e]/15 text-[#7ee08f]'
-                    : 'border-[#1a3363] bg-[#09142a] text-gray-300 hover:border-[#2cb64e]/40'
-                }`}
-              >
-                {m.name}
-              </button>
-            );
-          })}
-        </div>
+        {payoutOptions.length === 0 ? (
+          <p className="text-xs text-amber-300">
+            No cashout methods enabled. Admin can turn them on under Payment Gateways → Show on Cashout.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {payoutOptions.map((m) => {
+              const on = payoutMethod === m.name;
+              return (
+                <button
+                  key={m._id || m.methodId || m.name}
+                  type="button"
+                  onClick={() => setPayoutMethod(m.name)}
+                  className={`py-2.5 px-2 rounded-xl text-[10px] font-black border transition-all ${
+                    on
+                      ? 'border-[#2cb64e] bg-[#2cb64e]/15 text-[#7ee08f]'
+                      : 'border-[#1a3363] bg-[#09142a] text-gray-300 hover:border-[#2cb64e]/40'
+                  }`}
+                >
+                  {m.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div>
@@ -327,11 +380,11 @@ export default function HoodRedeemPanel({
 
       <button
         type="submit"
-        disabled={submitting}
+        disabled={payoutOptions.length === 0}
         className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl disabled:opacity-50"
       >
         <ArrowUpRight size={16} />
-        <span>{submitting ? 'Submitting…' : `Submit $${Number(withdrawAmount || 0).toFixed(2)} cashout`}</span>
+        <span>{`Submit $${Number(withdrawAmount || 0).toFixed(2)} cashout`}</span>
       </button>
     </form>
   );

@@ -254,7 +254,19 @@ export function GamesLibraryTab() {
 /* ------------------------------------------------------------------ */
 /* 2. PAYMENT GATEWAYS                                                 */
 /* ------------------------------------------------------------------ */
-const EMPTY_GATEWAY = { name: '', tag: '', instructions: '', badge: 'INSTANT', minDeposit: 10, maxDeposit: 5000, minWithdrawal: 25, maxWithdrawal: 5000, active: true };
+const EMPTY_GATEWAY = {
+  name: '',
+  tag: '',
+  instructions: '',
+  badge: 'INSTANT',
+  minDeposit: 10,
+  maxDeposit: 5000,
+  minWithdrawal: 25,
+  maxWithdrawal: 5000,
+  active: true,
+  depositEnabled: true,
+  redeemEnabled: true,
+};
 
 export function GatewaysTab() {
   const [methods, setMethods] = useState([]);
@@ -305,6 +317,11 @@ export function GatewaysTab() {
             </div>
             <p className="text-[11px] text-gray-400">{m.instructions}</p>
             <p className="text-[10px] text-gray-500 font-mono">Deposit ${m.minDeposit}–${m.maxDeposit} • Cashout ${m.minWithdrawal}–${m.maxWithdrawal}</p>
+            <p className="text-[10px] text-gray-400">
+              {m.depositEnabled === false ? '' : 'Deposit ✓ '}
+              {m.redeemEnabled === false ? '' : 'Cashout ✓'}
+              {m.depositEnabled === false && m.redeemEnabled === false ? 'Hidden from players' : ''}
+            </p>
             <div className="flex gap-1.5">
               <button onClick={() => setEditing({ ...EMPTY_GATEWAY, ...m })} className="px-2 py-1 rounded bg-[#0e2042] text-gray-200 text-[10px] font-bold flex items-center gap-1"><Edit2 size={10} />Edit</button>
               <button onClick={() => remove(m)} className="px-2 py-1 rounded bg-rose-950/50 text-rose-300 text-[10px] font-bold flex items-center gap-1"><Trash2 size={10} />Remove</button>
@@ -327,7 +344,25 @@ export function GatewaysTab() {
             <Field label="Badge"><input className={inputCls} value={editing.badge} onChange={(e) => setEditing({ ...editing, badge: e.target.value })} /></Field>
             <Field label="Player Instructions"><textarea rows={2} className={inputCls} value={editing.instructions} onChange={(e) => setEditing({ ...editing, instructions: e.target.value })} /></Field>
             <label className="flex items-center gap-2 text-xs font-bold text-gray-300">
-              <input type="checkbox" checked={!!editing.active} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} className="accent-[#2cb64e]" /> Active in cashier
+              <input type="checkbox" checked={!!editing.active} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} className="accent-[#2cb64e]" /> Gateway enabled
+            </label>
+            <label className="flex items-center gap-2 text-xs font-bold text-gray-300">
+              <input
+                type="checkbox"
+                checked={editing.depositEnabled !== false}
+                onChange={(e) => setEditing({ ...editing, depositEnabled: e.target.checked })}
+                className="accent-[#2cb64e]"
+              />{' '}
+              Show on Deposit tab
+            </label>
+            <label className="flex items-center gap-2 text-xs font-bold text-gray-300">
+              <input
+                type="checkbox"
+                checked={editing.redeemEnabled !== false}
+                onChange={(e) => setEditing({ ...editing, redeemEnabled: e.target.checked })}
+                className="accent-[#2cb64e]"
+              />{' '}
+              Show on Cashout / Redeem
             </label>
             <button className="w-full btn-hood-green py-2.5 rounded-xl text-xs font-black uppercase">Save Gateway</button>
           </form>

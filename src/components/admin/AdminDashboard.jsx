@@ -885,6 +885,11 @@ export default function AdminDashboard({ user, onLogout }) {
         scheduleChatInboxRefresh();
         return;
       }
+      if (payload.type === 'NEW_COIN_CASHOUT' || payload.type === 'NEW_FINANCE_REDEMPTION') {
+        refreshFinanceQueue();
+        window.dispatchEvent(new CustomEvent('hood-coin-desk-refresh'));
+        return;
+      }
       if (
         payload.type === 'NEW_DEPOSIT' ||
         payload.type === 'NEW_WITHDRAW' ||

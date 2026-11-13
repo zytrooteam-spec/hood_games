@@ -43,41 +43,45 @@ export async function POST(req) {
 
     const body = await req.json();
     const db = await getDb();
-    const { _id, methodId, name, tag, instructions, minDeposit, maxDeposit, minWithdrawal, maxWithdrawal, active, badge } = body;
+    const {
+      _id,
+      methodId,
+      name,
+      tag,
+      instructions,
+      minDeposit,
+      maxDeposit,
+      minWithdrawal,
+      maxWithdrawal,
+      active,
+      badge,
+      depositEnabled,
+      redeemEnabled,
+    } = body;
+
+    const methodFields = {
+      methodId,
+      name,
+      tag,
+      instructions,
+      minDeposit: Number(minDeposit || 10),
+      maxDeposit: Number(maxDeposit || 5000),
+      minWithdrawal: Number(minWithdrawal || 25),
+      maxWithdrawal: Number(maxWithdrawal || 5000),
+      active: Boolean(active),
+      badge,
+      depositEnabled: depositEnabled !== false,
+      redeemEnabled: redeemEnabled !== false,
+      updatedAt: new Date(),
+    };
 
     if (_id) {
-      await db.collection('payment_methods').updateOne(
-        toIdQuery(_id),
-        {
-          $set: {
-            methodId,
-            name,
-            tag,
-            instructions,
-            minDeposit: Number(minDeposit || 10),
-            maxDeposit: Number(maxDeposit || 5000),
-            minWithdrawal: Number(minWithdrawal || 25),
-            maxWithdrawal: Number(maxWithdrawal || 5000),
-            active: Boolean(active),
-            badge,
-            updatedAt: new Date(),
-          },
-        }
-      );
+      await db.collection('payment_methods').updateOne(toIdQuery(_id), { $set: methodFields });
     } else {
       await db.collection('payment_methods').insertOne({
+        ...methodFields,
         methodId: methodId || name.toLowerCase().replace(/\s+/g, '-'),
-        name,
-        tag,
-        instructions,
-        minDeposit: Number(minDeposit || 10),
-        maxDeposit: Number(maxDeposit || 5000),
-        minWithdrawal: Number(minWithdrawal || 25),
-        maxWithdrawal: Number(maxWithdrawal || 5000),
-        active: active !== false,
-        badge,
         createdAt: new Date(),
-        updatedAt: new Date(),
       });
     }
 

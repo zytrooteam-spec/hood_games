@@ -226,14 +226,14 @@ export default function CoinOperationsDesk({
     // Cross-tab broadcast listener for instant (0ms) load & cashout detection
     let channel = null;
     try {
-      channel = new BroadcastChannel('paradise_staff_alerts');
+      channel = new BroadcastChannel('hood_staff_alerts');
       channel.onmessage = (event) => {
         handleLiveEvent(event.data);
       };
     } catch {}
 
     const handleStorage = (e) => {
-      if (e.key === 'paradise_staff_event' && e.newValue) {
+      if (e.key === 'hood_staff_event' && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue);
           handleLiveEvent(parsed);
@@ -515,7 +515,7 @@ export default function CoinOperationsDesk({
         fetchData(true, true);
         // Broadcast instant notification to Finance / Cashier desk (0ms sound + Chrome desktop notification)
         try {
-          const staffChannel = new BroadcastChannel('paradise_staff_alerts');
+          const staffChannel = new BroadcastChannel('hood_staff_alerts');
           staffChannel.postMessage({
             type: 'NEW_FINANCE_REDEMPTION',
             redemptionId: targetId,
@@ -527,7 +527,7 @@ export default function CoinOperationsDesk({
         } catch {}
 
         localStorage.setItem(
-          'paradise_staff_event',
+          'hood_staff_event',
           JSON.stringify({
             type: 'NEW_FINANCE_REDEMPTION',
             redemptionId: targetId,

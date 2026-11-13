@@ -54,6 +54,7 @@ function WalletPageInner() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState('deposit');
   const [methods, setMethods] = useState([]);
+  const [allPaymentMethods, setAllPaymentMethods] = useState([]);
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [copied, setCopied] = useState(false);
 
@@ -94,7 +95,8 @@ function WalletPageInner() {
       .then((r) => r.json())
       .then((d) => {
         if (d?.success && Array.isArray(d?.methods)) {
-          const active = d.methods.filter((m) => m.active !== false);
+          diffSet(setAllPaymentMethods, d.methods);
+          const active = d.methods.filter((m) => m.active !== false && m.depositEnabled !== false);
           diffSet(setMethods, active);
           setSelectedMethod((prev) => (prev ? prev : active[0] || null));
         }
@@ -502,6 +504,7 @@ function WalletPageInner() {
                   userGameAccounts={userGameAccounts}
                   selectedGameWithdraw={selectedGameWithdraw}
                   onSelectGameWithdraw={setSelectedGameWithdraw}
+                  redeemMethods={allPaymentMethods}
                 />
               ) : (
                 <div className="text-center py-8 text-sm text-gray-400">

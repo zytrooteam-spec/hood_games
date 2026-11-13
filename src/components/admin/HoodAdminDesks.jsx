@@ -206,7 +206,14 @@ export function AccountRequestsDesk({
       try {
         const p = JSON.parse(e.newValue);
         const t = p?.type;
-        if (t === 'NEW_GAME_ID_REQUEST' || t === 'NEW_COIN_LOAD' || t === 'FREEPLAY') onInstant();
+        if (
+          t === 'NEW_GAME_ID_REQUEST' ||
+          t === 'NEW_COIN_LOAD' ||
+          t === 'NEW_COIN_CASHOUT' ||
+          t === 'FREEPLAY'
+        ) {
+          onInstant();
+        }
       } catch {
         /* ignore */
       }
@@ -217,7 +224,14 @@ export function AccountRequestsDesk({
       bc = new BroadcastChannel('hood_staff_alerts');
       bc.onmessage = (ev) => {
         const t = ev?.data?.type;
-        if (t === 'NEW_GAME_ID_REQUEST' || t === 'NEW_COIN_LOAD' || t === 'FREEPLAY') onInstant();
+        if (
+          t === 'NEW_GAME_ID_REQUEST' ||
+          t === 'NEW_COIN_LOAD' ||
+          t === 'NEW_COIN_CASHOUT' ||
+          t === 'FREEPLAY'
+        ) {
+          onInstant();
+        }
       };
     } catch {
       /* ignore */

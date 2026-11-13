@@ -7,6 +7,35 @@ import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { publishFinanceWithdraw, publishWalletSync } from '@/lib/realtimePublish';
 import { pulseStaffStatsAsync, pulseStaffScope } from '@/lib/staffDeskPulse.server';
 
+function deferRedemptionSideEffects(payload) {
+  const { userId, userEmail, username, redeemAmount, requestedGame, res } = payload;
+  publishFinanceWithdraw({
+    action: 'created',
+    status: 'pending_coin',
+    redemptionId: res.insertedId.toString(),
+    amount: redeemAmount,
+    username,
+    userEmail,
+    userId,
+  });
+  pulseStaffScope('finance');
+  notifyPlayer({
+    userId,
+    userEmail,
+    username,
+    title: 'Cashout request submitted',
+    message: `Your $${redeemAmount.toFixed(2)} SC cashout was sent to Coin Operations for game verification.`,
+    type: 'withdraw_pending_coin',
+  });
+  notifyStaff({
+    title: 'New cashout (coin verification)',
+    message: `@${username} — $${redeemAmount.toFixed(2)} SC from ${requestedGame}`,
+    type: 'withdraw_request',
+    data: { redemptionId: res.insertedId.toString() },
+  });
+  pulseStaffStatsAsync();
+}
+
 function pulseRedemptionDesk(redemption, patch = {}) {
   publishFinanceWithdraw({
     action: 'updated',
@@ -121,7 +150,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
-    await ensureDbInitialized();
+    await ensureDbReady();
     const { session, dbUser, error, status } = await requirePlayerDbUser(req);
     if (!dbUser) {
       return NextResponse.json({ success: false, error }, { status: status || 401 });
@@ -281,39 +310,30 @@ export async function POST(req) {
       createdAt: new Date(),
     });
 
-    notifyPlayer({
-      userId,
-      userEmail,
-      username,
-      title: 'Cashout request submitted',
-      message: `Your $${redeemAmount.toFixed(2)} SC cashout was sent to Coin Operations for game verification.`,
-      type: 'withdraw_pending_coin',
-    });
-
-    notifyStaff({
-      title: 'New cashout (coin verification)',
-      message: `@${username} — $${redeemAmount.toFixed(2)} SC from ${requestedGame}`,
-      type: 'withdraw_request',
-      data: { redemptionId: res.insertedId.toString() },
-    });
-
-    publishFinanceWithdraw({
-      action: 'created',
-      status: 'pending_coin',
-      redemptionId: res.insertedId.toString(),
-      amount: redeemAmount,
-      username,
-      userEmail,
-      userId,
-    });
-    pulseStaffStatsAsync();
-    pulseStaffScope('finance');
-
-    return NextResponse.json({
+    const responseBody = {
       success: true,
       redemption: { ...redemptionDoc, _id: res.insertedId },
       message: `Cashout for $${redeemAmount.toFixed(2)} submitted! Routed to Coin Operations for screenshot verification.`,
-    });
+    };
+
+    const sidePayload = {
+      dbUser,
+      userId,
+      userEmail,
+      username,
+      redeemAmount,
+      requestedGame,
+      payMethod,
+      res,
+      escrowFrozen,
+    };
+    if (typeof setImmediate === 'function') {
+      setImmediate(() => deferRedemptionSideEffects(sidePayload));
+    } else {
+      void Promise.resolve().then(() => deferRedemptionSideEffects(sidePayload));
+    }
+
+    return NextResponse.json(responseBody);
   } catch (err) {
     console.error('Withdraw POST error:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
