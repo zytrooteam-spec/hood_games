@@ -49,30 +49,30 @@ export async function GET(req) {
         }),
       ]);
 
-      await Promise.all([
+      const payload = {
+        success: true,
+        messages: serializeChatMessagesForApi(messages),
+        threadMeta: threadMeta || { userId: uid, labels: [], staffNotes: [] },
+        player: player
+          ? {
+              id: player._id.toString(),
+              username: player.username,
+              email: player.email,
+              balanceSC: player.balanceSC,
+              balanceGC: player.balanceGC,
+            }
+          : null,
+      };
+
+      // Return messages first; mark-read can lag on large inboxes without blocking staff UI.
+      void Promise.all([
         db
           .collection('chat_messages')
           .updateMany({ userId: uid, senderRole: 'player', read: { $ne: true } }, { $set: { read: true } }),
         clearStaffThreadUnread(db, uid),
-      ]);
+      ]).catch(() => {});
 
-      return NextResponse.json(
-        {
-          success: true,
-          messages: serializeChatMessagesForApi(messages),
-          threadMeta: threadMeta || { userId: uid, labels: [], staffNotes: [] },
-          player: player
-            ? {
-                id: player._id.toString(),
-                username: player.username,
-                email: player.email,
-                balanceSC: player.balanceSC,
-                balanceGC: player.balanceGC,
-              }
-            : null,
-        },
-        { headers: { 'Cache-Control': 'private, no-store' } }
-      );
+      return NextResponse.json(payload, { headers: { 'Cache-Control': 'private, no-store' } });
     }
 
     const user = await getSessionUser(req, 'admin');

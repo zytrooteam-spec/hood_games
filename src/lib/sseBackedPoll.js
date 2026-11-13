@@ -32,10 +32,11 @@ export function startSseBackedPoll(fn, opts = {}) {
   const whenDisconnected = opts.whenDisconnected ?? DEFAULT_DISCONNECTED_MS;
   const whenConnected = opts.whenConnected ?? DEFAULT_CONNECTED_MS;
   const runOnStart = opts.runOnStart !== false;
+  const runWhenHidden = opts.runWhenHidden === true;
 
   let timer = null;
   const run = () => {
-    if (document.hidden) return;
+    if (document.hidden && !runWhenHidden) return;
     try {
       fn();
     } catch {

@@ -20,6 +20,7 @@ function mapGameForClient(g) {
   const image = g.image || g.thumbnail || g.imageUrl || '';
   return {
     ...g,
+    _id: g._id?.toString?.() || g._id,
     title: sanitizeGameTitle(g.title),
     image,
     thumbnail: image,
@@ -29,37 +30,66 @@ function mapGameForClient(g) {
   };
 }
 
+/** Admin grid: drop multi‑100KB base64 from list payloads (covers load fast; optional full fetch for thumbs). */
+function slimGameForAdminList(g) {
+  const img = String(g.image || g.thumbnail || '');
+  if (img.startsWith('data:image') && img.length > 3500) {
+    return { ...g, image: '', thumbnail: '', imageUrl: '', _imageOmitted: true };
+  }
+  if (img.startsWith('http') || (img.startsWith('/') && img.length < 512)) {
+    return g;
+  }
+  if (img.length > 8000) {
+    return { ...g, image: '', thumbnail: '', imageUrl: '', _imageOmitted: true };
+  }
+  return g;
+}
+
+function bustGamesCache() {
+  cache.del('hood_games');
+  cache.del('hood_games_public');
+  cache.del('hood_games_admin_all_slim');
+  cache.del('hood_games_admin_all_full');
+}
+
 export async function GET(req) {
   try {
     await ensureDbInitialized();
     const { searchParams } = new URL(req.url);
     const all = searchParams.get('all') === 'true';
+    const includeImages =
+      searchParams.get('includeImages') === '1' || searchParams.get('includeImages') === 'true';
     const user = await getSessionUser(req, 'admin');
     const isAdmin = user && isStaffRole(user.role);
 
     const db = await getDb();
     const query = isAdmin && all ? {} : { isActive: { $ne: false }, active: { $ne: false } };
-    const cacheKey = isAdmin && all ? 'hood_games_admin_all' : 'hood_games_public';
+    const adminSlim = isAdmin && all && !includeImages;
+    const cacheKey = adminSlim
+      ? 'hood_games_admin_all_slim'
+      : isAdmin && all
+        ? 'hood_games_admin_all_full'
+        : 'hood_games_public';
 
-    const cached = !(isAdmin && all) ? cache.get(cacheKey) : null;
+    const cached = cache.get(cacheKey);
     if (cached) {
       return NextResponse.json(
-        { success: true, games: cached },
-        { headers: { 'Cache-Control': 'private, max-age=30' } }
+        { success: true, games: cached, slim: adminSlim },
+        { headers: { 'Cache-Control': adminSlim ? 'private, max-age=60' : 'private, max-age=30' } }
       );
     }
 
     const games = await db.collection('games').find(query).sort({ priority: 1, title: 1 }).toArray();
-    const sanitized = games.map(mapGameForClient);
-    if (!(isAdmin && all)) {
-      cache.set(cacheKey, sanitized, 45);
-    }
+    let sanitized = games.map(mapGameForClient);
+    if (adminSlim) sanitized = sanitized.map(slimGameForAdminList);
+    const ttl = adminSlim ? 120 : isAdmin && all ? 90 : 45;
+    cache.set(cacheKey, sanitized, ttl);
 
     return NextResponse.json(
-      { success: true, games: sanitized },
+      { success: true, games: sanitized, slim: adminSlim },
       {
         headers: {
-          'Cache-Control': isAdmin && all ? 'no-store' : 'private, max-age=30',
+          'Cache-Control': adminSlim ? 'private, max-age=60' : isAdmin && all ? 'private, max-age=45' : 'private, max-age=30',
         },
       }
     );
@@ -108,8 +138,7 @@ export async function POST(req) {
       });
     }
 
-    cache.del('hood_games');
-    cache.del('hood_games');
+    bustGamesCache();
     const updated = await db.collection('games').find({}).sort({ priority: 1 }).toArray();
     return NextResponse.json({
       success: true,
@@ -132,7 +161,7 @@ export async function DELETE(req) {
     if (!id) return NextResponse.json({ success: false, error: 'id required' }, { status: 400 });
     const db = await getDb();
     await db.collection('games').deleteOne(toIdQuery(id));
-    cache.del('hood_games');
+    bustGamesCache();
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

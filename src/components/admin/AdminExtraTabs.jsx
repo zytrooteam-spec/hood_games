@@ -6,6 +6,11 @@ import AdminImageField from './AdminImageField';
 import { diffSet } from '@/lib/fastDiff';
 import { playTune } from '@/lib/soundAlerts';
 import { hoodAlert, hoodConfirm } from '@/lib/hoodAlert';
+import { readGamesCache, writeGamesCache } from '@/lib/gameAssets';
+import { staffApiFetch } from '@/lib/staffApiFetch';
+import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import { readJson, writeJson, HOOD_ADMIN_LEDGER_SNAPSHOT } from '@/lib/clientCache';
+import AdminPagination from '@/components/admin/AdminPagination';
 
 /* ------------------------------------------------------------------ */
 /* Shared UI helpers                                                   */
@@ -55,17 +60,62 @@ function Field({ label, children }) {
 const EMPTY_GAME = { title: '', platform: '', category: 'slots', playUrl: '', image: '', badge: 'NEW', description: '', priority: 10, active: true };
 
 export function GamesLibraryTab() {
-  const [games, setGames] = useState([]);
+  const [games, setGames] = useState(() => readGamesCache() || []);
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(() => !(readGamesCache()?.length > 0));
+  const hydratingRef = React.useRef(false);
 
-  const load = useCallback(() => {
-    fetch('/api/games?all=true', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => d?.success && diffSet(setGames, d.games || []))
-      .catch(() => {});
+  const load = useCallback(async (silent = false) => {
+    if (!silent && !(readGamesCache()?.length > 0)) setLoading(true);
+    try {
+      const res = await staffApiFetch('/api/games?all=true&includeImages=0', { cache: 'no-store' });
+      const d = await res.json();
+      if (d?.success && Array.isArray(d.games)) {
+        diffSet(setGames, d.games);
+        writeGamesCache(d.games);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
   }, []);
-  useEffect(() => { load(); const i = setInterval(load, 8000); return () => clearInterval(i); }, [load]);
+
+  const hydrateImages = useCallback(async () => {
+    if (hydratingRef.current) return;
+    hydratingRef.current = true;
+    try {
+      const res = await staffApiFetch('/api/games?all=true&includeImages=1', { cache: 'no-store' });
+      const d = await res.json();
+      if (d?.success && Array.isArray(d.games)) {
+        diffSet(setGames, d.games);
+        writeGamesCache(d.games);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      hydratingRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    const cached = readGamesCache();
+    if (cached?.length) diffSet(setGames, cached);
+    load(Boolean(cached?.length));
+    const stop = startSseBackedPoll(() => load(true), {
+      whenDisconnected: 120_000,
+      whenConnected: 300_000,
+      runOnStart: false,
+    });
+    return () => stop();
+  }, [load]);
+
+  useEffect(() => {
+    if (!games.some((g) => g._imageOmitted)) return;
+    const t = window.setTimeout(() => hydrateImages(), 400);
+    return () => clearTimeout(t);
+  }, [games, hydrateImages]);
 
   const save = async (e) => {
     e.preventDefault();
@@ -101,11 +151,31 @@ export function GamesLibraryTab() {
   return (
     <div className="space-y-4 pt-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h3 className="text-base font-black text-white">Games Library ({games.length})</h3>
-        <button onClick={() => setEditing({ ...EMPTY_GAME })} className="btn-hood-green px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 self-start">
-          <Plus size={14} /> Add Game Platform
-        </button>
+        <h3 className="text-base font-black text-white flex items-center gap-2">
+          Games Library ({games.length})
+          {loading ? <RefreshCw size={14} className="animate-spin text-gray-500" aria-label="Loading" /> : null}
+        </h3>
+        <div className="flex items-center gap-2 self-start">
+          <button
+            type="button"
+            onClick={() => load(false)}
+            className="px-3 py-2 rounded-xl text-xs font-bold border border-[#1a3363] text-gray-300 hover:text-white flex items-center gap-1.5"
+          >
+            <RefreshCw size={13} /> Sync
+          </button>
+          <button onClick={() => setEditing({ ...EMPTY_GAME })} className="btn-hood-green px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5">
+            <Plus size={14} /> Add Game Platform
+          </button>
+        </div>
       </div>
+
+      {loading && games.length === 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3" aria-busy="true">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className={`${cardCls} p-4 h-24 animate-pulse bg-[#0c1b38]/80`} />
+          ))}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
         {games.map((g) => (
@@ -330,25 +400,97 @@ export function GameLoadsTab() {
 /* 4. LEDGER / TX SEARCH                                               */
 /* ------------------------------------------------------------------ */
 export function LedgerTab() {
-  const [rows, setRows] = useState([]);
-  const [totals, setTotals] = useState({ deposits: 0, redemptions: 0, bonuses: 0 });
+  const cachedSnap = () => readJson(HOOD_ADMIN_LEDGER_SNAPSHOT);
+  const [rows, setRows] = useState(() => cachedSnap()?.rows || []);
+  const [totals, setTotals] = useState(
+    () => cachedSnap()?.totals || { deposits: 0, redemptions: 0, bonuses: 0 }
+  );
   const [q, setQ] = useState('');
   const [type, setType] = useState('all');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => !(cachedSnap()?.rows?.length > 0));
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(40);
+  const [hasMore, setHasMore] = useState(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    fetch(`/api/admin/ledger?q=${encodeURIComponent(q)}&type=${type}`)
-      .then((r) => r.json())
-      .then((d) => { if (d?.success) { diffSet(setRows, d.rows); diffSet(setTotals, d.totals); } })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  const loadTotals = useCallback(async () => {
+    try {
+      const res = await staffApiFetch('/api/admin/ledger?totalsOnly=1', { cache: 'no-store' });
+      const d = await res.json();
+      if (d?.success && d.totals) diffSet(setTotals, d.totals);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const load = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          q,
+          type,
+          page: String(page),
+          limit: String(pageSize),
+        });
+        const res = await staffApiFetch(`/api/admin/ledger?${params}`, { cache: 'no-store' });
+        const d = await res.json();
+        if (d?.success) {
+          diffSet(setRows, d.rows || []);
+          if (d.totals) diffSet(setTotals, d.totals);
+          setHasMore(Boolean(d.hasMore));
+          if (!q && page === 1) {
+            writeJson(HOOD_ADMIN_LEDGER_SNAPSHOT, {
+              rows: d.rows,
+              totals: d.totals,
+              t: Date.now(),
+            });
+          }
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        setLoading(false);
+      }
+    },
+    [q, type, page, pageSize]
+  );
+
+  useEffect(() => {
+    loadTotals();
+    const stop = startSseBackedPoll(loadTotals, {
+      whenDisconnected: 120_000,
+      whenConnected: 300_000,
+      runOnStart: false,
+    });
+    return () => stop();
+  }, [loadTotals]);
+
+  useEffect(() => {
+    setPage(1);
   }, [q, type]);
-  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
 
-  const exportCsv = () => {
+  useEffect(() => {
+    const silent = Boolean(readJson(HOOD_ADMIN_LEDGER_SNAPSHOT)?.rows?.length);
+    const debounce = setTimeout(() => load(silent), q ? 350 : 80);
+    return () => clearTimeout(debounce);
+  }, [load, q, type, page, pageSize]);
+
+  const exportCsv = async () => {
+    let exportRows = rows;
+    try {
+      const params = new URLSearchParams({ q, type, page: '1', limit: '120' });
+      const res = await staffApiFetch(`/api/admin/ledger?${params}`, { cache: 'no-store' });
+      const d = await res.json();
+      if (d?.success && Array.isArray(d.rows)) exportRows = d.rows;
+    } catch {
+      /* use current page */
+    }
     const head = 'id,type,username,amount,method,status,reference,createdAt';
-    const body = rows.map((r) => [r.id, r.type, r.username, r.amount, r.method, r.status, r.reference, r.createdAt].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','));
+    const body = exportRows.map((r) =>
+      [r.id, r.type, r.username, r.amount, r.method, r.status, r.reference, r.createdAt]
+        .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`)
+        .join(',')
+    );
     const blob = new Blob([[head, ...body].join('\n')], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -380,8 +522,20 @@ export function LedgerTab() {
           <option value="free_spin">Free Spins</option>
           <option value="game_load">Game Loads</option>
         </select>
-        <button onClick={load} className="px-3 py-2 rounded-xl bg-[#0e2042] border border-[#1a3363] text-gray-300 text-xs font-bold flex items-center gap-1 justify-center"><RefreshCw size={13} className={loading ? 'animate-spin' : ''} />Refresh</button>
-        <button onClick={exportCsv} className="btn-hood-green px-3 py-2 rounded-xl text-xs font-black">Export CSV</button>
+        <button
+          type="button"
+          onClick={() => {
+            loadTotals();
+            load(false);
+          }}
+          className="px-3 py-2 rounded-xl bg-[#0e2042] border border-[#1a3363] text-gray-300 text-xs font-bold flex items-center gap-1 justify-center"
+        >
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
+        <button type="button" onClick={exportCsv} className="btn-hood-green px-3 py-2 rounded-xl text-xs font-black">
+          Export CSV
+        </button>
       </div>
 
       <div className={`-mx-3 sm:mx-0 overflow-x-auto touch-pan-x ${cardCls}`}>
@@ -390,7 +544,21 @@ export function LedgerTab() {
             <tr><th className="p-3">Date</th><th className="p-3">Type</th><th className="p-3">Player</th><th className="p-3">Amount</th><th className="p-3">Method</th><th className="p-3">Reference</th><th className="p-3">Status</th></tr>
           </thead>
           <tbody className="divide-y divide-[#1a3363]">
-            {rows.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-gray-500">No transactions found.</td></tr>}
+            {loading && rows.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-gray-400">
+                  <RefreshCw size={18} className="inline animate-spin text-[#2cb64e] mr-2" />
+                  Loading ledger…
+                </td>
+              </tr>
+            ) : null}
+            {!loading && rows.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="p-6 text-center text-gray-500">
+                  No transactions found.
+                </td>
+              </tr>
+            ) : null}
             {rows.map((r) => (
               <tr key={`${r.type}-${r.id}`} className="hover:bg-[#0e2042]/50">
                 <td className="p-3 text-gray-400 whitespace-nowrap">{r.createdAt ? new Date(r.createdAt).toLocaleString() : '-'}</td>
@@ -407,6 +575,21 @@ export function LedgerTab() {
           </tbody>
         </table>
       </div>
+
+      {(rows.length > 0 || page > 1) && (
+        <AdminPagination
+          currentPage={page}
+          totalItems={hasMore ? page * pageSize + 1 : (page - 1) * pageSize + rows.length}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(n) => {
+            setPageSize(n);
+            setPage(1);
+          }}
+          pageSizeOptions={[20, 40, 60]}
+          itemLabel="transactions"
+        />
+      )}
     </div>
   );
 }

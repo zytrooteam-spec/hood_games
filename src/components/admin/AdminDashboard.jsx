@@ -96,6 +96,13 @@ import { HOOD_ADMIN_BOOTSTRAP, readJson, writeJson } from '@/lib/clientCache';
 import { staffApiFetch } from '@/lib/staffApiFetch';
 import { REALTIME_TYPES } from '@/lib/realtimePublish';
 import { mergeAccountRequestRowFromServer } from '@/lib/accountRequestDeskMerge';
+import {
+  recordStaffAccountClose,
+  hydratePatchMapFromStaffCloses,
+} from '@/lib/accountRequestStaffClose';
+import { markRequestCompletedHidden } from '@/lib/accountRequestOptimistic';
+import { HOOD_ADMIN_POLL } from '@/lib/adminPollingConfig';
+import { useSseBackedPoll } from '@/lib/sseBackedPoll';
 
 export default function AdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -222,8 +229,15 @@ export default function AdminDashboard({ user, onLogout }) {
     recentAccountRequestPatchesRef.current.set(key, {
       status,
       patch,
-      until,
+      until: Math.max(until, Date.now() + 86400000),
     });
+    if (String(status).toUpperCase() !== 'PENDING') {
+      recordStaffAccountClose(key, status, patch);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    hydratePatchMapFromStaffCloses(recentAccountRequestPatchesRef.current);
   }, []);
 
   const mergeAccountRequestFromServer = React.useCallback((r) => {
@@ -549,13 +563,20 @@ export default function AdminDashboard({ user, onLogout }) {
 
   const refreshAdminStatsOnly = React.useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/stats', { credentials: 'include', cache: 'no-store' });
+      const res = await staffApiFetch('/api/admin/stats', { cache: 'no-store' });
       const data = await res.json();
       if (data?.success && data.stats) diffSet(setStats, data.stats);
     } catch {
       /* ignore */
     }
   }, []);
+
+  useSseBackedPoll(refreshAdminStatsOnly, [refreshAdminStatsOnly], {
+    whenDisconnected: HOOD_ADMIN_POLL.STATS,
+    whenConnected: Math.max(HOOD_ADMIN_POLL.STATS * 4, 3200),
+    runOnStart: true,
+    runWhenHidden: true,
+  });
 
   const refreshFinanceQueue = React.useCallback(async () => {
     try {
@@ -578,7 +599,7 @@ export default function AdminDashboard({ user, onLogout }) {
       const [depRes, redRes, reqRes] = await Promise.all([
         fetch('/api/payments/deposit', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
         fetch('/api/payments/withdraw', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({})),
-        fetch('/api/account-requests?status=all', { credentials: 'include', cache: 'no-store' })
+        fetch('/api/account-requests?status=all&limit=80&page=1', { credentials: 'include', cache: 'no-store' })
           .then((r) => r.json())
           .catch(() => ({})),
       ]);
@@ -625,7 +646,7 @@ export default function AdminDashboard({ user, onLogout }) {
       window.setTimeout(() => {
         refreshAdminStatsOnly();
         refreshDeskQueues();
-      }, 1200);
+      }, 600);
     },
     [
       patchAccountRequestInNav,
@@ -737,10 +758,10 @@ export default function AdminDashboard({ user, onLogout }) {
     if (activeTab === 'finance' && !deposits.length && !redemptions.length) {
       refreshFinanceQueue();
     }
-    if ((activeTab === 'requests' || activeTab === 'game_loads') && !accountRequests.length) {
+    if (activeTab === 'requests' || activeTab === 'game_loads') {
       refreshDeskQueues();
     }
-  }, [activeTab, accountRequests.length, deposits.length, redemptions.length, refreshDeskQueues, refreshFinanceQueue]);
+  }, [activeTab, deposits.length, redemptions.length, refreshDeskQueues, refreshFinanceQueue]);
 
   useEffect(() => {
     if (activeTab === 'settings' && !cashbackReport) {
@@ -856,10 +877,10 @@ export default function AdminDashboard({ user, onLogout }) {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000);
+    const timeout = setTimeout(() => controller.abort(), 22000);
     try {
       const res = await staffApiFetch(
-        `/api/chat?userId=${encodeURIComponent(uid)}&limit=50&_t=${Date.now()}`,
+        `/api/chat?userId=${encodeURIComponent(uid)}&limit=35&_t=${Date.now()}`,
         {
         signal: controller.signal,
       });
@@ -896,7 +917,7 @@ export default function AdminDashboard({ user, onLogout }) {
       }
     } finally {
       clearTimeout(timeout);
-      if (!isSilent && String(selectedThreadUserRef.current) === uid) {
+      if (!isSilent && requestId === conversationReqIdRef.current) {
         setConversationLoading(false);
       }
     }
@@ -1277,19 +1298,47 @@ export default function AdminDashboard({ user, onLogout }) {
       fields: [{ name: 'reason', label: 'Reason', required: true, placeholder: 'e.g. Screenshot unclear' }],
     });
     if (!values?.reason) return;
+  const key = String(requestId || '');
+    const reason = values.reason.trim();
+    recordAccountRequestDeskPatch(key, 'REJECTED', { rejectionReason: reason });
+    patchAccountRequestInNav(key, { status: 'REJECTED', rejectionReason: reason });
+    setStats((s) =>
+      s
+        ? {
+            ...s,
+            pendingAccountRequests: Math.max(0, Number(s.pendingAccountRequests || 0) - 1),
+          }
+        : s
+    );
     try {
-      const res = await fetch('/api/account-requests', {
+      const res = await staffApiFetch('/api/account-requests', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId, action: 'reject', rejectionReason: values.reason }),
+        body: JSON.stringify({
+          requestId: key,
+          action: 'reject',
+          rejectionReason: reason,
+          reason,
+        }),
       });
       const data = await res.json();
       if (data.success) {
+        markRequestCompletedHidden(key);
         hoodAlert.success('Request rejected', 'Game ID desk');
-        fetchAllData();
-      } else hoodAlert.error(data.error || 'Failed');
+        if (data.request) {
+          const st = String(data.request.status || 'REJECTED').toUpperCase();
+          recordAccountRequestDeskPatch(key, st, data.request);
+          patchAccountRequestInNav(key, { ...data.request, status: st });
+        }
+        refreshDeskQueues();
+        refreshAdminStatsOnly();
+      } else {
+        hoodAlert.error(data.error || data.message || 'Failed');
+        refreshDeskQueues();
+      }
     } catch {
       hoodAlert.error('Error rejecting request');
+      refreshDeskQueues();
     }
   };
 
@@ -2305,7 +2354,20 @@ export default function AdminDashboard({ user, onLogout }) {
                       </p>
                     </div>
                   ) : conversationLoading && threadMessages.length === 0 ? (
-                    <div className="text-center py-8 text-xs text-gray-400">Loading messages…</div>
+                    <div className="text-center py-8 space-y-2">
+                      <RefreshCw size={22} className="mx-auto animate-spin text-[#2cb64e]" />
+                      <p className="text-xs text-gray-400">Loading messages…</p>
+                      {(() => {
+                        const hint = (chatThreads || []).find(
+                          (t) => String(t.userId) === String(selectedThreadUser)
+                        );
+                        return hint?.lastMessage ? (
+                          <p className="text-[10px] text-gray-500 max-w-sm mx-auto truncate px-2">
+                            Latest: {hint.lastMessage}
+                          </p>
+                        ) : null;
+                      })()}
+                    </div>
                   ) : threadMessages.length === 0 ? (
                     <p className="text-center text-[11px] text-gray-500 py-8">No messages in this thread yet.</p>
                   ) : (
@@ -2934,6 +2996,7 @@ export default function AdminDashboard({ user, onLogout }) {
           <AccountRequestsDesk
             deskActive={activeTab === 'requests'}
             initialRequests={accountRequests}
+            pendingNavCount={pendingAccountDeskCount}
             onMutate={handleAccountRequestsDeskMutate}
           />
         )}
@@ -3167,12 +3230,16 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {/* 10. GAMES LIBRARY                                        */}
         {/* ======================================================== */}
-        {activeTab === 'games_lib' && <GamesLibraryTab />}
+        <div className={activeTab === 'games_lib' ? undefined : 'hidden'} aria-hidden={activeTab !== 'games_lib'}>
+          <GamesLibraryTab />
+        </div>
 
         {/* ======================================================== */}
         {/* 11. FINANCIAL LEDGER / TX AUDIT                          */}
         {/* ======================================================== */}
-        {activeTab === 'ledger' && <LedgerTab />}
+        <div className={activeTab === 'ledger' ? undefined : 'hidden'} aria-hidden={activeTab !== 'ledger'}>
+          <LedgerTab />
+        </div>
 
         {activeTab === 'promos' && <PromosTab />}
 

@@ -5,6 +5,9 @@ export const HOOD_SETTINGS_SNAPSHOT = 'hood_settings_snapshot';
 export const HOOD_GAME_ACCOUNTS_SNAPSHOT = 'hood_game_accounts_snapshot';
 export const HOOD_ADMIN_BOOTSTRAP = 'hood_admin_bootstrap_snapshot';
 export const HOOD_ADMIN_SESSION = 'hood_admin_session_snapshot';
+export const HOOD_ADMIN_LEDGER_SNAPSHOT = 'hood_admin_ledger_snapshot';
+export const HOOD_ACCOUNT_STAFF_CLOSES = 'hood_account_staff_closes';
+export const HOOD_ADMIN_REQUESTS_CACHE = 'hood_admin_requests_cache';
 
 export function readJson(key) {
   if (typeof window === 'undefined') return null;

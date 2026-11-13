@@ -34,6 +34,7 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
   onDismissRequest,
   onRefresh,
   isRefreshing = false,
+  pendingNavCount = 0,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL'); // 'ALL' | 'ACCOUNT_CREATION' | 'COIN_LOAD'
@@ -276,6 +277,23 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
               </p>
               <p style={{ margin: '8px auto 0 auto', maxWidth: '480px', fontSize: '13px', color: '#9A91A8' }}>
                 Clear the search box or tap Refresh to load the latest queue.
+              </p>
+            </>
+          ) : (pendingNavCount > 0 || isRefreshing) && allRequests.length === 0 ? (
+            <>
+              <RefreshCw
+                size={36}
+                color="#00F0FF"
+                className="mx-auto mb-4 animate-spin"
+                style={{ filter: 'drop-shadow(0 0 12px rgba(0,240,255,0.5))' }}
+              />
+              <p style={{ margin: 0, fontFamily: 'Lexend, sans-serif', fontSize: '17px', fontWeight: 900, color: '#FFFFFF' }}>
+                Loading request queue…
+              </p>
+              <p style={{ margin: '8px auto 0 auto', maxWidth: '480px', fontSize: '13px', color: '#9A91A8' }}>
+                {pendingNavCount > 0
+                  ? `${pendingNavCount} pending in system — syncing desk now. Tap Refresh if this takes more than a few seconds.`
+                  : 'Fetching the latest player requests.'}
               </p>
             </>
           ) : pendingCount === 0 && allRequests.length === 0 ? (

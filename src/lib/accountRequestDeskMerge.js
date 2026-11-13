@@ -1,3 +1,5 @@
+import { applyStaffCloseToRow } from '@/lib/accountRequestStaffClose';
+
 const CLOSED_STATUSES = new Set(['REJECTED', 'READY', 'DISMISSED', 'APPROVED', 'CANCELLED']);
 
 export function isClosedAccountRequestStatus(status) {
@@ -6,11 +8,14 @@ export function isClosedAccountRequestStatus(status) {
 
 /** Prevent poll/parent seed from resurrecting PENDING after staff closed a row. */
 export function mergeAccountRequestRowFromServer(row, patchMap) {
-  if (!row || !patchMap) return row;
-  const key = String(row.id || row._id || '');
-  if (!key) return row;
+  if (!row) return row;
+  let base = applyStaffCloseToRow(row);
+  if (!patchMap) return base;
+  const key = String(base.id || base._id || '');
+  if (!key) return base;
   const hold = patchMap.get(key);
-  if (!hold) return row;
+  if (!hold) return base;
+  row = base;
 
   const incoming = String(row.status || '').toUpperCase();
   const held = String(hold.status || '').toUpperCase();

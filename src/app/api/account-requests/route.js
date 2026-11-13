@@ -25,6 +25,31 @@ function bustStaffRequestCaches({ userEmail, userId } = {}) {
   if (userId) invalidateAuthCache(String(userId));
 }
 
+const STAFF_LIST_PROJECTION = {
+  userId: 1,
+  userEmail: 1,
+  userName: 1,
+  username: 1,
+  gameTitle: 1,
+  gameId: 1,
+  status: 1,
+  requestType: 1,
+  transferAmount: 1,
+  pendingCoinLoadAmount: 1,
+  createdAt: 1,
+  updatedAt: 1,
+  freeplayPending: 1,
+  freeplayAmount: 1,
+  gameAccountUsername: 1,
+  gameAccountPassword: 1,
+  gameUsername: 1,
+  gamePassword: 1,
+  rejectionReason: 1,
+  notes: 1,
+  coinLoadQueued: 1,
+  depositAmount: 1,
+};
+
 function buildStaffQuery(searchParams) {
   const query = {};
   const status = searchParams.get('status');
@@ -83,10 +108,22 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
 
     let requests;
+    let totalCount = 0;
     if (isStaff) {
       const query = buildStaffQuery(searchParams);
-      const staffLimit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '120', 10) || 120));
-      requests = await db.collection('accountRequests').find(query).sort({ createdAt: -1 }).limit(staffLimit).toArray();
+      const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+      const staffLimit = Math.min(120, Math.max(1, parseInt(searchParams.get('limit') || '60', 10) || 60));
+      const skip = (page - 1) * staffLimit;
+      const cursor = db
+        .collection('accountRequests')
+        .find(query)
+        .project(STAFF_LIST_PROJECTION)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(staffLimit);
+      const [rows, count] = await Promise.all([cursor.toArray(), db.collection('accountRequests').countDocuments(query)]);
+      requests = rows;
+      totalCount = count;
     } else {
       const usersCol = db.collection('users');
       const dbUser = await resolvePlayerDbUser(user, usersCol);
@@ -106,6 +143,7 @@ export async function GET(req) {
       success: true,
       requests: mapped,
       accountRequests: mapped,
+      totalCount: isStaff ? totalCount : mapped.length,
     };
     return NextResponse.json(payload, {
       headers: { 'Cache-Control': 'private, no-store' },
@@ -592,7 +630,7 @@ export async function PUT(req) {
         }
       }
 
-      await db.collection('accountRequests').updateOne(
+      const rejectUpdate = await db.collection('accountRequests').updateOne(
         toIdQuery(requestId),
         {
           $set: {
@@ -604,6 +642,23 @@ export async function PUT(req) {
           },
         }
       );
+      if (rejectUpdate.matchedCount === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Request not found — refresh the desk and try again.' },
+          { status: 404 }
+        );
+      }
+      if (rejectUpdate.modifiedCount === 0) {
+        const again = await db.collection('accountRequests').findOne(toIdQuery(requestId));
+        const cur = String(again?.status || '').toLowerCase();
+        if (cur !== 'rejected' && cur !== 'cancelled') {
+          return NextResponse.json(
+            { success: false, error: 'Could not update request status. Try again.' },
+            { status: 409 }
+          );
+        }
+      }
+      const freshRejected = await db.collection('accountRequests').findOne(toIdQuery(requestId));
 
       if (reqDoc.freeplayPending) {
         await db.collection('freeplay_tasks').updateMany(
@@ -638,7 +693,11 @@ export async function PUT(req) {
         requestId: String(reqDoc._id),
       });
       pulseStaffStatsAsync();
-      return NextResponse.json({ success: true, message: 'Request rejected' });
+      return NextResponse.json({
+        success: true,
+        message: 'Request rejected',
+        request: freshRejected ? mapAccountRequest(freshRejected) : null,
+      });
     }
 
     return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });

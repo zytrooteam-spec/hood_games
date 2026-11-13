@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { RefreshCw, Check, Key } from 'lucide-react';
 import AccountRequestsView from './AccountRequestsView';
 import CoinOperationsDesk from './CoinOperationsDesk';
@@ -14,7 +14,22 @@ import {
   isClosedAccountRequestStatus,
   mergeAccountRequestListFromServer,
   mergeAccountRequestListsPreferLocalClosed,
+  mergeAccountRequestRowFromServer,
 } from '@/lib/accountRequestDeskMerge';
+import {
+  recordStaffAccountClose,
+  hydratePatchMapFromStaffCloses,
+  clearStaffAccountClose,
+} from '@/lib/accountRequestStaffClose';
+import {
+  filterOutCompletedRows,
+  markRequestCompletedHidden,
+  clearRequestCompletedHidden,
+  readCompletedRequestIds,
+} from '@/lib/accountRequestOptimistic';
+import useAdminCachedFetch from '@/hooks/useAdminCachedFetch';
+import { HOOD_ADMIN_POLL } from '@/lib/adminPollingConfig';
+import { HOOD_ADMIN_REQUESTS_CACHE, readJson } from '@/lib/clientCache';
 import {
   HoodAdminModal,
   HoodAdminModalHeader,
@@ -36,8 +51,17 @@ function gameIdDeskRows(rows) {
   );
 }
 
-export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive = true }) {
-  const [requests, setRequests] = useState(() => gameIdDeskRows(initialRequests));
+export function AccountRequestsDesk({
+  onMutate,
+  initialRequests = [],
+  deskActive = true,
+  pendingNavCount = 0,
+}) {
+  const cachedReq = readJson(HOOD_ADMIN_REQUESTS_CACHE);
+  const [requests, setRequests] = useState(() =>
+    gameIdDeskRows(cachedReq?.accountRequests?.length ? cachedReq.accountRequests : initialRequests)
+  );
+  const [hiddenIds, setHiddenIds] = useState(() => readCompletedRequestIds());
   const [filter, setFilter] = useState('PENDING');
   const [refreshing, setRefreshing] = useState(false);
   const [approvalModal, setApprovalModal] = useState({ open: false, request: null, username: '', password: '' });
@@ -55,9 +79,14 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive
     closedRequestPatchesRef.current.set(key, {
       status,
       patch,
-      until: Date.now() + 300_000,
+      until: Date.now() + 86400000,
     });
+    recordStaffAccountClose(key, status, patch);
   };
+
+  useEffect(() => {
+    hydratePatchMapFromStaffCloses(closedRequestPatchesRef.current);
+  }, []);
 
   const patchRequest = (id, patch) => {
     markLocalMutation();
@@ -76,34 +105,84 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive
     setRequests((prev) => prev.filter((r) => String(r.id || r._id) !== key));
   };
 
-  const load = useCallback(async (silent = false) => {
-    if (!silent) setRefreshing(true);
-    try {
-      const res = await staffApiFetch(`/api/account-requests?status=all&_t=${Date.now()}`);
-      const d = await res.json();
-      const rows = d.accountRequests || d.requests || [];
-      if (d.success && Array.isArray(rows)) {
-        const merged = mergeAccountRequestListFromServer(
-          gameIdDeskRows(rows),
-          closedRequestPatchesRef.current
-        );
-        diffSet(setRequests, merged);
-      }
-    } finally {
-      if (!silent) setRefreshing(false);
+  const hideFromDesk = (id) => {
+    const key = String(id || '');
+    if (!key) return;
+    markRequestCompletedHidden(key);
+    setHiddenIds(readCompletedRequestIds());
+    removeRequest(key);
+  };
+
+  const { data: pollData, loading: pollLoading, mutate: mutateRequests } = useAdminCachedFetch(
+    deskActive ? '/api/account-requests?status=all&limit=80&page=1' : null,
+    {
+      cacheKey: HOOD_ADMIN_REQUESTS_CACHE,
+      pollMs: HOOD_ADMIN_POLL.QUEUES,
+      enabled: deskActive,
     }
+  );
+
+  useEffect(() => {
+    if (!pollData?.success) return;
+    const rows = pollData.accountRequests || pollData.requests || [];
+    if (!Array.isArray(rows)) return;
+    const gameRows = gameIdDeskRows(rows);
+    const merged = mergeAccountRequestListFromServer(gameRows, closedRequestPatchesRef.current);
+    diffSet(setRequests, merged);
+  }, [pollData]);
+
+  useEffect(() => {
+    if (pollLoading) setRefreshing(true);
+    else setRefreshing(false);
+  }, [pollLoading]);
+
+  const load = useCallback(
+    async (silent = false) => {
+      if (!silent) setRefreshing(true);
+      await mutateRequests(false);
+      if (!silent) setRefreshing(false);
+    },
+    [mutateRequests]
+  );
+
+  const mergeParentIntoDesk = useCallback((parentRows, prev) => {
+    const parent = gameIdDeskRows(parentRows);
+    if (!parent.length) return prev;
+    if (!prev.length) {
+      return mergeAccountRequestListFromServer(parent, closedRequestPatchesRef.current);
+    }
+    if (Date.now() < skipParentSeedUntilRef.current) {
+      const byId = new Map(prev.map((r) => [String(r.id || r._id), r]));
+      const merged = parent.map((row) => {
+        const key = String(row.id || row._id);
+        const local = byId.get(key);
+        if (!local) return mergeAccountRequestRowFromServer(row, closedRequestPatchesRef.current);
+        return mergeAccountRequestListsPreferLocalClosed([row], [local])[0];
+      });
+      const seen = new Set(merged.map((r) => String(r.id || r._id)));
+      prev.forEach((r) => {
+        const key = String(r.id || r._id);
+        if (!seen.has(key)) merged.push(r);
+      });
+      return mergeAccountRequestListFromServer(merged, closedRequestPatchesRef.current);
+    }
+    const merged = mergeAccountRequestListsPreferLocalClosed(parent, prev);
+    return mergeAccountRequestListFromServer(merged, closedRequestPatchesRef.current);
   }, []);
 
   useEffect(() => {
     if (!initialRequests?.length) return;
-    if (Date.now() < skipParentSeedUntilRef.current) return;
-    setRequests((prev) => {
-      const parentRows = gameIdDeskRows(initialRequests);
-      const merged = mergeAccountRequestListsPreferLocalClosed(parentRows, prev);
-      const withPatches = mergeAccountRequestListFromServer(merged, closedRequestPatchesRef.current);
-      return withPatches;
-    });
-  }, [initialRequests]);
+    setRequests((prev) => mergeParentIntoDesk(initialRequests, prev));
+  }, [initialRequests, mergeParentIntoDesk]);
+
+  const displayRequests = useMemo(() => {
+    const parent = gameIdDeskRows(initialRequests);
+    let base = requests;
+    if (requests.length === 0 && parent.length > 0) {
+      base = mergeAccountRequestListFromServer(parent, closedRequestPatchesRef.current);
+    }
+    return filterOutCompletedRows(base, hiddenIds);
+  }, [requests, initialRequests, hiddenIds]);
 
   const scheduleReconcile = () => {
     window.setTimeout(() => {
@@ -113,7 +192,6 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive
 
   useEffect(() => {
     if (!deskActive) return;
-    if (!initialRequests?.length) load(true);
     const onInstant = () => {
       if (deskActive) load(true);
     };
@@ -134,11 +212,7 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive
     } catch {
       /* ignore */
     }
-    const interval = setInterval(() => {
-      if (!document.hidden && deskActive) load(true);
-    }, 18000);
     return () => {
-      clearInterval(interval);
       window.removeEventListener('hood-admin-desk-sync', onInstant);
       window.removeEventListener('hood-admin-refresh', onInstant);
       window.removeEventListener('hood_staff_event_local', onInstant);
@@ -180,10 +254,9 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive
     onMutate?.({ id, status: 'READY', patch: { gameUsername, gamePassword } });
 
     try {
-      const res = await fetch('/api/account-requests', {
+      const res = await staffApiFetch('/api/account-requests', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           requestId: id,
           action: 'approve',
@@ -193,6 +266,7 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive
       });
       const data = await res.json();
       if (data.success) {
+        hideFromDesk(id);
         hoodAlert.success(data.message || 'Credentials issued', 'Account desk');
         scheduleReconcile();
       } else {
@@ -219,14 +293,14 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive
     const rid = req.id || req._id;
     patchRequest(rid, { status: 'READY' });
     onMutate?.({ id: rid, status: 'READY' });
-    const res = await fetch('/api/account-requests', {
+    const res = await staffApiFetch('/api/account-requests', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ requestId: rid, action: 'freeplay_wallet' }),
     });
     const data = await res.json();
     if (data.success) {
+      hideFromDesk(rid);
       hoodAlert.success(data.message, 'Freeplay');
       scheduleReconcile();
     } else {
@@ -247,22 +321,33 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive
     patchRequest(id, { status: 'REJECTED', rejectionReason: reason });
     onMutate?.({ id, status: 'REJECTED', patch: { rejectionReason: reason } });
     try {
-      const res = await fetch('/api/account-requests', {
+      const res = await staffApiFetch('/api/account-requests', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           requestId: id,
           action: 'reject',
           reason,
+          rejectionReason: reason,
         }),
       });
       const data = await res.json();
       if (!data.success) {
         hoodAlert.error(data.error || data.message || 'Reject failed');
+        closedRequestPatchesRef.current.delete(String(id));
+        clearStaffAccountClose(id);
+        clearRequestCompletedHidden(id);
         skipParentSeedUntilRef.current = 0;
         load(true);
       } else {
+        const srv = data.request;
+        const status = srv?.status ? String(srv.status).toUpperCase() : 'REJECTED';
+        recordClosedPatch(id, status, {
+          rejectionReason: srv?.rejectionReason || reason,
+          ...(srv || {}),
+        });
+        hideFromDesk(id);
+        onMutate?.({ id, status: 'REJECTED', patch: { rejectionReason: reason } });
         scheduleReconcile();
       }
     } catch {
@@ -319,7 +404,8 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive
       </div>
 
       <AccountRequestsView
-        requests={requests}
+        requests={displayRequests}
+        pendingNavCount={pendingNavCount}
         filter={filter}
         onFilterChange={setFilter}
         onOpenApproveModal={openApprove}
