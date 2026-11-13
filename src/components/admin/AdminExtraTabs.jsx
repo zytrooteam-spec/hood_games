@@ -323,18 +323,51 @@ const EMPTY_GATEWAY = {
   redeemEnabled: true,
 };
 
-export function GatewaysTab() {
-  const [methods, setMethods] = useState([]);
+function normalizeGatewayRows(list) {
+  return (list || []).map((m) => ({
+    ...m,
+    _id: m._id?.toString?.() || m._id,
+  }));
+}
+
+export function GatewaysTab({ initialMethods = [] }) {
+  const [methods, setMethods] = useState(() => normalizeGatewayRows(initialMethods));
+  const [loading, setLoading] = useState(() => !initialMethods?.length);
   const [editing, setEditing] = useState(null);
 
-  const load = useCallback(() => {
-    fetch('/api/payments/methods').then((r) => r.json()).then((d) => d?.success && diffSet(setMethods, d.methods || [])).catch(() => {});
-  }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (initialMethods?.length) setMethods(normalizeGatewayRows(initialMethods));
+  }, [initialMethods]);
+
+  const load = useCallback(async () => {
+    setLoading((busy) => busy || methods.length === 0);
+    let hadRows = methods.length > 0;
+    try {
+      const res = await staffApiFetch(`/api/payments/methods?all=true&_t=${Date.now()}`);
+      const d = await res.json();
+      if (d?.success) {
+        const rows = normalizeGatewayRows(d.methods || []);
+        hadRows = hadRows || rows.length > 0;
+        diffSet(setMethods, rows);
+      } else if (!hadRows) hoodAlert.error(d?.error || 'Could not load gateways', 'Gateways');
+    } catch {
+      if (!hadRows) hoodAlert.error('Network error loading gateways', 'Gateways');
+    } finally {
+      setLoading(false);
+    }
+  }, [methods.length]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const save = async (e) => {
     e.preventDefault();
-    const res = await fetch('/api/payments/methods', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editing) });
+    const res = await staffApiFetch('/api/payments/methods', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editing),
+    });
     const d = await res.json();
     if (!d.success) return hoodAlert.error(d.error || 'Failed', 'Gateway save failed');
     playTune('coin');
@@ -350,17 +383,45 @@ export function GatewaysTab() {
       cancelLabel: 'Cancel',
     });
     if (!ok) return;
-    await fetch(`/api/payments/methods?id=${m._id}`, { method: 'DELETE' });
+    await staffApiFetch(`/api/payments/methods?id=${m._id}`, { method: 'DELETE' });
     load();
   };
 
   return (
     <div className="space-y-4 pt-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h3 className="text-base font-black text-white">Payment Gateways ({methods.length})</h3>
-        <button onClick={() => setEditing({ ...EMPTY_GATEWAY })} className="btn-hood-green px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 self-start"><Plus size={14} /> Add Gateway</button>
+        <h3 className="text-base font-black text-white flex items-center gap-2">
+          Payment Gateways ({methods.length})
+          {loading ? <RefreshCw size={14} className="animate-spin text-gray-500" aria-label="Loading" /> : null}
+        </h3>
+        <div className="flex items-center gap-2 self-start">
+          <button
+            type="button"
+            onClick={() => load()}
+            className="px-3 py-2 rounded-xl text-xs font-bold border border-[#1a3363] text-gray-300 hover:text-white flex items-center gap-1.5"
+          >
+            <RefreshCw size={13} /> Sync
+          </button>
+          <button onClick={() => setEditing({ ...EMPTY_GATEWAY })} className="btn-hood-green px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5">
+            <Plus size={14} /> Add Gateway
+          </button>
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {loading && methods.length === 0 ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className={`${cardCls} p-4 h-36 animate-pulse bg-[#0e2042]/40`} />
+          ))
+        ) : null}
+        {!loading && methods.length === 0 ? (
+          <div className={`${cardCls} p-8 col-span-full text-center space-y-2`}>
+            <p className="text-sm font-black text-white">No gateways in the database</p>
+            <p className="text-xs text-gray-400 max-w-lg mx-auto">
+              Only gateways you add here appear for players. Until you save at least one, deposit/cashout pages show a
+              message to contact <span className="text-[#2cb64e] font-bold">Live Chat Support</span>.
+            </p>
+          </div>
+        ) : null}
         {methods.map((m) => (
           <div key={m._id} className={`${cardCls} p-4 space-y-2`}>
             <div className="flex items-start justify-between gap-2">

@@ -19,6 +19,7 @@ import { hoodAlert } from '@/lib/hoodAlert';
 import { playerApiFetch } from '@/lib/playerApiFetch';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import HoodCashierGameSelect from '@/components/wallet/HoodCashierGameSelect';
+import HoodNoGatewaysSupportCard from '@/components/wallet/HoodNoGatewaysSupportCard';
 import { getAvailableGamePlatforms } from '@/lib/gamePlatforms';
 
 export default function UnifiedCashierModal({
@@ -104,7 +105,7 @@ export default function UnifiedCashierModal({
       .then((r) => r.json())
       .then((d) => {
         if (d?.success && Array.isArray(d?.methods)) {
-          const activeMethods = d.methods.filter((m) => m.active !== false);
+          const activeMethods = d.methods.filter((m) => m.active !== false && m.depositEnabled !== false);
           diffSet(setMethods, activeMethods);
           setSelectedMethod((prev) => (prev ? prev : activeMethods[0] || null));
         }
@@ -319,6 +320,10 @@ export default function UnifiedCashierModal({
                   onSelectGame={setSelectedGame}
                 />
 
+                {methods.length === 0 ? (
+                  <HoodNoGatewaysSupportCard />
+                ) : (
+                  <>
                 {/* 1. Payment Gateway Selection */}
                 <div>
                   <label className="text-xs font-bold text-gray-300 block mb-1.5">
@@ -468,6 +473,8 @@ export default function UnifiedCashierModal({
                   <Wallet size={16} />
                   <span>{submittingDeposit ? 'Submitting...' : 'SUBMIT DEPOSIT FOR INSTANT APPROVAL'}</span>
                 </button>
+                  </>
+                )}
               </form>
             )}
           </div>

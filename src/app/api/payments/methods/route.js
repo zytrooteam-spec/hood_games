@@ -4,6 +4,7 @@ import { getSessionUser } from '@/lib/auth';
 import { ensureDbReady } from '@/lib/initDb';
 import { cache } from '@/lib/cache';
 import { invalidatePaymentMethodsCache } from '@/lib/authCache';
+import { serializePaymentMethods } from '@/lib/paymentMethodsSeed';
 
 const CACHE_KEY = 'hood_payment_methods';
 const CACHE_TTL = 60;
@@ -15,17 +16,26 @@ export async function GET(req) {
     const all = searchParams.get('all') === 'true';
     const cacheKey = all ? `${CACHE_KEY}_all` : CACHE_KEY;
     const cached = cache.get(cacheKey);
-    if (cached) {
-      return NextResponse.json({ success: true, methods: cached });
+    if (cached && Array.isArray(cached) && cached.length > 0) {
+      return NextResponse.json({ success: true, methods: serializePaymentMethods(cached) });
     }
 
     const db = await getDb();
-    const query = all ? {} : { active: { $ne: false } };
-    const methods = await db.collection('payment_methods').find(query).sort({ name: 1 }).toArray();
-    cache.set(cacheKey, methods, CACHE_TTL);
+    const query = { active: { $ne: false } };
+    const methods = await db
+      .collection('payment_methods')
+      .find(all ? {} : query)
+      .sort({ name: 1 })
+      .toArray();
+    const serialized = serializePaymentMethods(methods);
+    if (serialized.length > 0) {
+      cache.set(cacheKey, serialized, CACHE_TTL);
+    } else {
+      cache.del(cacheKey);
+    }
 
     return NextResponse.json(
-      { success: true, methods },
+      { success: true, methods: serialized },
       { headers: { 'Cache-Control': all ? 'private, no-store' : 'private, max-age=30' } }
     );
   } catch (err) {
@@ -37,7 +47,7 @@ export async function POST(req) {
   try {
     await ensureDbReady();
     const user = await getSessionUser(req);
-    if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    if (!user || !['admin', 'superadmin', 'staff'].includes(String(user.role || '').toLowerCase())) {
       return NextResponse.json({ success: false, error: 'Unauthorized: Admin access required' }, { status: 403 });
     }
 
@@ -86,7 +96,7 @@ export async function POST(req) {
     }
 
     invalidatePaymentMethodsCache();
-    const methods = await db.collection('payment_methods').find({}).toArray();
+    const methods = serializePaymentMethods(await db.collection('payment_methods').find({}).sort({ name: 1 }).toArray());
     return NextResponse.json({ success: true, methods });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
@@ -97,7 +107,7 @@ export async function DELETE(req) {
   try {
     await ensureDbReady();
     const user = await getSessionUser(req);
-    if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    if (!user || !['admin', 'superadmin', 'staff'].includes(String(user.role || '').toLowerCase())) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
     }
     const id = new URL(req.url).searchParams.get('id');

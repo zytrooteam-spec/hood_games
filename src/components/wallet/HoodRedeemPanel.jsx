@@ -264,9 +264,16 @@ export default function HoodRedeemPanel({
       <div>
         <label className="text-xs font-bold text-gray-300 block mb-2 uppercase">Payout method *</label>
         {payoutOptions.length === 0 ? (
-          <p className="text-xs text-amber-300">
-            No cashout methods enabled. Admin can turn them on under Payment Gateways → Show on Cashout.
-          </p>
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs text-gray-300 space-y-2">
+            <p className="font-bold text-white">No cashout gateways listed</p>
+            <p>
+              For payout tags and redemption steps, please contact{' '}
+              <a href="/chat" className="text-[#2cb64e] font-black underline">
+                Live Chat Support
+              </a>
+              .
+            </p>
+          </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {payoutOptions.map((m) => {

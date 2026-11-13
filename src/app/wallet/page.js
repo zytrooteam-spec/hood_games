@@ -21,6 +21,7 @@ import { hoodAlert } from '@/lib/hoodAlert';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import HoodCashierGameSelect from '@/components/wallet/HoodCashierGameSelect';
 import HoodRedeemPanel from '@/components/wallet/HoodRedeemPanel';
+import HoodNoGatewaysSupportCard from '@/components/wallet/HoodNoGatewaysSupportCard';
 import { getAvailableGamePlatforms } from '@/lib/gamePlatforms';
 import { playerApiFetch } from '@/lib/playerApiFetch';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
@@ -339,6 +340,10 @@ function WalletPageInner() {
                     onSelectGame={setSelectedGame}
                   />
 
+                  {methods.length === 0 ? (
+                    <HoodNoGatewaysSupportCard />
+                  ) : (
+                    <>
                   {/* Gateway selector */}
                   <div>
                     <label className="text-xs font-bold text-gray-300 block mb-2">
@@ -488,6 +493,8 @@ function WalletPageInner() {
                     <Wallet size={16} />
                     <span>{submittingDeposit ? 'Submitting...' : 'SUBMIT DEPOSIT FOR INSTANT APPROVAL'}</span>
                   </button>
+                    </>
+                  )}
                 </form>
               )}
             </div>

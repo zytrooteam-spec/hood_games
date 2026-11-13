@@ -922,6 +922,20 @@ export default function AdminDashboard({ user, onLogout }) {
     };
   }, [playAdminChime, scheduleChatInboxRefresh, refreshDeskQueues, scheduleLightAdminSync]);
 
+  const inboxPreviewMessages = React.useCallback((threadHint, uid) => {
+    if (!threadHint?.lastMessage) return [];
+    return [
+      {
+        _id: `inbox-preview-${uid}`,
+        id: `inbox-preview-${uid}`,
+        text: threadHint.lastMessage,
+        senderRole: 'player',
+        createdAt: threadHint.lastMessageAt || new Date().toISOString(),
+        inboxPreview: true,
+      },
+    ];
+  }, []);
+
   const applyConversationPayload = React.useCallback((uid, messages, threadMeta, player) => {
     conversationCacheRef.current.set(uid, { messages, threadMeta, player });
     writeAdminChatThreadCache(uid, { messages, threadMeta, player });
@@ -942,16 +956,23 @@ export default function AdminDashboard({ user, onLogout }) {
       if (!uid || conversationCacheRef.current.has(uid)) return;
       const disk = readAdminChatThreadCache(uid);
       if (disk?.messages?.length) {
-        conversationCacheRef.current.set(uid, {
+        const row = {
           messages: disk.messages,
           threadMeta: disk.threadMeta || { labels: [], staffNotes: [] },
           player: disk.player,
-        });
+        };
+        conversationCacheRef.current.set(uid, row);
+        if (String(selectedThreadUserRef.current) === uid) {
+          setThreadMessages(row.messages);
+          setThreadMeta(row.threadMeta);
+          if (row.player) setThreadPlayerDetail(row.player);
+          setConversationLoading(false);
+        }
         return;
       }
       try {
         const res = await staffApiFetch(
-          `/api/chat?userId=${encodeURIComponent(uid)}&limit=80`,
+          `/api/chat?userId=${encodeURIComponent(uid)}&limit=45`,
           { cache: 'no-store' }
         );
         const data = await res.json();
@@ -970,6 +991,12 @@ export default function AdminDashboard({ user, onLogout }) {
   const loadConversation = async (userId, isSilent = false) => {
     const uid = String(userId || '');
     if (!uid) return;
+
+    const controller = new AbortController();
+    const network = staffApiFetch(
+      `/api/chat?userId=${encodeURIComponent(uid)}&limit=45&_t=${Date.now()}`,
+      { signal: controller.signal, cache: 'no-store' }
+    );
 
     let requestId = conversationReqIdRef.current;
     if (!isSilent) {
@@ -995,28 +1022,24 @@ export default function AdminDashboard({ user, onLogout }) {
         setThreadPlayerDetail(cached.player);
         setConversationLoading(false);
       } else {
-        setThreadMessages([]);
-        setThreadMeta({ labels: [], staffNotes: [] });
+        const preview = inboxPreviewMessages(threadHint, uid);
+        setThreadMessages(preview);
+        setThreadMeta({ labels: threadHint?.labels || [], staffNotes: threadHint?.staffNotes || [] });
         setThreadPlayerDetail(
           threadHint
             ? { id: uid, username: threadHint.username, email: threadHint.userEmail }
             : null
         );
-        setConversationLoading(true);
+        setConversationLoading(preview.length === 0);
       }
     } else if (String(selectedThreadUserRef.current) !== uid) {
       if (!conversationCacheRef.current.has(uid)) await prefetchConversation(uid);
       return;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const res = await staffApiFetch(
-        `/api/chat?userId=${encodeURIComponent(uid)}&limit=80&_t=${Date.now()}`,
-        {
-        signal: controller.signal,
-      });
+      const res = await network;
       const data = await res.json();
       if (String(selectedThreadUserRef.current) !== uid) return;
       if (!isSilent && requestId !== conversationReqIdRef.current) return;
@@ -1075,10 +1098,9 @@ export default function AdminDashboard({ user, onLogout }) {
 
   useEffect(() => {
     if (activeTab !== 'chat' || !chatThreads.length) return;
-    const warm = chatThreads
-      .filter((t) => t.unreadCount > 0)
-      .slice(0, 5)
-      .map((t) => t.userId);
+    const unread = chatThreads.filter((t) => t.unreadCount > 0).map((t) => t.userId);
+    const recent = chatThreads.slice(0, 12).map((t) => t.userId);
+    const warm = [...new Set([...unread, ...recent])].slice(0, 16);
     warm.forEach((id) => prefetchConversation(id));
   }, [activeTab, chatThreads, prefetchConversation]);
 
@@ -2404,9 +2426,13 @@ export default function AdminDashboard({ user, onLogout }) {
                       <button
                         key={t.userId}
                         type="button"
-                        onClick={() => loadConversation(t.userId)}
+                        onClick={() => {
+                          prefetchConversation(t.userId);
+                          loadConversation(t.userId);
+                        }}
                         onMouseEnter={() => prefetchConversation(t.userId)}
                         onFocus={() => prefetchConversation(t.userId)}
+                        onTouchStart={() => prefetchConversation(t.userId)}
                         className={`w-full text-left p-3 transition-colors ${
                           selectedThreadUser === t.userId ? 'bg-[#12244c] ring-1 ring-inset ring-[#2cb64e]/35' : 'hover:bg-[#0e2042]'
                         }`}
@@ -2517,18 +2543,8 @@ export default function AdminDashboard({ user, onLogout }) {
                     </div>
                   ) : conversationLoading && threadMessages.length === 0 ? (
                     <div className="text-center py-8 space-y-2">
-                      <RefreshCw size={22} className="mx-auto animate-spin text-[#2cb64e]" />
-                      <p className="text-xs text-gray-400">Loading messages…</p>
-                      {(() => {
-                        const hint = (chatThreads || []).find(
-                          (t) => String(t.userId) === String(selectedThreadUser)
-                        );
-                        return hint?.lastMessage ? (
-                          <p className="text-[10px] text-gray-500 max-w-sm mx-auto truncate px-2">
-                            Latest: {hint.lastMessage}
-                          </p>
-                        ) : null;
-                      })()}
+                      <RefreshCw size={18} className="mx-auto animate-spin text-[#2cb64e]/70" />
+                      <p className="text-[10px] text-gray-500">Syncing full thread…</p>
                     </div>
                   ) : threadMessages.length === 0 ? (
                     <p className="text-center text-[11px] text-gray-500 py-8">No messages in this thread yet.</p>
@@ -3381,8 +3397,7 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {/* 8. PAYMENT GATEWAYS                                      */}
         {/* ======================================================== */}
-        {activeTab === 'gateways' && (<GatewaysTab />
-        )}
+        {activeTab === 'gateways' && <GatewaysTab initialMethods={gateways} />}
 
         {/* ======================================================== */}
         {/* 9. GAME CREDIT LOADS                                     */}

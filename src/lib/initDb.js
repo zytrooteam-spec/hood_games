@@ -49,6 +49,7 @@ function scheduleIndexes(db) {
     db.collection('daily_spins').createIndex({ createdAt: -1 }),
     db.collection('coin_transfers').createIndex({ createdAt: -1 }),
     db.collection('chat_messages').createIndex({ userId: 1, createdAt: -1 }),
+    db.collection('chat_messages').createIndex({ userEmail: 1, createdAt: -1 }),
     db.collection('chat_messages').createIndex({ senderRole: 1, read: 1 }),
     db.collection('chat_messages').createIndex({ senderRole: 1, read: 1, userId: 1 }),
     db.collection('chat_threads').createIndex({ lastMessageAt: -1 }),
@@ -378,87 +379,7 @@ async function runHeavyDbSeed() {
         await gamesCol.insertMany(defaultGames);
       }
 
-      // 4. Default Payment Gateways
-      const methodsCol = db.collection('payment_methods');
-      const methodsCount = await methodsCol.countDocuments({});
-      if (methodsCount === 0) {
-        console.log('Seeding initial payment gateways for Hood Games...');
-        const defaultMethods = [
-          {
-            methodId: 'cashapp',
-            name: 'Cash App',
-            icon: 'DollarSign',
-            tag: '$HoodGamesHQ',
-            displayName: 'Cash App Pay',
-            instructions: 'Send payment with your player username in the note. Instant auto-credit upon verification.',
-            minDeposit: 10,
-            maxDeposit: 5000,
-            minWithdrawal: 25,
-            maxWithdrawal: 3000,
-            active: true,
-            badge: 'MOST POPULAR (INSTANT)',
-          },
-          {
-            methodId: 'zelle',
-            name: 'Zelle',
-            icon: 'Zap',
-            tag: 'pay@hoodgames.com',
-            displayName: 'Zelle Direct',
-            instructions: 'Send via Zelle to pay@hoodgames.com. Zero fees, instant bank settlement.',
-            minDeposit: 20,
-            maxDeposit: 5000,
-            minWithdrawal: 50,
-            maxWithdrawal: 4000,
-            active: true,
-            badge: 'ZERO FEES',
-          },
-          {
-            methodId: 'crypto',
-            name: 'Bitcoin / USDT',
-            icon: 'Bitcoin',
-            tag: '1HoodGamesCyberWalletBTC777',
-            displayName: 'Crypto / BTC / USDT (TRC20)',
-            instructions: 'Transfer BTC or USDT. Payouts processed within 5-15 minutes.',
-            minDeposit: 20,
-            maxDeposit: 10000,
-            minWithdrawal: 50,
-            maxWithdrawal: 10000,
-            active: true,
-            badge: '10% EXTRA BONUS',
-          },
-          {
-            methodId: 'chime',
-            name: 'Chime',
-            icon: 'CreditCard',
-            tag: '$HoodGamesPay',
-            displayName: 'Chime Spot',
-            instructions: 'Send Chime to $HoodGamesPay. Include your username.',
-            minDeposit: 10,
-            maxDeposit: 2500,
-            minWithdrawal: 25,
-            maxWithdrawal: 2500,
-            active: true,
-            badge: 'FAST CASHOUT',
-          },
-          {
-            methodId: 'applepay',
-            name: 'Apple Pay / Card',
-            icon: 'Smartphone',
-            tag: 'apple@hoodgames.com',
-            displayName: 'Apple Pay Direct',
-            instructions: 'Use Apple Pay via SMS or iMessage request for fast deposit.',
-            minDeposit: 15,
-            maxDeposit: 2000,
-            minWithdrawal: 25,
-            maxWithdrawal: 2000,
-            active: true,
-            badge: '1-TAP PAY',
-          },
-        ];
-        await methodsCol.insertMany(defaultMethods);
-      }
-
-      // 5. Default Winners Activity for Ticker (Tied strictly to seeded games)
+      // 4. Default Winners Activity for Ticker (Tied strictly to seeded games)
       const activityCol = db.collection('activity');
       const actCount = await activityCol.countDocuments({});
       if (actCount === 0) {

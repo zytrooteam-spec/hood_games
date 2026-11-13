@@ -2,6 +2,7 @@ import { mapAccountRequest } from '@/lib/mapAccountRequest';
 import { buildStaffChatThreads } from '@/lib/chatThreads.server';
 import { computeAdminStats, STAFF_LIST_LIMIT } from '@/lib/adminStats.server';
 import { listStaffDeposits } from '@/lib/staffDeposits.server';
+import { serializePaymentMethods } from '@/lib/paymentMethodsSeed';
 
 export const ADMIN_BOOTSTRAP_HEAVY_LIMIT = 120;
 export const ADMIN_BOOTSTRAP_LITE_THREADS = 50;
@@ -20,7 +21,7 @@ export async function buildAdminBootstrapLite(db) {
     lite: true,
     stats,
     settings: settings || null,
-    methods,
+    methods: serializePaymentMethods(methods),
     threads,
   };
 }
@@ -72,7 +73,7 @@ export async function buildAdminBootstrapFull(db) {
     accountRequests: mappedRequests,
     settings: settings || null,
     threads,
-    methods,
+    methods: serializePaymentMethods(methods),
   };
 }
 

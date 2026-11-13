@@ -34,12 +34,26 @@ export async function GET(req) {
         return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
       }
 
-      const target = await resolveStaffChatTargetUser(db, targetUserId);
-      const uid = String(target?.userId || targetUserId);
-      const msgLimit = Math.min(120, Math.max(20, parseInt(searchParams.get('limit') || '50', 10) || 50));
-      const player = await db.collection('users').findOne(toIdQuery(uid), {
+      const rawId = String(targetUserId).trim();
+      const msgLimit = Math.min(80, Math.max(15, parseInt(searchParams.get('limit') || '45', 10) || 45));
+      let player = await db.collection('users').findOne(toIdQuery(rawId), {
         projection: { username: 1, email: 1, balanceSC: 1, balanceGC: 1 },
       });
+      if (!player && rawId.includes('@')) {
+        player = await db.collection('users').findOne(
+          { email: rawId.toLowerCase() },
+          { projection: { username: 1, email: 1, balanceSC: 1, balanceGC: 1 } }
+        );
+      }
+      if (!player) {
+        const resolved = await resolveStaffChatTargetUser(db, rawId);
+        if (resolved?.userId && resolved.userId !== rawId) {
+          player = await db.collection('users').findOne(toIdQuery(resolved.userId), {
+            projection: { username: 1, email: 1, balanceSC: 1, balanceGC: 1 },
+          });
+        }
+      }
+      const uid = player?._id?.toString?.() || rawId;
       const msgQuery = player ? buildPlayerChatMessageQuery(player) : { userId: uid };
 
       const [messages, threadMeta] = await Promise.all([
