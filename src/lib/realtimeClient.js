@@ -10,6 +10,7 @@ const ADMIN_PULSE_TYPES = new Set([
   REALTIME_TYPES.FINANCE_DEPOSIT,
   REALTIME_TYPES.FINANCE_WITHDRAW,
   REALTIME_TYPES.COIN_DESK,
+  REALTIME_TYPES.ADMIN_STATS,
 ]);
 
 const PLAYER_PULSE_TYPES = new Set([
@@ -44,9 +45,17 @@ function playerInstantPulse() {
 
 export function applyRealtimeEvent(event) {
   if (!event || typeof window === 'undefined') return;
-  if (event.type === 'CONNECTED') return;
+  if (event.type === 'CONNECTED' || event.type === REALTIME_TYPES.SSE_CONNECTED) {
+    window.dispatchEvent(new CustomEvent('hood-sse-status', { detail: { connected: true, t: event.t } }));
+    window.dispatchEvent(new CustomEvent('hood-realtime', { detail: event }));
+    return;
+  }
 
   window.dispatchEvent(new CustomEvent('hood-realtime', { detail: event }));
+
+  if (event.type === REALTIME_TYPES.ADMIN_STATS && event.stats) {
+    window.dispatchEvent(new CustomEvent('hood-admin-stats', { detail: event.stats }));
+  }
 
   switch (event.type) {
     case REALTIME_TYPES.ACCOUNT_REQUEST_CREATED: {

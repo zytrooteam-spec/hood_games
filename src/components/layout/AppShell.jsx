@@ -58,6 +58,7 @@ export default function AppShell({ children }) {
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [freeplayOpen, setFreeplayOpen] = useState(false);
   const [siteSettings, setSiteSettings] = useState(null);
+  const sseLiveRef = React.useRef(false);
 
   const fetchUser = async (isSilent = false) => {
     try {
@@ -91,6 +92,14 @@ export default function AppShell({ children }) {
       /* ignore */
     }
   };
+
+  useEffect(() => {
+    const onSse = (e) => {
+      sseLiveRef.current = Boolean(e.detail?.connected);
+    };
+    window.addEventListener('hood-sse-status', onSse);
+    return () => window.removeEventListener('hood-sse-status', onSse);
+  }, []);
 
   useEffect(() => {
     unlockAudioContext();
@@ -128,10 +137,10 @@ export default function AppShell({ children }) {
     window.addEventListener('balanceUpdate', onInstant);
     // SSE first; gentle backup poll when tab visible
     const interval = setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || sseLiveRef.current) return;
       fetchUser(true);
       fetchUnreadNotifs();
-    }, 45000);
+    }, 120000);
 
     const handleUserSync = (e) => {
       if (e?.detail) {

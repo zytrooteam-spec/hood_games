@@ -4,6 +4,7 @@ export const HOOD_SESSION_SNAPSHOT = 'hood_player_session_snapshot';
 export const HOOD_SETTINGS_SNAPSHOT = 'hood_settings_snapshot';
 export const HOOD_GAME_ACCOUNTS_SNAPSHOT = 'hood_game_accounts_snapshot';
 export const HOOD_ADMIN_BOOTSTRAP = 'hood_admin_bootstrap_snapshot';
+export const HOOD_ADMIN_SESSION = 'hood_admin_session_snapshot';
 
 export function readJson(key) {
   if (typeof window === 'undefined') return null;

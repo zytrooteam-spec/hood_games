@@ -7,7 +7,8 @@ import { sanitizeGameTitle } from '@/lib/fastDiff';
 import { mapAccountRequest } from '@/lib/mapAccountRequest';
 import { resolvePlayerDbUser } from '@/lib/resolvePlayerDbUser';
 import { getFreeplayAmountSC } from '@/lib/freeplayConfig.server';
-import { publishAccountRequestCreated } from '@/lib/realtimePublish';
+import { publishAccountRequestCreated, publishAccountRequestUpdated } from '@/lib/realtimePublish';
+import { pulseStaffStatsAsync, pulseStaffScope } from '@/lib/staffDeskPulse.server';
 import {
   invalidateAccountRequestsCache,
   invalidateAuthCache,
@@ -259,6 +260,8 @@ export async function POST(req) {
       userEmail: dbUser.email,
       userId: dbUser._id.toString(),
     });
+    pulseStaffStatsAsync();
+    pulseStaffScope('requests');
 
     invalidateAccountRequestsCache();
     invalidateAuthCache(dbUser._id.toString());
@@ -558,6 +561,14 @@ export async function PUT(req) {
       }
 
       bustStaffRequestCaches({ userEmail: reqDoc.userEmail, userId: reqDoc.userId });
+      publishAccountRequestUpdated({
+        action: 'approve',
+        status: 'approved',
+        userEmail: reqDoc.userEmail,
+        userId: reqDoc.userId,
+        requestId: String(reqDoc._id),
+      });
+      pulseStaffStatsAsync();
       return NextResponse.json({ success: true, message: 'Game credentials issued successfully!' });
     } else if (action === 'reject') {
       const isCoinLoadReject =
@@ -614,6 +625,14 @@ export async function PUT(req) {
       });
 
       bustStaffRequestCaches({ userEmail: reqDoc.userEmail, userId: reqDoc.userId });
+      publishAccountRequestUpdated({
+        action: 'reject',
+        status: 'rejected',
+        userEmail: reqDoc.userEmail,
+        userId: reqDoc.userId,
+        requestId: String(reqDoc._id),
+      });
+      pulseStaffStatsAsync();
       return NextResponse.json({ success: true, message: 'Request rejected' });
     }
 

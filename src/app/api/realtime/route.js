@@ -7,6 +7,7 @@ import {
   playerBroadcastChannel,
 } from '@/lib/realtimeHub';
 import { getSessionUser, isStaffRole } from '@/lib/auth';
+import { ensureDbReady } from '@/lib/initDb';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -19,6 +20,7 @@ function safeGuestId(raw) {
 }
 
 export async function GET(req) {
+  await ensureDbReady();
   const { searchParams } = new URL(req.url);
   const guestParam = safeGuestId(searchParams.get('guestId'));
 

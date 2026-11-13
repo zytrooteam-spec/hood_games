@@ -94,6 +94,7 @@ import {
 import Player360ProfileModal from './Player360ProfileModal';
 import { HOOD_ADMIN_BOOTSTRAP, readJson, writeJson } from '@/lib/clientCache';
 import { staffApiFetch } from '@/lib/staffApiFetch';
+import { REALTIME_TYPES } from '@/lib/realtimePublish';
 
 export default function AdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -171,6 +172,7 @@ export default function AdminDashboard({ user, onLogout }) {
   const adminLightSyncTimerRef = React.useRef(null);
   const fetchInFlightRef = React.useRef(false);
   const adminFullHydratedRef = React.useRef(false);
+  const sseLiveRef = React.useRef(false);
   /** Prevent bootstrap poll from resurrecting PENDING after desk reject/approve. */
   const recentAccountRequestPatchesRef = React.useRef(new Map());
   const conversationReqIdRef = React.useRef(0);
@@ -653,35 +655,93 @@ export default function AdminDashboard({ user, onLogout }) {
 
   useEffect(() => {
     const cached = readJson(HOOD_ADMIN_BOOTSTRAP);
-    const hadCache = Boolean(cached?.data?.success);
-    if (hadCache) {
+    if (cached?.data?.success) {
       applyBootstrapPayload(cached.data);
       adminFullHydratedRef.current = true;
-      setLoading(false);
     }
-    void (async () => {
-      await fetchAdminLite(true);
-      setLoading(false);
-      if (!adminFullHydratedRef.current) {
-        window.setTimeout(() => fetchAllData(true), 100);
-      }
-    })();
+    setLoading(false);
+    const raf = requestAnimationFrame(() => {
+      fetchAdminLite(true);
+      if (!adminFullHydratedRef.current) fetchAllData(true);
+    });
     const onRefresh = () => scheduleLightAdminSync();
     window.addEventListener('hood-admin-refresh', onRefresh);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('hood-admin-refresh', onRefresh);
+    };
   }, [applyBootstrapPayload, fetchAdminLite, scheduleLightAdminSync]);
 
   useEffect(() => {
+    const onSse = (e) => {
+      sseLiveRef.current = Boolean(e.detail?.connected);
+    };
+    const onStats = (e) => {
+      if (e.detail) diffSet(setStats, e.detail);
+    };
+    const onRealtime = (e) => {
+      const ev = e.detail;
+      if (!ev?.type || ev.type === 'CONNECTED') return;
+      if (ev.type === REALTIME_TYPES.ADMIN_STATS && ev.stats) {
+        diffSet(setStats, ev.stats);
+        return;
+      }
+      if (ev.type === REALTIME_TYPES.CHAT_MESSAGE) {
+        scheduleChatInboxRefresh();
+        return;
+      }
+      if (ev.type === REALTIME_TYPES.FINANCE_DEPOSIT || ev.type === REALTIME_TYPES.FINANCE_WITHDRAW) {
+        refreshFinanceQueue();
+        return;
+      }
+      if (
+        ev.type === REALTIME_TYPES.ACCOUNT_REQUEST_CREATED ||
+        ev.type === REALTIME_TYPES.ACCOUNT_REQUEST_UPDATED
+      ) {
+        refreshDeskQueues();
+        return;
+      }
+      if (ev.type === REALTIME_TYPES.DESK_SYNC) {
+        const scope = ev.scope || 'all';
+        if (scope === 'stats') refreshAdminStatsOnly();
+        else if (scope === 'finance') refreshFinanceQueue();
+        else if (scope === 'requests') refreshDeskQueues();
+        else if (scope === 'chat') refreshChatInbox();
+        else scheduleLightAdminSync();
+      }
+    };
+    window.addEventListener('hood-sse-status', onSse);
+    window.addEventListener('hood-admin-stats', onStats);
+    window.addEventListener('hood-realtime', onRealtime);
+    return () => {
+      window.removeEventListener('hood-sse-status', onSse);
+      window.removeEventListener('hood-admin-stats', onStats);
+      window.removeEventListener('hood-realtime', onRealtime);
+    };
+  }, [
+    scheduleChatInboxRefresh,
+    refreshFinanceQueue,
+    refreshDeskQueues,
+    refreshAdminStatsOnly,
+    refreshChatInbox,
+    scheduleLightAdminSync,
+  ]);
+
+  useEffect(() => {
     const liteInterval = setInterval(() => {
-      if (!document.hidden) fetchAdminLite(true);
-    }, 45000);
+      if (document.hidden || sseLiveRef.current) return;
+      fetchAdminLite(true);
+    }, 120000);
     const fullInterval = setInterval(() => {
-      if (!document.hidden) fetchAllData(true);
-    }, 180000);
+      if (document.hidden) return;
+      if (sseLiveRef.current) refreshAdminStatsOnly();
+      else fetchAllData(true);
+    }, 300000);
     return () => {
       clearInterval(liteInterval);
       clearInterval(fullInterval);
     };
-  }, [fetchAdminLite]);
+  }, [fetchAdminLite, refreshAdminStatsOnly]);
 
   useEffect(() => {
     if (activeTab === 'finance' && !deposits.length && !redemptions.length) {
@@ -859,8 +919,8 @@ export default function AdminDashboard({ user, onLogout }) {
     if (activeTab !== 'chat') return;
     refreshChatInbox();
     const interval = setInterval(() => {
-      if (!document.hidden) refreshChatInbox();
-    }, 22000);
+      if (!document.hidden && !sseLiveRef.current) refreshChatInbox();
+    }, 60000);
     return () => clearInterval(interval);
   }, [activeTab, refreshChatInbox]);
 

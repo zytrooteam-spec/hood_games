@@ -7,6 +7,7 @@ import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
 import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
 import { publishFinanceDeposit } from '@/lib/realtimePublish';
+import { pulseStaffStatsAsync, pulseStaffScope } from '@/lib/staffDeskPulse.server';
 import { listStaffDeposits } from '@/lib/staffDeposits.server';
 import { invalidateAuthCache, invalidateGameAccountsCache } from '@/lib/authCache';
 
@@ -115,6 +116,8 @@ export async function POST(req) {
       userEmail,
       userId,
     });
+    pulseStaffStatsAsync();
+    pulseStaffScope('finance');
 
     return NextResponse.json({
       success: true,
@@ -206,6 +209,8 @@ export async function PUT(req) {
         userEmail: deposit.userEmail,
         userId: deposit.userId,
       });
+      pulseStaffStatsAsync();
+      pulseStaffScope('finance');
 
       if (deposit.userId) invalidateAuthCache(String(deposit.userId));
       if (deposit.userEmail) invalidateGameAccountsCache(deposit.userEmail);
@@ -250,6 +255,8 @@ export async function PUT(req) {
         userEmail: deposit.userEmail,
         userId: deposit.userId,
       });
+      pulseStaffStatsAsync();
+      pulseStaffScope('finance');
 
       return NextResponse.json({
         success: true,

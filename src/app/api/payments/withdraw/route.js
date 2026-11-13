@@ -5,6 +5,7 @@ import { ensureDbReady, ensureDbInitialized } from '@/lib/initDb';
 import { ADMIN_BOOTSTRAP_HEAVY_LIMIT } from '@/lib/adminBootstrap.server';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { publishFinanceWithdraw } from '@/lib/realtimePublish';
+import { pulseStaffStatsAsync, pulseStaffScope } from '@/lib/staffDeskPulse.server';
 import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
 import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
 import { findUserGameAccount } from '@/lib/gameAccounts';
@@ -279,6 +280,8 @@ export async function POST(req) {
       userEmail,
       userId,
     });
+    pulseStaffStatsAsync();
+    pulseStaffScope('finance');
 
     return NextResponse.json({
       success: true,

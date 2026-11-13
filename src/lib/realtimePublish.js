@@ -17,6 +17,8 @@ export const REALTIME_TYPES = {
   FINANCE_WITHDRAW: 'FINANCE_WITHDRAW',
   WALLET: 'WALLET',
   COIN_DESK: 'COIN_DESK',
+  ADMIN_STATS: 'ADMIN_STATS',
+  SSE_CONNECTED: 'CONNECTED',
 };
 
 function resolveChannels(targets = {}) {
@@ -95,6 +97,28 @@ export function publishDeskSync(payload = {}) {
   publishRealtimeEvent({
     type: REALTIME_TYPES.DESK_SYNC,
     ...payload,
+    targets: { staff: true },
+  });
+}
+
+/** scope: stats | finance | requests | chat | all */
+export function publishStaffDeskPulse(scope = 'all', extra = {}) {
+  publishDeskSync({ scope, ...extra });
+}
+
+export function publishAccountRequestUpdated(fields) {
+  publishStaffPlayerSync(REALTIME_TYPES.ACCOUNT_REQUEST_UPDATED, {
+    ...fields,
+    staff: true,
+  });
+  publishStaffDeskPulse('requests');
+}
+
+export function publishAdminStatsSnapshot(stats) {
+  if (!stats) return;
+  publishRealtimeEvent({
+    type: REALTIME_TYPES.ADMIN_STATS,
+    stats,
     targets: { staff: true },
   });
 }

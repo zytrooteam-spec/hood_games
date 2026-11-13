@@ -41,6 +41,7 @@ export default function RealtimeBridge() {
       };
 
       es.onerror = () => {
+        window.dispatchEvent(new CustomEvent('hood-sse-status', { detail: { connected: false } }));
         try {
           es.close();
         } catch {}

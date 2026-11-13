@@ -7,11 +7,19 @@ import AdminDashboard from '@/components/admin/AdminDashboard';
 import { ShieldCheck, Lock, User, Eye, EyeOff, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { broadcastAdminSession } from '@/lib/sessionClient';
+import { HOOD_ADMIN_SESSION, readJson, writeJson } from '@/lib/clientCache';
+
+function readCachedAdminUser() {
+  const snap = readJson(HOOD_ADMIN_SESSION);
+  if (!snap?.user) return null;
+  if (snap.t && Date.now() - snap.t > 7 * 24 * 60 * 60 * 1000) return null;
+  return snap.user;
+}
 
 export default function AdminPage() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(() => readCachedAdminUser());
+  const [loading, setLoading] = useState(() => !readCachedAdminUser());
 
   // Dedicated Admin Login Form State (Strictly Login, Zero Register)
   const [identifier, setIdentifier] = useState('');
@@ -28,14 +36,17 @@ export default function AdminPage() {
         const r = (data.user.role || '').toLowerCase();
         if (['admin', 'superadmin', 'staff', 'coin_manager', 'financial_manager', 'support_admin'].includes(r)) {
           setUser(data.user);
+          writeJson(HOOD_ADMIN_SESSION, { user: data.user, t: Date.now() });
         } else {
           setUser(null);
+          writeJson(HOOD_ADMIN_SESSION, null);
         }
       } else {
         setUser(null);
+        writeJson(HOOD_ADMIN_SESSION, null);
       }
     } catch {
-      setUser(null);
+      if (!readCachedAdminUser()) setUser(null);
     } finally {
       setLoading(false);
     }
@@ -71,6 +82,7 @@ export default function AdminPage() {
         const r = (data.user.role || '').toLowerCase();
         if (['admin', 'superadmin', 'staff', 'coin_manager', 'financial_manager', 'support_admin'].includes(r)) {
           setUser(data.user);
+          writeJson(HOOD_ADMIN_SESSION, { user: data.user, t: Date.now() });
           broadcastAdminSession(data.user);
           playTune('win');
         } else {
@@ -93,6 +105,7 @@ export default function AdminPage() {
       body: JSON.stringify({ isAdminLogout: true }),
     });
     setUser(null);
+    writeJson(HOOD_ADMIN_SESSION, null);
     router.push('/');
   };
 
