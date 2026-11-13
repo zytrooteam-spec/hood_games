@@ -19,7 +19,7 @@ export function notifyPlayer({ userId, userEmail, username, title, message, type
         title,
         message,
         type,
-        url: data?.url || '/',
+        url: data?.url || (type === 'chat_message' ? '/chat' : '/'),
         read: false,
         createdAt: new Date(),
       }).catch(() => {});
@@ -37,7 +37,13 @@ export function notifyPlayer({ userId, userEmail, username, title, message, type
             token: tok,
             title,
             body: message,
-            data: { ...data, type, target: 'player', userId: cleanUid || '' },
+            data: {
+              ...data,
+              type,
+              target: 'player',
+              userId: cleanUid || '',
+              url: data?.url || (type === 'chat_message' ? '/chat' : '/'),
+            },
           }).catch(() => {});
         }
       }

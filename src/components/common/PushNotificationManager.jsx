@@ -187,11 +187,15 @@ export default function PushNotificationManager() {
               const notifTarget = notification.data?.target;
               // Filter out staff alerts on player client
               if (notifTarget === 'staff') return;
+              const type = notification.data?.type || '';
+              const url =
+                notification.data?.url || (type === 'chat_message' ? '/chat' : '/');
 
               dispatchAlert({
                 title: notification.title,
                 message: notification.body,
-                url: notification.data?.url || '/',
+                type,
+                url,
               });
             });
 
@@ -377,27 +381,44 @@ export default function PushNotificationManager() {
 
   if (!activeToast || (pathname && pathname.startsWith('/admin'))) return null;
 
+  const isChatAlert = (item) => {
+    if (!item) return false;
+    if (item.type === 'chat_message') return true;
+    if (item.url === '/chat') return true;
+    const title = String(item.title || '').toLowerCase();
+    return title.includes('concierge') || title.includes('support') || title.includes('chat reply');
+  };
+
   const handleOpenAction = () => {
+    if (!activeToast) return;
+    const target = { ...activeToast };
     setActiveToast(null);
-    if (activeToast?.type === 'chat_message') {
-      if (typeof window !== 'undefined' && window.openLiveChat) {
-        window.openLiveChat();
-        return;
-      }
-      router.push(activeToast.url || '/chat');
+    if (isChatAlert(target)) {
+      router.push('/chat');
       return;
     }
-    if (activeToast?.url && activeToast.url !== '/') {
-      router.push(activeToast.url);
-    } else {
-      window.dispatchEvent(new CustomEvent('hood-open-notifications'));
+    if (target.url && target.url !== '/') {
+      router.push(target.url);
+      return;
     }
+    router.push('/');
   };
 
   return (
     <div
       role="alert"
-      className="fixed top-4 right-4 z-[9999] max-w-sm w-full mx-auto p-4 rounded-2xl bg-[#090d1a]/95 backdrop-blur-2xl border border-emerald-400/50 shadow-[0_12px_40px_rgba(44,182,78,0.35)] animate-in slide-in-from-top duration-300 overflow-hidden"
+      tabIndex={0}
+      onClick={(e) => {
+        if (e.target.closest('button')) return;
+        handleOpenAction();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleOpenAction();
+        }
+      }}
+      className="fixed top-4 right-4 z-[9999] max-w-sm w-full mx-auto p-4 rounded-2xl bg-[#090d1a]/95 backdrop-blur-2xl border border-emerald-400/50 shadow-[0_12px_40px_rgba(44,182,78,0.35)] animate-in slide-in-from-top duration-300 overflow-hidden cursor-pointer"
       style={{
         boxShadow: '0 0 25px rgba(0, 240, 255, 0.25), inset 0 0 15px rgba(0, 240, 255, 0.1)',
       }}
@@ -406,7 +427,7 @@ export default function PushNotificationManager() {
       <div className="flex items-start gap-3">
         {/* Glowing Icon */}
         <div className="relative shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-purple-600/20 border border-emerald-400/60 flex items-center justify-center text-emerald-300 shadow-[0_0_12px_rgba(44,182,78,0.4)]">
-          {activeToast.type === 'chat_message' ? (
+          {isChatAlert(activeToast) ? (
             <MessageSquare size={18} className="animate-bounce text-emerald-400" />
           ) : (
             <Bell size={18} className="animate-bounce" />
@@ -438,7 +459,7 @@ export default function PushNotificationManager() {
               onClick={handleOpenAction}
               className="px-3 py-1 rounded-lg bg-gradient-to-r from-emerald-400 to-emerald-300 text-black text-[11px] font-heading font-black hover:scale-102 active:scale-98 transition-all flex items-center gap-1 shadow-[0_0_10px_rgba(44,182,78,0.4)]"
             >
-              <span>{activeToast.type === 'chat_message' ? 'OPEN CHAT' : 'CLAIM / VIEW'}</span>
+              <span>{isChatAlert(activeToast) ? 'OPEN CHAT' : 'CLAIM / VIEW'}</span>
               <ExternalLink size={11} strokeWidth={3} />
             </button>
 

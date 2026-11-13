@@ -30,7 +30,8 @@ self.addEventListener('push', (event) => {
     renotify: true,
     requireInteraction: true,
     data: {
-      url: data.url || '/',
+      url: data.url || (data.type === 'chat_message' ? '/chat' : '/'),
+      type: data.type || '',
       dateOfArrival: Date.now(),
     },
     actions: [
@@ -76,7 +77,8 @@ self.addEventListener('notificationclick', (event) => {
 
   if (event.action === 'dismiss') return;
 
-  const urlToOpen = event.notification.data?.url || '/';
+  const d = event.notification.data || {};
+  const urlToOpen = d.url || (d.type === 'chat_message' ? '/chat' : '/');
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

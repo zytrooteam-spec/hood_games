@@ -69,7 +69,7 @@ export async function getFirebaseMessaging() {
 function buildFcmPayload({ title, body, data = {} }) {
   const notifTitle = title || '🎰 Hood Games: Special Bonus Drop!';
   const notifBody = body || 'Tap to play now and claim your rewards!';
-  const targetUrl = data.url || '/';
+  const targetUrl = data.url || (data.type === 'chat_message' ? '/chat' : '/');
 
   return {
     notification: {

@@ -307,6 +307,7 @@ export async function POST(req) {
         title: 'New Reply from Hood Games Concierge',
         message: previewText(cleanText, cleanImageUrl).slice(0, 120),
         type: 'chat_message',
+        data: { url: '/chat' },
       });
       try {
         const ch = new BroadcastChannel('hood_player_chat_sync');
