@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { RefreshCw, Check, Key } from 'lucide-react';
 import AccountRequestsView from './AccountRequestsView';
 import CoinOperationsDesk from './CoinOperationsDesk';
@@ -20,37 +20,101 @@ import {
   HoodAdminModalButton,
 } from './HoodAdminModal';
 
-export function AccountRequestsDesk({ onMutate }) {
-  const [requests, setRequests] = useState([]);
+function gameIdDeskRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(
+    (r) =>
+      r.requestType !== 'COIN_LOAD' &&
+      String(r.requestType || '').toUpperCase() !== 'COIN_LOAD' &&
+      Number(r.transferAmount || 0) <= 0
+  );
+}
+
+export function AccountRequestsDesk({ onMutate, initialRequests = [] }) {
+  const [requests, setRequests] = useState(() => gameIdDeskRows(initialRequests));
   const [filter, setFilter] = useState('PENDING');
   const [refreshing, setRefreshing] = useState(false);
   const [approvalModal, setApprovalModal] = useState({ open: false, request: null, username: '', password: '' });
   const [submitting, setSubmitting] = useState(false);
+  const skipParentSeedUntilRef = useRef(0);
 
-  const load = useCallback(async () => {
-    setRefreshing(true);
+  const markLocalMutation = () => {
+    skipParentSeedUntilRef.current = Date.now() + 15000;
+  };
+
+  const patchRequest = (id, patch) => {
+    markLocalMutation();
+    const key = String(id);
+    setRequests((prev) =>
+      prev.map((r) => (String(r.id || r._id) === key ? { ...r, ...patch } : r))
+    );
+  };
+
+  const removeRequest = (id) => {
+    markLocalMutation();
+    const key = String(id);
+    setRequests((prev) => prev.filter((r) => String(r.id || r._id) !== key));
+  };
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setRefreshing(true);
     try {
-      const res = await staffApiFetch('/api/account-requests?status=all');
+      const res = await staffApiFetch(`/api/account-requests?status=all&_t=${Date.now()}`);
       const d = await res.json();
       const rows = d.accountRequests || d.requests || [];
       if (d.success && Array.isArray(rows)) {
-        const creation = rows.filter(
-          (r) =>
-            r.requestType !== 'COIN_LOAD' &&
-            String(r.requestType || '').toUpperCase() !== 'COIN_LOAD' &&
-            Number(r.transferAmount || 0) <= 0
-        );
-        diffSet(setRequests, creation);
+        if (Date.now() < skipParentSeedUntilRef.current) return;
+        diffSet(setRequests, gameIdDeskRows(rows));
       }
     } finally {
-      setRefreshing(false);
+      if (!silent) setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
-    const i = setInterval(load, 6000);
-    return () => clearInterval(i);
+    if (!initialRequests?.length) return;
+    if (Date.now() < skipParentSeedUntilRef.current) return;
+    diffSet(setRequests, gameIdDeskRows(initialRequests));
+  }, [initialRequests]);
+
+  const scheduleReconcile = () => {
+    window.setTimeout(() => {
+      skipParentSeedUntilRef.current = 0;
+      load(true);
+    }, 3000);
+  };
+
+  useEffect(() => {
+    load(true);
+    const onInstant = () => load(true);
+    window.addEventListener('hood-admin-desk-sync', onInstant);
+    window.addEventListener('hood-admin-refresh', onInstant);
+    window.addEventListener('hood_staff_event_local', onInstant);
+    const onStorage = (e) => {
+      if (e.key === 'hood_staff_event') onInstant();
+    };
+    window.addEventListener('storage', onStorage);
+    let bc;
+    try {
+      bc = new BroadcastChannel('hood_staff_alerts');
+      bc.onmessage = (ev) => {
+        const t = ev?.data?.type;
+        if (!t || t === 'NEW_GAME_ID_REQUEST' || t === 'NEW_COIN_LOAD' || t === 'FREEPLAY') onInstant();
+      };
+    } catch {
+      /* ignore */
+    }
+    const interval = setInterval(() => {
+      if (!document.hidden) load(true);
+    }, 4000);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('hood-admin-desk-sync', onInstant);
+      window.removeEventListener('hood-admin-refresh', onInstant);
+      window.removeEventListener('hood_staff_event_local', onInstant);
+      window.removeEventListener('storage', onStorage);
+      if (bc) bc.close();
+    };
   }, [load]);
 
   const openApprove = (req) => {
@@ -65,26 +129,51 @@ export function AccountRequestsDesk({ onMutate }) {
 
   const confirmApprove = async () => {
     if (!approvalModal.request || submitting) return;
+    const req = approvalModal.request;
+    const id = req.id || req._id;
+    const gameUsername = approvalModal.username?.trim();
+    const gamePassword = approvalModal.password?.trim();
+    if (!gameUsername || !gamePassword) {
+      hoodAlert.warning('Enter game username and password');
+      return;
+    }
+
     setSubmitting(true);
+    setApprovalModal({ open: false, request: null, username: '', password: '' });
+    patchRequest(id, {
+      status: 'READY',
+      gameAccountUsername: gameUsername,
+      gameUsername,
+      gameAccountPassword: gamePassword,
+      gamePassword,
+    });
+    onMutate?.();
+
     try {
-      const id = approvalModal.request.id || approvalModal.request._id;
       const res = await fetch('/api/account-requests', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          id,
+          requestId: id,
           action: 'approve',
-          username: approvalModal.username,
-          password: approvalModal.password,
+          gameUsername,
+          gamePassword,
         }),
       });
       const data = await res.json();
       if (data.success) {
         hoodAlert.success(data.message || 'Credentials issued', 'Account desk');
-        setApprovalModal({ open: false, request: null, username: '', password: '' });
-        load();
-        onMutate?.();
-      } else hoodAlert.error(data.error || data.message || 'Failed');
+        scheduleReconcile();
+      } else {
+        hoodAlert.error(data.error || data.message || 'Failed');
+        skipParentSeedUntilRef.current = 0;
+        load(true);
+      }
+    } catch {
+      hoodAlert.error('Network error');
+      skipParentSeedUntilRef.current = 0;
+      load(true);
     } finally {
       setSubmitting(false);
     }
@@ -97,17 +186,24 @@ export function AccountRequestsDesk({ onMutate }) {
       confirmLabel: 'Credit SC',
     });
     if (!ok) return;
+    const rid = req.id || req._id;
+    patchRequest(rid, { status: 'READY' });
+    onMutate?.();
     const res = await fetch('/api/account-requests', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId: req.id || req._id, action: 'freeplay_wallet' }),
+      credentials: 'include',
+      body: JSON.stringify({ requestId: rid, action: 'freeplay_wallet' }),
     });
     const data = await res.json();
     if (data.success) {
       hoodAlert.success(data.message, 'Freeplay');
-      load();
-      onMutate?.();
-    } else hoodAlert.error(data.error || 'Failed');
+      scheduleReconcile();
+    } else {
+      hoodAlert.error(data.error || 'Failed');
+      skipParentSeedUntilRef.current = 0;
+      load(true);
+    }
   };
 
   const cancelReq = async (id) => {
@@ -117,20 +213,56 @@ export function AccountRequestsDesk({ onMutate }) {
       confirmLabel: 'Reject',
     });
     if (!values) return;
-    await fetch('/api/account-requests', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, action: 'cancel', reason: 'Staff desk unavailable — contact support.' }),
-    });
-    load();
+    removeRequest(id);
     onMutate?.();
+    try {
+      const res = await fetch('/api/account-requests', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          requestId: id,
+          action: 'cancel',
+          reason: 'Staff desk unavailable — contact support.',
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        hoodAlert.error(data.error || data.message || 'Reject failed');
+        skipParentSeedUntilRef.current = 0;
+        load(true);
+      } else {
+        scheduleReconcile();
+      }
+    } catch {
+      hoodAlert.error('Network error');
+      skipParentSeedUntilRef.current = 0;
+      load(true);
+    }
   };
 
   const dismissReq = async (id) => {
     const ok = await hoodConfirm({ title: 'Dismiss', message: 'Remove from desk?', confirmLabel: 'Dismiss' });
     if (!ok) return;
-    await fetch(`/api/account-requests?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-    load();
+    removeRequest(id);
+    onMutate?.();
+    try {
+      const res = await fetch(`/api/account-requests?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.success === false) {
+        hoodAlert.error(data.message || 'Could not dismiss');
+        skipParentSeedUntilRef.current = 0;
+        load(true);
+      } else {
+        scheduleReconcile();
+      }
+    } catch {
+      skipParentSeedUntilRef.current = 0;
+      load(true);
+    }
   };
 
   return (

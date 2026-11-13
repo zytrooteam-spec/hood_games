@@ -49,6 +49,8 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const normStatus = (r) => String(r?.status || '').toUpperCase();
+
   // Strictly only show Game Account Creation requests here (Coin Loads belong strictly in Coins Allotment Desk)
   const allRequests = (requests || []).filter(
     (r) => r.requestType !== 'COIN_LOAD' && Number(r.transferAmount || 0) <= 0
@@ -56,8 +58,15 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
 
   const filtered = allRequests.filter((r) => {
     // Status filter
+    const st = normStatus(r);
     const matchesFilter =
-      filter === 'ALL' ? true : (r.status || '').toUpperCase() === filter.toUpperCase();
+      filter === 'ALL'
+        ? true
+        : filter === 'PENDING'
+          ? st === 'PENDING'
+          : filter === 'READY'
+            ? st === 'READY' || st === 'APPROVED'
+            : st === filter.toUpperCase();
     
     // Search query
     const q = searchQuery.toLowerCase().trim();
@@ -71,8 +80,8 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
     return matchesFilter && matchesSearch;
   });
 
-  const pendingCount = allRequests.filter((r) => (r.status || '').toUpperCase() === 'PENDING').length;
-  const readyCount = allRequests.filter((r) => (r.status || '').toUpperCase() === 'READY').length;
+  const pendingCount = allRequests.filter((r) => normStatus(r) === 'PENDING').length;
+  const readyCount = allRequests.filter((r) => normStatus(r) === 'READY' || normStatus(r) === 'APPROVED').length;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
@@ -253,30 +262,52 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
           >
             <Gamepad2 size={34} color="#00F0FF" />
           </div>
-          <div
-            style={{
-              display: 'inline-block',
-              padding: '4px 14px',
-              borderRadius: '20px',
-              backgroundColor: 'rgba(0, 240, 255, 0.15)',
-              border: '1px solid rgba(0, 240, 255, 0.35)',
-              color: '#00F0FF',
-              fontSize: '11px',
-              fontWeight: 900,
-              letterSpacing: '1px',
-              textTransform: 'uppercase',
-              marginBottom: '10px',
-              fontFamily: 'Lexend, sans-serif',
-            }}
-          >
-            All Clear · Zero Pending Backlog
-          </div>
-          <p style={{ margin: 0, fontFamily: 'Lexend, sans-serif', fontSize: '17px', fontWeight: 900, color: '#FFFFFF' }}>
-            No Game Account Requests Found
-          </p>
-          <p style={{ margin: '8px auto 0 auto', maxWidth: '480px', fontSize: '13px', color: '#9A91A8', fontFamily: 'Lexend, sans-serif', lineHeight: 1.6 }}>
-            Incoming player credentials requests will ring and arrive here in real-time.
-          </p>
+          {pendingCount > 0 && filter === 'PENDING' && searchQuery.trim() ? (
+            <>
+              <p style={{ margin: 0, fontFamily: 'Lexend, sans-serif', fontSize: '17px', fontWeight: 900, color: '#FFFFFF' }}>
+                {pendingCount} pending — none match your search
+              </p>
+              <p style={{ margin: '8px auto 0 auto', maxWidth: '480px', fontSize: '13px', color: '#9A91A8' }}>
+                Clear the search box or tap Refresh to load the latest queue.
+              </p>
+            </>
+          ) : pendingCount === 0 && allRequests.length === 0 ? (
+            <>
+              <div
+                style={{
+                  display: 'inline-block',
+                  padding: '4px 14px',
+                  borderRadius: '20px',
+                  backgroundColor: 'rgba(0, 240, 255, 0.15)',
+                  border: '1px solid rgba(0, 240, 255, 0.35)',
+                  color: '#00F0FF',
+                  fontSize: '11px',
+                  fontWeight: 900,
+                  letterSpacing: '1px',
+                  textTransform: 'uppercase',
+                  marginBottom: '10px',
+                  fontFamily: 'Lexend, sans-serif',
+                }}
+              >
+                All Clear · Zero Pending Backlog
+              </div>
+              <p style={{ margin: 0, fontFamily: 'Lexend, sans-serif', fontSize: '17px', fontWeight: 900, color: '#FFFFFF' }}>
+                No Game Account Requests Found
+              </p>
+              <p style={{ margin: '8px auto 0 auto', maxWidth: '480px', fontSize: '13px', color: '#9A91A8', fontFamily: 'Lexend, sans-serif', lineHeight: 1.6 }}>
+                Incoming player credentials requests will ring and arrive here in real-time.
+              </p>
+            </>
+          ) : (
+            <>
+              <p style={{ margin: 0, fontFamily: 'Lexend, sans-serif', fontSize: '17px', fontWeight: 900, color: '#FFFFFF' }}>
+                No requests in this view
+              </p>
+              <p style={{ margin: '8px auto 0 auto', fontSize: '13px', color: '#9A91A8' }}>
+                Try another filter or refresh the desk.
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <>

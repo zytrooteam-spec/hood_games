@@ -91,6 +91,7 @@ import {
 } from './HoodAdminModal';
 import Player360ProfileModal from './Player360ProfileModal';
 import { HOOD_ADMIN_BOOTSTRAP, readJson, writeJson } from '@/lib/clientCache';
+import { staffApiFetch } from '@/lib/staffApiFetch';
 
 export default function AdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -164,6 +165,9 @@ export default function AdminDashboard({ user, onLogout }) {
   const chatInboxRefreshTimerRef = React.useRef(null);
   const adminLightSyncTimerRef = React.useRef(null);
   const fetchInFlightRef = React.useRef(false);
+  const conversationReqIdRef = React.useRef(0);
+  const conversationCacheRef = React.useRef(new Map());
+  const [conversationLoading, setConversationLoading] = useState(false);
   const processingDepositIdsRef = React.useRef(new Set());
   const [processingDepositIds, setProcessingDepositIds] = useState(() => new Set());
 
@@ -619,24 +623,60 @@ export default function AdminDashboard({ user, onLogout }) {
     };
   }, [playAdminChime, scheduleChatInboxRefresh, refreshDeskQueues, scheduleLightAdminSync]);
 
-  // Fetch individual chat conversation (supports silent sync)
   const loadConversation = async (userId, isSilent = false) => {
+    const uid = String(userId || '');
+    if (!uid) return;
+
+    let requestId = conversationReqIdRef.current;
     if (!isSilent) {
-      setSelectedThreadUser(userId);
-      setThreadPlayerDetail(null);
+      requestId = ++conversationReqIdRef.current;
+      setSelectedThreadUser(uid);
       setChatDeskPane('conversation');
+      const cached = conversationCacheRef.current.get(uid);
+      const threadHint = (chatThreads || []).find((t) => String(t.userId) === uid);
+      if (cached) {
+        setThreadMessages(cached.messages);
+        setThreadMeta(cached.threadMeta);
+        setThreadPlayerDetail(cached.player);
+      } else {
+        setThreadMessages([]);
+        setThreadMeta({ labels: [], staffNotes: [] });
+        setThreadPlayerDetail(
+          threadHint
+            ? { id: uid, username: threadHint.username, email: threadHint.userEmail }
+            : null
+        );
+      }
+      setConversationLoading(true);
+    } else if (String(selectedThreadUserRef.current) !== uid) {
+      return;
     }
+
     try {
-      const res = await fetch(`/api/chat?userId=${encodeURIComponent(userId)}`);
+      const res = await staffApiFetch(`/api/chat?userId=${encodeURIComponent(uid)}&_t=${Date.now()}`);
       const data = await res.json();
+      if (!isSilent && requestId !== conversationReqIdRef.current) return;
+      if (isSilent && String(selectedThreadUserRef.current) !== uid) return;
       if (data?.success) {
-        diffSet(setThreadMessages, dedupeChatMessagesById(data.messages || []));
-        diffSet(setThreadMeta, data.threadMeta || { labels: [], staffNotes: [] });
-        if (data.player) diffSet(setThreadPlayerDetail, data.player);
-        else if (!isSilent) setThreadPlayerDetail(null);
+        const messages = dedupeChatMessagesById(data.messages || []);
+        const threadMeta = data.threadMeta || { labels: [], staffNotes: [] };
+        const player =
+          data.player ||
+          (() => {
+            const hint = (chatThreads || []).find((t) => String(t.userId) === uid);
+            return hint ? { id: uid, username: hint.username, email: hint.userEmail } : null;
+          })();
+        conversationCacheRef.current.set(uid, { messages, threadMeta, player });
+        diffSet(setThreadMessages, messages);
+        diffSet(setThreadMeta, threadMeta);
+        if (player) diffSet(setThreadPlayerDetail, player);
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      if (!isSilent && requestId === conversationReqIdRef.current) {
+        setConversationLoading(false);
+      }
     }
   };
 
@@ -1160,6 +1200,10 @@ export default function AdminDashboard({ user, onLogout }) {
       setChatDeskPane(selectedThreadUser ? 'conversation' : 'inbox');
     } else {
       setChatDeskPane('inbox');
+    }
+    if (tab === 'requests') {
+      refreshDeskQueues();
+      window.dispatchEvent(new CustomEvent('hood-admin-desk-sync'));
     }
   };
 
@@ -2027,6 +2071,8 @@ export default function AdminDashboard({ user, onLogout }) {
                         Unread counts show how many player messages need a reply. Attach screenshots with the paperclip.
                       </p>
                     </div>
+                  ) : conversationLoading && threadMessages.length === 0 ? (
+                    <div className="text-center py-8 text-xs text-gray-400">Loading messages…</div>
                   ) : threadMessages.length === 0 ? (
                     <p className="text-center text-[11px] text-gray-500 py-8">No messages in this thread yet.</p>
                   ) : (
@@ -2651,7 +2697,12 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {/* 6. GAME ID REQUESTS                                      */}
         {/* ======================================================== */}
-        {activeTab === 'requests' && <AccountRequestsDesk onMutate={() => fetchAllData(true)} />}
+        {activeTab === 'requests' && (
+          <AccountRequestsDesk
+            initialRequests={accountRequests}
+            onMutate={() => fetchAllData(true)}
+          />
+        )}
 
         {/* ======================================================== */}
         {/* 7. PLAYER MANAGEMENT                                     */}

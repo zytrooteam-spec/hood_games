@@ -29,34 +29,48 @@ export async function GET(req) {
 
     if (isStaff) {
       if (targetUserId) {
-        await db.collection('chat_messages').updateMany(
-          { userId: targetUserId, senderRole: 'player', read: { $ne: true } },
+        const uid = String(targetUserId);
+        const markRead = db.collection('chat_messages').updateMany(
+          { userId: uid, senderRole: 'player', read: { $ne: true } },
           { $set: { read: true } }
         );
 
-        const messages = await db
-          .collection('chat_messages')
-          .find({ userId: targetUserId })
-          .sort({ createdAt: 1 })
-          .toArray();
+        const [messages, threadMeta, player] = await Promise.all([
+          db
+            .collection('chat_messages')
+            .find({ userId: uid })
+            .sort({ createdAt: -1 })
+            .limit(200)
+            .toArray()
+            .then((rows) => rows.reverse()),
+          db.collection('chat_threads').findOne(
+            { userId: uid },
+            { projection: { labels: 1, staffNotes: 1, userId: 1 } }
+          ),
+          db.collection('users').findOne(toIdQuery(uid), {
+            projection: { username: 1, email: 1, balanceSC: 1, balanceGC: 1 },
+          }),
+        ]);
 
-        const threadMeta = await db.collection('chat_threads').findOne({ userId: targetUserId });
-        const player = await db.collection('users').findOne(toIdQuery(targetUserId));
+        await markRead;
 
-        return NextResponse.json({
-          success: true,
-          messages,
-          threadMeta: threadMeta || { userId: targetUserId, labels: [], staffNotes: [] },
-          player: player
-            ? {
-                id: player._id.toString(),
-                username: player.username,
-                email: player.email,
-                balanceSC: player.balanceSC,
-                balanceGC: player.balanceGC,
-              }
-            : null,
-        });
+        return NextResponse.json(
+          {
+            success: true,
+            messages,
+            threadMeta: threadMeta || { userId: uid, labels: [], staffNotes: [] },
+            player: player
+              ? {
+                  id: player._id.toString(),
+                  username: player.username,
+                  email: player.email,
+                  balanceSC: player.balanceSC,
+                  balanceGC: player.balanceGC,
+                }
+              : null,
+          },
+          { headers: { 'Cache-Control': 'private, no-store' } }
+        );
       }
 
       const threads = await buildStaffChatThreads(db);

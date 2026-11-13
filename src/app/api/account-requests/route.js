@@ -8,7 +8,6 @@ import { mapAccountRequest } from '@/lib/mapAccountRequest';
 import { resolvePlayerDbUser } from '@/lib/resolvePlayerDbUser';
 import { getFreeplayAmountSC } from '@/lib/freeplayConfig.server';
 import { publishAccountRequestCreated } from '@/lib/realtimePublish';
-import { cache } from '@/lib/cache';
 import {
   invalidateAccountRequestsCache,
   invalidateAuthCache,
@@ -80,14 +79,6 @@ export async function GET(req) {
 
     let requests;
     if (isStaff) {
-      const statusKey = searchParams.get('status') || 'all';
-      const typeKey = searchParams.get('type') || 'all';
-      const emailQ = searchParams.get('email');
-      const cacheKey = `hood_account_requests_${statusKey}_${typeKey}`;
-      if (!emailQ) {
-        const cached = cache.get(cacheKey);
-        if (cached) return NextResponse.json(cached);
-      }
       const query = buildStaffQuery(searchParams);
       requests = await db.collection('accountRequests').find(query).sort({ createdAt: -1 }).limit(250).toArray();
     } else {
@@ -110,12 +101,9 @@ export async function GET(req) {
       requests: mapped,
       accountRequests: mapped,
     };
-    if (isStaff && !searchParams.get('email')) {
-      const statusKey = searchParams.get('status') || 'all';
-      const typeKey = searchParams.get('type') || 'all';
-      cache.set(`hood_account_requests_${statusKey}_${typeKey}`, payload, 8);
-    }
-    return NextResponse.json(payload);
+    return NextResponse.json(payload, {
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
