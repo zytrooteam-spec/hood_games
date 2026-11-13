@@ -1,6 +1,7 @@
 /** Maps SSE payloads to in-app sync events (poll stays as backup). */
 
 import { REALTIME_TYPES } from '@/lib/realtimePublish';
+import { broadcastAdminDeskPulse } from '@/lib/adminCrossTab';
 
 const ADMIN_PULSE_TYPES = new Set([
   REALTIME_TYPES.ACCOUNT_REQUEST_CREATED,
@@ -147,6 +148,7 @@ export function applyRealtimeEvent(event) {
 
   if (ADMIN_PULSE_TYPES.has(event.type)) {
     adminDeskPulse(event);
+    broadcastAdminDeskPulse();
   }
 
   if (event.type === REALTIME_TYPES.WALLET) {

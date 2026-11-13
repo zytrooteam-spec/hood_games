@@ -9,6 +9,8 @@ import { hoodAlert, hoodConfirm } from '@/lib/hoodAlert';
 import { readGamesCache, writeGamesCache } from '@/lib/gameAssets';
 import { staffApiFetch } from '@/lib/staffApiFetch';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import { HOOD_POLL } from '@/lib/pollingConfig';
+import { hoodSsePoll } from '@/lib/ssePollOptions';
 import { readJson, writeJson, HOOD_ADMIN_LEDGER_SNAPSHOT } from '@/lib/clientCache';
 import AdminPagination from '@/components/admin/AdminPagination';
 
@@ -103,11 +105,7 @@ export function GamesLibraryTab() {
     const cached = readGamesCache();
     if (cached?.length) diffSet(setGames, cached);
     load(Boolean(cached?.length));
-    const stop = startSseBackedPoll(() => load(true), {
-      whenDisconnected: 120_000,
-      whenConnected: 300_000,
-      runOnStart: false,
-    });
+    const stop = startSseBackedPoll(() => load(true), hoodSsePoll(HOOD_POLL.LISTS));
     return () => stop();
   }, [load]);
 
@@ -457,11 +455,7 @@ export function LedgerTab() {
 
   useEffect(() => {
     loadTotals();
-    const stop = startSseBackedPoll(loadTotals, {
-      whenDisconnected: 120_000,
-      whenConnected: 300_000,
-      runOnStart: false,
-    });
+    const stop = startSseBackedPoll(loadTotals, hoodSsePoll(HOOD_POLL.QUEUES));
     return () => stop();
   }, [loadTotals]);
 

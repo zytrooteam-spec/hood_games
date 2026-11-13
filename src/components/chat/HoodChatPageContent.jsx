@@ -19,6 +19,8 @@ import { compressImageFile } from '@/lib/imageCompress';
 import { diffSet } from '@/lib/fastDiff';
 import HoodChatMessageBubble from '@/components/chat/HoodChatMessageBubble';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import { HOOD_POLL } from '@/lib/pollingConfig';
+import { hoodSsePoll } from '@/lib/ssePollOptions';
 import { REALTIME_TYPES } from '@/lib/realtimePublish';
 
 const STAFF_ROLES = new Set(['admin', 'superadmin', 'staff', 'coin_manager', 'financial_manager', 'support_admin']);
@@ -65,11 +67,7 @@ export default function HoodChatPageContent({ user, onOpenAuth }) {
   useEffect(() => {
     fetchMessages();
     fetchRef.current = fetchMessages;
-    return startSseBackedPoll(() => fetchMessages(), {
-      whenDisconnected: 30_000,
-      whenConnected: 300_000,
-      runOnStart: false,
-    });
+    return startSseBackedPoll(() => fetchMessages(), hoodSsePoll(HOOD_POLL.CHAT));
   }, [user?.email, user?.id]);
 
   useEffect(() => {

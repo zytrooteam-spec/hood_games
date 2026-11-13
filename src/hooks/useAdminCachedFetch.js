@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { staffApiFetch } from '@/lib/staffApiFetch';
 import { readJson, writeJson } from '@/lib/clientCache';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import { hoodSsePoll } from '@/lib/ssePollOptions';
 
 /**
  * Winning Heaven pattern: show cached JSON instantly, revalidate in background, keep previous rows while loading.
@@ -51,12 +52,7 @@ export default function useAdminCachedFetch(url, { cacheKey, pollMs = 0, enabled
     const onPulse = () => revalidate(true);
     window.addEventListener('hood-admin-desk-sync', onPulse);
     window.addEventListener('hood-admin-refresh', onPulse);
-    const stop = startSseBackedPoll(() => revalidate(true), {
-      whenDisconnected: pollMs,
-      whenConnected: Math.max(pollMs * 4, 120_000),
-      runOnStart: false,
-      runWhenHidden: true,
-    });
+    const stop = startSseBackedPoll(() => revalidate(true), hoodSsePoll(pollMs));
     return () => {
       stop();
       window.removeEventListener('hood-admin-desk-sync', onPulse);

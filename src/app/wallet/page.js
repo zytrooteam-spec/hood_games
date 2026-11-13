@@ -24,6 +24,8 @@ import HoodRedeemPanel from '@/components/wallet/HoodRedeemPanel';
 import { getAvailableGamePlatforms } from '@/lib/gamePlatforms';
 import { playerApiFetch } from '@/lib/playerApiFetch';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import { HOOD_POLL } from '@/lib/pollingConfig';
+import { hoodSsePoll } from '@/lib/ssePollOptions';
 
 function WalletAccountSync({ user, onAccounts }) {
   const load = useCallback(() => {
@@ -139,11 +141,7 @@ function WalletPageInner() {
 
   useEffect(() => {
     const sync = () => loadPaymentData();
-    const stop = startSseBackedPoll(sync, {
-      whenDisconnected: 25_000,
-      whenConnected: 180_000,
-      runOnStart: false,
-    });
+    const stop = startSseBackedPoll(sync, hoodSsePoll(HOOD_POLL.QUEUES));
     const onWallet = () => sync();
     window.addEventListener('hood-instant-sync', onWallet);
     window.addEventListener('hood-wallet-sync', onWallet);

@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import { diffSet } from '@/lib/fastDiff';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import { HOOD_POLL } from '@/lib/pollingConfig';
+import { hoodSsePoll } from '@/lib/ssePollOptions';
 import AdminPagination from '@/components/admin/AdminPagination';
 import {
   HoodAdminModal,
@@ -179,11 +181,7 @@ export default function CoinOperationsDesk({
 
   useEffect(() => {
     fetchData(true);
-    const stopPoll = startSseBackedPoll(() => fetchData(true), {
-      whenDisconnected: 45_000,
-      whenConnected: 240_000,
-      runOnStart: false,
-    });
+    const stopPoll = startSseBackedPoll(() => fetchData(true), hoodSsePoll(HOOD_POLL.LIVE));
 
     const handleLiveEvent = (payload) => {
       if (!payload || !payload.type) return;

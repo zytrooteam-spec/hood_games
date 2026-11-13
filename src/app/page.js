@@ -20,6 +20,10 @@ import GameRequestModal from '@/components/modals/GameRequestModal';
 import LoadCoinsModal from '@/components/modals/LoadCoinsModal';
 import { readGamesCache, writeGamesCache } from '@/lib/gameAssets';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import { HOOD_POLL } from '@/lib/pollingConfig';
+import { hoodSsePoll } from '@/lib/ssePollOptions';
+import usePollingFetch from '@/hooks/usePollingFetch';
+import { HOOD_GAME_ACCOUNTS_SNAPSHOT } from '@/lib/clientCache';
 
 import {
   Sparkles,
@@ -35,8 +39,6 @@ import {
   Coins
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
-import { playerApiFetch } from '@/lib/playerApiFetch';
-
 export default function HomePage() {
   const { user, fetchUser, openAuth, openCashier, openFreeplay } = useAppShell();
 
@@ -55,25 +57,21 @@ export default function HomePage() {
   const [settings, setSettings] = useState(null);
   const [games, setGames] = useState(() => readGamesCache() || []);
   const [loadingGames, setLoadingGames] = useState(() => !(readGamesCache()?.length > 0));
-  const [userGameAccounts, setUserGameAccounts] = useState([]);
-  const [pendingAccountRequests, setPendingAccountRequests] = useState([]);
+  const accountsUrl = user?.email
+    ? `/api/game-accounts?email=${encodeURIComponent(user.email)}`
+    : null;
+  const { data: accountsData } = usePollingFetch(accountsUrl, {
+    cacheKey: user?.email ? HOOD_GAME_ACCOUNTS_SNAPSHOT : null,
+    pollMs: HOOD_POLL.PLAYER,
+    enabled: Boolean(user?.email),
+  });
+  const userGameAccounts = accountsData?.gameAccounts || [];
+  const pendingAccountRequests = accountsData?.pendingRequests || [];
 
   const [spinModalOpen, setSpinModalOpen] = useState(false);
   const [appModalOpen, setAppModalOpen] = useState(false);
   const [requestModal, setRequestModal] = useState({ open: false, game: null });
   const [loadCoinsModal, setLoadCoinsModal] = useState({ open: false, game: null, userAccount: null });
-
-  // Load User Game Accounts
-  const loadUserAccounts = async (email) => {
-    try {
-      const res = await playerApiFetch(`/api/game-accounts?email=${encodeURIComponent(email || '')}`);
-      const data = await res.json();
-      if (data?.success) {
-        if (Array.isArray(data?.gameAccounts)) diffSet(setUserGameAccounts, data.gameAccounts);
-        if (Array.isArray(data?.pendingRequests)) diffSet(setPendingAccountRequests, data.pendingRequests);
-      }
-    } catch {}
-  };
 
   // Load System Settings & Games
   const fetchSiteData = async (isSilent = false) => {
@@ -111,21 +109,9 @@ export default function HomePage() {
       );
     }
     fetchSiteData(Boolean(cached?.length));
-    const stopPoll = startSseBackedPoll(() => fetchSiteData(true), {
-      whenDisconnected: 35_000,
-      whenConnected: 180_000,
-      runOnStart: false,
-    });
+    const stopPoll = startSseBackedPoll(() => fetchSiteData(true), hoodSsePoll(HOOD_POLL.PLAYER));
     return () => stopPoll();
   }, []);
-
-  useEffect(() => {
-    if (user?.email) loadUserAccounts(user.email);
-    else {
-      diffSet(setUserGameAccounts, []);
-      diffSet(setPendingAccountRequests, []);
-    }
-  }, [user?.email]);
 
   return (
     <>

@@ -24,6 +24,8 @@ import {
   HOOD_SETTINGS_SNAPSHOT,
 } from '@/lib/clientCache';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import { HOOD_POLL } from '@/lib/pollingConfig';
+import { hoodSsePoll } from '@/lib/ssePollOptions';
 
 export const AppShellContext = createContext({
   user: null,
@@ -141,7 +143,7 @@ export default function AppShell({ children }) {
         fetchUser(true);
         fetchUnreadNotifs();
       },
-      { whenDisconnected: 90_000, whenConnected: 300_000, runOnStart: false }
+      hoodSsePoll(HOOD_POLL.PLAYER)
     );
 
     const handleUserSync = (e) => {

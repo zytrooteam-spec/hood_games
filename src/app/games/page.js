@@ -12,15 +12,26 @@ import Link from 'next/link';
 import { playTune } from '@/lib/soundAlerts';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import { readGamesCache, writeGamesCache } from '@/lib/gameAssets';
-import { playerApiFetch } from '@/lib/playerApiFetch';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import { HOOD_POLL } from '@/lib/pollingConfig';
+import { hoodSsePoll } from '@/lib/ssePollOptions';
+import usePollingFetch from '@/hooks/usePollingFetch';
+import { HOOD_GAME_ACCOUNTS_SNAPSHOT } from '@/lib/clientCache';
 
 function GamesContent() {
   const { user, fetchUser, openAuth } = useAppShell();
   const [games, setGames] = useState(() => readGamesCache() || []);
   const [loadingGames, setLoadingGames] = useState(() => !(readGamesCache()?.length > 0));
-  const [userGameAccounts, setUserGameAccounts] = useState([]);
-  const [pendingAccountRequests, setPendingAccountRequests] = useState([]);
+  const accountsUrl = user?.email
+    ? `/api/game-accounts?email=${encodeURIComponent(user.email)}`
+    : null;
+  const { data: accountsData } = usePollingFetch(accountsUrl, {
+    cacheKey: user?.email ? HOOD_GAME_ACCOUNTS_SNAPSHOT : null,
+    pollMs: HOOD_POLL.PLAYER,
+    enabled: Boolean(user?.email),
+  });
+  const userGameAccounts = accountsData?.gameAccounts || [];
+  const pendingAccountRequests = accountsData?.pendingRequests || [];
   const [requestModal, setRequestModal] = useState({ open: false, game: null });
   const [loadCoinsModal, setLoadCoinsModal] = useState({ open: false, game: null, userAccount: null });
   const [spinModalOpen, setSpinModalOpen] = useState(false);
@@ -43,48 +54,12 @@ function GamesContent() {
       .finally(() => setLoadingGames(false));
   };
 
-  const loadUserAccounts = (email) => {
-    if (!email) return;
-    playerApiFetch(`/api/game-accounts?email=${encodeURIComponent(email)}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d?.success) {
-          if (Array.isArray(d?.gameAccounts)) diffSet(setUserGameAccounts, d.gameAccounts);
-          if (Array.isArray(d?.pendingRequests)) diffSet(setPendingAccountRequests, d.pendingRequests);
-        }
-      })
-      .catch(() => {});
-  };
-
   useEffect(() => {
     const cached = readGamesCache();
     if (cached?.length) diffSet(setGames, cached.map((g) => ({ ...g, title: sanitizeGameTitle(g.title) })));
     loadGames(Boolean(cached?.length));
-    return startSseBackedPoll(() => loadGames(true), {
-      whenDisconnected: 60_000,
-      whenConnected: 300_000,
-      runOnStart: false,
-    });
+    return startSseBackedPoll(() => loadGames(true), hoodSsePoll(HOOD_POLL.LISTS));
   }, []);
-
-  useEffect(() => {
-    if (!user?.email) return;
-    const syncAccounts = () => loadUserAccounts(user.email);
-    syncAccounts();
-    const stop = startSseBackedPoll(syncAccounts, {
-      whenDisconnected: 25_000,
-      whenConnected: 180_000,
-      runOnStart: false,
-    });
-    const onRefresh = () => syncAccounts();
-    window.addEventListener('hood-game-accounts-refresh', onRefresh);
-    window.addEventListener('hood-instant-sync', onRefresh);
-    return () => {
-      stop();
-      window.removeEventListener('hood-game-accounts-refresh', onRefresh);
-      window.removeEventListener('hood-instant-sync', onRefresh);
-    };
-  }, [user?.email]);
 
   return (
     <div className="space-y-8 animate-in fade-in">

@@ -10,43 +10,39 @@ import { playTune } from '@/lib/soundAlerts';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
 import { getGameThumbnail, readGamesCache, writeGamesCache } from '@/lib/gameAssets';
 import { findGameForAccount } from '@/lib/matchGameAccount';
-import { playerApiFetch } from '@/lib/playerApiFetch';
-import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import usePollingFetch from '@/hooks/usePollingFetch';
+import { HOOD_POLL } from '@/lib/pollingConfig';
+import { HOOD_GAME_ACCOUNTS_SNAPSHOT, readJson } from '@/lib/clientCache';
 
 function GameIdsContent() {
   const { user, openAuth } = useAppShell();
-  const [accounts, setAccounts] = useState([]);
-  const [pendingRequests, setPendingRequests] = useState([]);
+  const accountsUrl = user?.email
+    ? `/api/game-accounts?email=${encodeURIComponent(user.email)}`
+    : null;
+  const initialSnap = readJson(HOOD_GAME_ACCOUNTS_SNAPSHOT);
+  const { data: deskData, loading: deskPolling } = usePollingFetch(accountsUrl, {
+    cacheKey: user?.email ? HOOD_GAME_ACCOUNTS_SNAPSHOT : null,
+    pollMs: HOOD_POLL.PLAYER,
+    enabled: Boolean(user?.email),
+  });
+  const snap = deskData || initialSnap;
+  const accounts = (snap?.gameAccounts || []).map((a) => ({
+    ...a,
+    gameTitle: sanitizeGameTitle(a.gameTitle),
+  }));
+  const pendingRequests = (snap?.pendingRequests || []).map((r) => ({
+    ...r,
+    gameTitle: sanitizeGameTitle(r.gameTitle),
+  }));
   const [gamesCatalog, setGamesCatalog] = useState(() => readGamesCache() || []);
-  const [loadingDesk, setLoadingDesk] = useState(true);
+  const loadingDesk =
+    Boolean(user?.email) &&
+    deskPolling &&
+    !deskData &&
+    !(Array.isArray(initialSnap?.gameAccounts) && initialSnap.gameAccounts.length);
   const [copiedId, setCopiedId] = useState(null);
   const [requestModal, setRequestModal] = useState({ open: false, game: null });
   const [loadCoinsModal, setLoadCoinsModal] = useState({ open: false, game: null, userAccount: null });
-
-  const loadData = async (email, silent = false) => {
-    if (!email) return;
-    if (!silent) setLoadingDesk(true);
-    try {
-      const res = await playerApiFetch(`/api/game-accounts?email=${encodeURIComponent(email)}`);
-      const data = await res.json();
-      if (data?.success) {
-        const sanitizedAccounts = (data.gameAccounts || []).map((a) => ({
-          ...a,
-          gameTitle: sanitizeGameTitle(a.gameTitle),
-        }));
-        const sanitizedRequests = (data.pendingRequests || []).map((r) => ({
-          ...r,
-          gameTitle: sanitizeGameTitle(r.gameTitle),
-        }));
-        diffSet(setAccounts, sanitizedAccounts);
-        diffSet(setPendingRequests, sanitizedRequests);
-      }
-    } catch {
-      /* ignore */
-    } finally {
-      setLoadingDesk(false);
-    }
-  };
 
   useEffect(() => {
     fetch('/api/games', { cache: 'no-store' })
@@ -60,27 +56,6 @@ function GameIdsContent() {
       })
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (user?.email) {
-      const sync = () => loadData(user.email, true);
-      sync();
-      const stop = startSseBackedPoll(sync, {
-        whenDisconnected: 25_000,
-        whenConnected: 180_000,
-        runOnStart: false,
-      });
-      const onEv = () => sync();
-      window.addEventListener('hood-game-accounts-refresh', onEv);
-      window.addEventListener('hood-instant-sync', onEv);
-      return () => {
-        stop();
-        window.removeEventListener('hood-game-accounts-refresh', onEv);
-        window.removeEventListener('hood-instant-sync', onEv);
-      };
-    }
-    setLoadingDesk(false);
-  }, [user?.email]);
 
   const copyText = (txt, id) => {
     navigator.clipboard.writeText(txt);

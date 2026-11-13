@@ -6,6 +6,8 @@ import { playTune } from '@/lib/soundAlerts';
 import { playerApiFetch } from '@/lib/playerApiFetch';
 import { diffSet } from '@/lib/fastDiff';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
+import { HOOD_POLL } from '@/lib/pollingConfig';
+import { hoodSsePoll } from '@/lib/ssePollOptions';
 import { REALTIME_TYPES } from '@/lib/realtimePublish';
 
 export default function HoodLiveChatModal({
@@ -36,11 +38,7 @@ export default function HoodLiveChatModal({
       return;
     }
     fetchMessages();
-    const stop = startSseBackedPoll(fetchMessages, {
-      whenDisconnected: 20_000,
-      whenConnected: 240_000,
-      runOnStart: false,
-    });
+    const stop = startSseBackedPoll(fetchMessages, hoodSsePoll(HOOD_POLL.CHAT));
     const onRt = (e) => {
       const ev = e?.detail;
       if (ev?.type === REALTIME_TYPES.CHAT_MESSAGE && ev.senderRole === 'staff') fetchMessages();

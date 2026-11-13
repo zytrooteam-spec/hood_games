@@ -72,17 +72,21 @@ import {
   dedupeChatMessagesById,
   threadKey,
 } from '@/lib/hoodAdminChatInbox';
+import AdminImageField from './AdminImageField';
 import {
   GamesLibraryTab,
   GatewaysTab,
   LedgerTab,
   StaffTab,
   PromosTab,
-} from './AdminExtraTabs';
-import { AccountRequestsDesk, CoinAllotmentDesk, AffiliatesDesk } from './HoodAdminDesks';
-import AdminImageField from './AdminImageField';
-import AdminDailySpinTab from './AdminDailySpinTab';
-import AdminVipTab from './AdminVipTab';
+  AccountRequestsDesk,
+  CoinAllotmentDesk,
+  AffiliatesDesk,
+  AdminDailySpinTab,
+  AdminVipTab,
+  Player360ProfileModal,
+  AdminTabFallback,
+} from './AdminLazyChunks';
 import {
   HoodAdminModal,
   HoodAdminModalHeader,
@@ -91,7 +95,6 @@ import {
   HoodAdminModalActions,
   HoodAdminModalButton,
 } from './HoodAdminModal';
-import Player360ProfileModal from './Player360ProfileModal';
 import { HOOD_ADMIN_BOOTSTRAP, readJson, writeJson } from '@/lib/clientCache';
 import { staffApiFetch } from '@/lib/staffApiFetch';
 import { REALTIME_TYPES } from '@/lib/realtimePublish';
@@ -101,10 +104,19 @@ import {
   hydratePatchMapFromStaffCloses,
 } from '@/lib/accountRequestStaffClose';
 import { markRequestCompletedHidden } from '@/lib/accountRequestOptimistic';
-import { HOOD_ADMIN_POLL } from '@/lib/adminPollingConfig';
+import { HOOD_POLL } from '@/lib/pollingConfig';
+import { hoodSsePoll } from '@/lib/ssePollOptions';
 import { useSseBackedPoll } from '@/lib/sseBackedPoll';
+import { useAdminCrossTabSync } from '@/hooks/useAdminCrossTabSync';
+
+function AdminTabSuspense({ children, label }) {
+  return (
+    <React.Suspense fallback={<AdminTabFallback label={label} />}>{children}</React.Suspense>
+  );
+}
 
 export default function AdminDashboard({ user, onLogout }) {
+  useAdminCrossTabSync();
   const [activeTab, setActiveTab] = useState('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [stats, setStats] = useState(null);
@@ -571,12 +583,28 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   }, []);
 
-  useSseBackedPoll(refreshAdminStatsOnly, [refreshAdminStatsOnly], {
-    whenDisconnected: HOOD_ADMIN_POLL.STATS,
-    whenConnected: Math.max(HOOD_ADMIN_POLL.STATS * 4, 3200),
-    runOnStart: true,
-    runWhenHidden: true,
-  });
+  useSseBackedPoll(refreshAdminStatsOnly, [refreshAdminStatsOnly], hoodSsePoll(HOOD_POLL.STATS, { runOnStart: true }));
+
+  useSseBackedPoll(
+    () => {
+      if (sseLiveRef.current) return;
+      const tab = activeTabRef.current;
+      if (!['overview', 'finance', 'requests', 'game_loads'].includes(tab)) return;
+      refreshDeskQueues();
+    },
+    [refreshDeskQueues],
+    hoodSsePoll(HOOD_POLL.QUEUES)
+  );
+
+  useSseBackedPoll(refreshFinanceQueue, [refreshFinanceQueue], hoodSsePoll(HOOD_POLL.QUEUES));
+
+  useSseBackedPoll(
+    () => {
+      if (activeTabRef.current === 'chat') refreshChatInbox();
+    },
+    [refreshChatInbox],
+    hoodSsePoll(HOOD_POLL.CHAT)
+  );
 
   const refreshFinanceQueue = React.useCallback(async () => {
     try {
@@ -738,21 +766,24 @@ export default function AdminDashboard({ user, onLogout }) {
     scheduleLightAdminSync,
   ]);
 
-  useEffect(() => {
-    const liteInterval = setInterval(() => {
+  useSseBackedPoll(
+    () => {
       if (document.hidden || sseLiveRef.current) return;
       fetchAdminLite(true);
-    }, 120000);
-    const fullInterval = setInterval(() => {
+    },
+    [fetchAdminLite],
+    hoodSsePoll(HOOD_POLL.LISTS)
+  );
+
+  useSseBackedPoll(
+    () => {
       if (document.hidden) return;
       if (sseLiveRef.current) refreshAdminStatsOnly();
       else fetchAllData(true);
-    }, 300000);
-    return () => {
-      clearInterval(liteInterval);
-      clearInterval(fullInterval);
-    };
-  }, [fetchAdminLite, refreshAdminStatsOnly]);
+    },
+    [fetchAdminLite, refreshAdminStatsOnly, fetchAllData],
+    hoodSsePoll(HOOD_POLL.LISTS * 15, { runWhenHidden: false })
+  );
 
   useEffect(() => {
     if (activeTab === 'finance' && !deposits.length && !redemptions.length) {
@@ -2649,7 +2680,9 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {activeTab === 'daily_spin' && (
           <form onSubmit={handleSaveSettings} className="w-full max-w-5xl space-y-6">
-            <AdminDailySpinTab settings={settings} setSettings={setSettings} />
+            <AdminTabSuspense label="Opening wheel settings…">
+              <AdminDailySpinTab settings={settings} setSettings={setSettings} />
+            </AdminTabSuspense>
             <button
               type="submit"
               disabled={savingSettings}
@@ -2662,7 +2695,9 @@ export default function AdminDashboard({ user, onLogout }) {
 
         {activeTab === 'vip_privilege' && (
           <form onSubmit={handleSaveSettings} className="w-full max-w-5xl space-y-6">
-            <AdminVipTab settings={settings} setSettings={setSettings} />
+            <AdminTabSuspense label="Opening VIP settings…">
+              <AdminVipTab settings={settings} setSettings={setSettings} />
+            </AdminTabSuspense>
             <button
               type="submit"
               disabled={savingSettings}
@@ -2993,12 +3028,14 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* 6. GAME ID REQUESTS                                      */}
         {/* ======================================================== */}
         {activeTab === 'requests' && (
-          <AccountRequestsDesk
-            deskActive={activeTab === 'requests'}
-            initialRequests={accountRequests}
-            pendingNavCount={pendingAccountDeskCount}
-            onMutate={handleAccountRequestsDeskMutate}
-          />
+          <AdminTabSuspense label="Opening Game ID desk…">
+            <AccountRequestsDesk
+              deskActive={activeTab === 'requests'}
+              initialRequests={accountRequests}
+              pendingNavCount={pendingAccountDeskCount}
+              onMutate={handleAccountRequestsDeskMutate}
+            />
+          </AdminTabSuspense>
         )}
 
         {/* ======================================================== */}
@@ -3220,38 +3257,64 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {/* 8. PAYMENT GATEWAYS                                      */}
         {/* ======================================================== */}
-        {activeTab === 'gateways' && <GatewaysTab />}
+        {activeTab === 'gateways' && (
+          <AdminTabSuspense label="Opening gateways…">
+            <GatewaysTab />
+          </AdminTabSuspense>
+        )}
 
         {/* ======================================================== */}
         {/* 9. GAME CREDIT LOADS                                     */}
         {/* ======================================================== */}
-        {activeTab === 'game_loads' && <CoinAllotmentDesk sessionUser={user} onMutate={() => fetchAllData(true)} />}
+        {activeTab === 'game_loads' && (
+          <AdminTabSuspense label="Opening coin desk…">
+            <CoinAllotmentDesk sessionUser={user} onMutate={() => fetchAllData(true)} />
+          </AdminTabSuspense>
+        )}
 
         {/* ======================================================== */}
         {/* 10. GAMES LIBRARY                                        */}
         {/* ======================================================== */}
         <div className={activeTab === 'games_lib' ? undefined : 'hidden'} aria-hidden={activeTab !== 'games_lib'}>
-          <GamesLibraryTab />
+          <AdminTabSuspense label="Opening games library…">
+            <GamesLibraryTab />
+          </AdminTabSuspense>
         </div>
 
         {/* ======================================================== */}
         {/* 11. FINANCIAL LEDGER / TX AUDIT                          */}
         {/* ======================================================== */}
         <div className={activeTab === 'ledger' ? undefined : 'hidden'} aria-hidden={activeTab !== 'ledger'}>
-          <LedgerTab />
+          <AdminTabSuspense label="Opening ledger…">
+            <LedgerTab />
+          </AdminTabSuspense>
         </div>
 
-        {activeTab === 'promos' && <PromosTab />}
+        {activeTab === 'promos' && (
+          <AdminTabSuspense label="Opening promos…">
+            <PromosTab />
+          </AdminTabSuspense>
+        )}
 
-        {activeTab === 'affiliates' && <AffiliatesDesk mode="affiliates" onRefresh={() => fetchAllData(true)} />}
+        {activeTab === 'affiliates' && (
+          <AdminTabSuspense label="Opening affiliates…">
+            <AffiliatesDesk mode="affiliates" onRefresh={() => fetchAllData(true)} />
+          </AdminTabSuspense>
+        )}
         {activeTab === 'affiliate_commissions' && (
-          <AffiliatesDesk mode="affiliate_commissions" onRefresh={() => fetchAllData(true)} />
+          <AdminTabSuspense label="Opening commissions…">
+            <AffiliatesDesk mode="affiliate_commissions" onRefresh={() => fetchAllData(true)} />
+          </AdminTabSuspense>
         )}
 
         {/* ======================================================== */}
         {/* 12. STAFF MANAGEMENT                                     */}
         {/* ======================================================== */}
-        {activeTab === 'staff' && <StaffTab currentUser={user} />}
+        {activeTab === 'staff' && (
+          <AdminTabSuspense label="Opening staff…">
+            <StaffTab currentUser={user} />
+          </AdminTabSuspense>
+        )}
 
         {/* ======================================================== */}
         {/* LIGHTBOX / DEPOSIT PROOF IMAGE VIEWER MODAL              */}
@@ -3276,19 +3339,21 @@ export default function AdminDashboard({ user, onLogout }) {
         </HoodAdminModal>
 
         {player360Id && (
-          <Player360ProfileModal
-            userId={player360Id}
-            onClose={() => setPlayer360Id(null)}
-            onUserUpdated={() => {
-              loadPlayerDirectory(playerSearch, playerDirectoryPage, playerDirectoryPageSize);
-              if (selectedThreadUser) loadConversation(selectedThreadUser, true);
-            }}
-            onOpenChat={(p) => {
-              if (!p?.id) return;
-              setActiveTab('chat');
-              loadConversation(String(p.id), false);
-            }}
-          />
+          <AdminTabSuspense label="Loading player profile…">
+            <Player360ProfileModal
+              userId={player360Id}
+              onClose={() => setPlayer360Id(null)}
+              onUserUpdated={() => {
+                loadPlayerDirectory(playerSearch, playerDirectoryPage, playerDirectoryPageSize);
+                if (selectedThreadUser) loadConversation(selectedThreadUser, true);
+              }}
+              onOpenChat={(p) => {
+                if (!p?.id) return;
+                setActiveTab('chat');
+                loadConversation(String(p.id), false);
+              }}
+            />
+          </AdminTabSuspense>
         )}
       </main>
     </div>

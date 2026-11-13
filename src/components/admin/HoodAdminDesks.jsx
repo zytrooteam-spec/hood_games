@@ -28,7 +28,8 @@ import {
   readCompletedRequestIds,
 } from '@/lib/accountRequestOptimistic';
 import useAdminCachedFetch from '@/hooks/useAdminCachedFetch';
-import { HOOD_ADMIN_POLL } from '@/lib/adminPollingConfig';
+import { HOOD_POLL } from '@/lib/pollingConfig';
+import { hoodSsePoll } from '@/lib/ssePollOptions';
 import { HOOD_ADMIN_REQUESTS_CACHE, readJson } from '@/lib/clientCache';
 import {
   HoodAdminModal,
@@ -117,7 +118,7 @@ export function AccountRequestsDesk({
     deskActive ? '/api/account-requests?status=all&limit=80&page=1' : null,
     {
       cacheKey: HOOD_ADMIN_REQUESTS_CACHE,
-      pollMs: HOOD_ADMIN_POLL.QUEUES,
+      pollMs: HOOD_POLL.QUEUES,
       enabled: deskActive,
     }
   );
@@ -516,11 +517,7 @@ export function CoinAllotmentDesk({ sessionUser, onMutate }) {
 
   useEffect(() => {
     refresh();
-    const stop = startSseBackedPoll(refresh, {
-      whenDisconnected: 40_000,
-      whenConnected: 240_000,
-      runOnStart: false,
-    });
+    const stop = startSseBackedPoll(refresh, hoodSsePoll(HOOD_POLL.QUEUES));
     const onDesk = () => refresh();
     window.addEventListener('hood-coin-desk-refresh', onDesk);
     window.addEventListener('hood-admin-desk-sync', onDesk);
@@ -572,11 +569,7 @@ export function AffiliatesDesk({ mode = 'affiliates', onRefresh }) {
 
   useEffect(() => {
     load();
-    return startSseBackedPoll(load, {
-      whenDisconnected: 60_000,
-      whenConnected: 300_000,
-      runOnStart: false,
-    });
+    return startSseBackedPoll(load, hoodSsePoll(HOOD_POLL.LISTS));
   }, [load]);
 
   return (
