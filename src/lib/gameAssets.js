@@ -45,11 +45,13 @@ export function mergeGamesPreserveImages(prev, incoming) {
   });
 }
 
-export function writeGamesCache(games) {
+export function writeGamesCache(games, { preserveExistingImages = false } = {}) {
   try {
     if (Array.isArray(games) && games.length > 0) {
-      const prior = readGamesCache();
-      const toStore = prior?.length ? mergeGamesPreserveImages(prior, games) : games;
+      const toStore =
+        preserveExistingImages && readGamesCache()?.length
+          ? mergeGamesPreserveImages(readGamesCache(), games)
+          : games;
       localStorage.setItem(HOOD_GAMES_CACHE_KEY, JSON.stringify(toStore));
     }
   } catch {

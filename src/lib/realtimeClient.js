@@ -155,7 +155,7 @@ export function applyRealtimeEvent(event) {
     window.dispatchEvent(new CustomEvent('hood-wallet-sync', { detail: event }));
   }
 
-  if (PLAYER_PULSE_TYPES.has(event.type) || event.userEmail || event.userId) {
+  if (PLAYER_PULSE_TYPES.has(event.type)) {
     playerInstantPulse();
   }
 }

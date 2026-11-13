@@ -202,7 +202,14 @@ export function AccountRequestsDesk({
     window.addEventListener('hood-admin-refresh', onInstant);
     window.addEventListener('hood_staff_event_local', onInstant);
     const onStorage = (e) => {
-      if (e.key === 'hood_staff_event') onInstant();
+      if (e.key !== 'hood_staff_event' || !e.newValue) return;
+      try {
+        const p = JSON.parse(e.newValue);
+        const t = p?.type;
+        if (t === 'NEW_GAME_ID_REQUEST' || t === 'NEW_COIN_LOAD' || t === 'FREEPLAY') onInstant();
+      } catch {
+        /* ignore */
+      }
     };
     window.addEventListener('storage', onStorage);
     let bc;
@@ -210,7 +217,7 @@ export function AccountRequestsDesk({
       bc = new BroadcastChannel('hood_staff_alerts');
       bc.onmessage = (ev) => {
         const t = ev?.data?.type;
-        if (!t || t === 'NEW_GAME_ID_REQUEST' || t === 'NEW_COIN_LOAD' || t === 'FREEPLAY') onInstant();
+        if (t === 'NEW_GAME_ID_REQUEST' || t === 'NEW_COIN_LOAD' || t === 'FREEPLAY') onInstant();
       };
     } catch {
       /* ignore */

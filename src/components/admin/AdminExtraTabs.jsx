@@ -76,7 +76,7 @@ export function GamesLibraryTab() {
       if (d?.success && Array.isArray(d.games)) {
         diffSet(setGames, (prev) => {
           const merged = mergeGamesPreserveImages(prev, d.games);
-          writeGamesCache(merged);
+          writeGamesCache(merged, { preserveExistingImages: true });
           return merged;
         });
       }
@@ -96,7 +96,7 @@ export function GamesLibraryTab() {
       if (d?.success && Array.isArray(d.games)) {
         diffSet(setGames, (prev) => {
           const merged = mergeGamesPreserveImages(prev, d.games);
-          writeGamesCache(merged);
+          writeGamesCache(merged, { preserveExistingImages: true });
           return merged;
         });
       }
@@ -114,11 +114,6 @@ export function GamesLibraryTab() {
     const stop = startSseBackedPoll(() => load(true), hoodSsePoll(HOOD_POLL.LISTS));
     return () => stop();
   }, [load]);
-
-  useEffect(() => {
-    const t = window.setTimeout(() => hydrateImages(), 150);
-    return () => clearTimeout(t);
-  }, [hydrateImages]);
 
   useEffect(() => {
     if (!games.some((g) => g._imageOmitted)) return;

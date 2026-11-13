@@ -357,6 +357,7 @@ export default function AdminDashboard({ user, onLogout }) {
         } catch {
           /* ignore */
         }
+        if (payload.skipStorage || payload.type === 'DESK_ALERT') return;
         try {
           if (typeof localStorage !== 'undefined') {
             localStorage.setItem('hood_staff_event', JSON.stringify({ ...msg, t: Date.now() }));
@@ -390,7 +391,7 @@ export default function AdminDashboard({ user, onLogout }) {
             : batch[0].body;
         playAdminChime(tune);
         sendDesktopNotification(title, body, '/admin');
-        broadcast({ title, tune, batchSize: batch.length });
+        broadcast({ type: 'DESK_ALERT', title, tune, batchSize: batch.length });
       };
 
       const track = (items, seenSet, onNew) => {

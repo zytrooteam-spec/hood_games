@@ -407,18 +407,7 @@ export default function PushNotificationManager() {
   return (
     <div
       role="alert"
-      tabIndex={0}
-      onClick={(e) => {
-        if (e.target.closest('button')) return;
-        handleOpenAction();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          handleOpenAction();
-        }
-      }}
-      className="fixed top-4 right-4 z-[9999] max-w-sm w-full mx-auto p-4 rounded-2xl bg-[#090d1a]/95 backdrop-blur-2xl border border-emerald-400/50 shadow-[0_12px_40px_rgba(44,182,78,0.35)] animate-in slide-in-from-top duration-300 overflow-hidden cursor-pointer"
+      className="fixed top-4 right-4 z-[9999] max-w-sm w-full mx-auto p-4 rounded-2xl bg-[#090d1a]/95 backdrop-blur-2xl border border-emerald-400/50 shadow-[0_12px_40px_rgba(44,182,78,0.35)] animate-in slide-in-from-top duration-300 overflow-hidden"
       style={{
         boxShadow: '0 0 25px rgba(0, 240, 255, 0.25), inset 0 0 15px rgba(0, 240, 255, 0.1)',
       }}
