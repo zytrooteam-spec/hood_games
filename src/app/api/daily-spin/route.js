@@ -6,7 +6,7 @@ import { requirePlayerDbUser } from '@/lib/requirePlayerDbUser';
 
 export const runtime = 'nodejs';
 
-// GET: depositor free-spin balance (2 spins per approved deposit — same as Players Paradise)
+// GET: depositor free-spin balance (2 spins per approved deposit — Hood Games)
 export async function GET(req) {
   try {
     await ensureDbInitialized();
@@ -53,7 +53,7 @@ export async function GET(req) {
   }
 }
 
-// POST: weighted spin (10% $3, 20% $2, 40% $1, 30% bad luck — Paradise spec)
+// POST: weighted spin (admin-configurable odds — default Hood Games spec)
 export async function POST(req) {
   try {
     await ensureDbInitialized();

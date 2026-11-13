@@ -164,11 +164,11 @@ function WheelSpinPageContent() {
               <span>Depositor Exclusive Lucky Wheel</span>
             </div>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tight">
-              Spin for <span className="text-[#2cb64e]">$1 – $3 SC</span> (Paradise rules)
+              Spin for <span className="text-[#2cb64e]">$1 – $3 SC</span> (Hood Games rules)
             </h1>
             <p className="text-sm sm:text-base text-gray-300 leading-relaxed">
               Each <strong className="text-white">approved deposit</strong> unlocks <strong className="text-amber-300">2 free spins</strong>.
-              Winnings go straight to your Hood wallet — same odds as Players Paradise.
+              Winnings go straight to your Hood wallet — official Hood Games depositor wheel.
             </p>
           </div>
           <div className="p-5 rounded-2xl bg-[#09142a]/90 border border-[#2cb64e]/40 min-w-[180px]">
@@ -263,7 +263,7 @@ function WheelSpinPageContent() {
           <div className="p-6 rounded-3xl bg-[#09142a] border-2 border-[#1a3363] space-y-4 shadow-xl">
             <h3 className="text-lg font-black text-white flex items-center gap-2">
               <Trophy size={20} className="text-amber-400" />
-              <span>Wheel slices (same as Paradise)</span>
+              <span>Hood Games wheel slices</span>
             </h3>
             <div className="space-y-2 text-xs text-gray-300">
               <div className="flex justify-between p-2.5 rounded-xl bg-[#070d1e] border border-[#2cb64e]/40">

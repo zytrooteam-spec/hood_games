@@ -417,7 +417,7 @@ export function AccountRequestsDesk({
           </div>
           <div>
             <h2 className="text-lg font-black text-white m-0">Player Game Account Requests</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Paradise-style desk — approve IDs, freeplay, coin-load handoff</p>
+            <p className="text-xs text-gray-400 mt-0.5">Hood Games desk — approve IDs, freeplay, coin-load handoff</p>
           </div>
         </div>
         <button

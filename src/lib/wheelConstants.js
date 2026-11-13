@@ -1,4 +1,4 @@
-// Daily spin wheel — same prize labels & values as Players Paradise (depositor spins).
+// Daily spin wheel — Hood Games depositor free spins.
 // Colors tuned for Hood Games UI (#09142a / #2cb64e theme).
 export const WHEEL_SLICES = [
   { label: '$1', value: 1, color: '#12244c', text: '#2cb64e' },

@@ -227,7 +227,7 @@ export default function AdminPage() {
             {/* Security Warning Notice */}
             <div className="p-3 rounded-2xl bg-[#0e2042]/60 border border-[#2cb64e]/25 text-center space-y-1">
               <span className="text-[10px] font-bold text-[#2cb64e] block leading-relaxed">
-                Player Paradise–style dual session: log in here as admin, then open the main site in another tab and Sign Up / Login as a player — both sessions stay independent in the same browser.
+                Hood Games dual session: log in here as admin, then open the main site in another tab and Sign Up / Login as a player — both sessions stay independent in the same browser.
               </span>
               <span className="text-[10px] font-mono font-bold text-gray-500 block">
                 🔒 Protected by End-to-End Session Encryption

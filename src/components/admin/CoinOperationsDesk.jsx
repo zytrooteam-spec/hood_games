@@ -594,11 +594,11 @@ export default function CoinOperationsDesk({
         fetchData(true, true);
         // Unfreeze balance in player window in real time without refresh
         try {
-          const syncChan = new BroadcastChannel('paradise_balance_sync');
+          const syncChan = new BroadcastChannel('hood_balance_sync');
           syncChan.postMessage({ type: 'BALANCE_UPDATED', time: Date.now() });
           syncChan.close();
         } catch {}
-        localStorage.setItem('paradise_user_balance_sync', String(Date.now()));
+        localStorage.setItem('hood_user_balance_sync', String(Date.now()));
       }
     } catch {
       unmarkMutated(targetId);

@@ -207,7 +207,7 @@ export async function POST(req) {
                 const html = `
                   <div style="background-color: #070d1e; color: #FFFFFF; padding: 40px 24px; font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 540px; margin: auto; border-radius: 16px; border: 1px solid rgba(0, 240, 255, 0.35); text-align: center;">
                     <img src="https://hoodgaming.com/logo.png" alt="Hood Gaming" style="height: 52px; margin-bottom: 8px;" />
-                    <h1 style="color: #2cb64e; margin: 0; font-size: 22px; font-weight: 900; letter-spacing: 1px;">PLAYERS PARADISE</h1>
+                    <h1 style="color: #2cb64e; margin: 0; font-size: 22px; font-weight: 900; letter-spacing: 1px;">HOOD GAMES</h1>
                     <p style="color: #3ae466; font-size: 11px; margin: 4px 0 20px 0; text-transform: uppercase; letter-spacing: 2px;">Official Player Broadcast</p>
                     <div style="background: #09142a; border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 12px; padding: 22px; text-align: left; margin: 20px 0;">
                       <h2 style="font-size: 18px; margin: 0 0 10px 0; color: #FFFFFF;">${title.trim()}</h2>

@@ -3118,7 +3118,7 @@ export default function AdminDashboard({ user, onLogout }) {
 
               <div className="p-6 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4 h-full">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="text-sm font-black text-white">Lobby Freeplay (Players Paradise workflow)</h4>
+                  <h4 className="text-sm font-black text-white">Lobby Freeplay (Hood Games workflow)</h4>
                   <button
                     type="button"
                     onClick={() =>
@@ -3189,7 +3189,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 ) : null}
               </h3>
               <p className="text-[10px] text-gray-500 max-w-md">
-                Same as Player Paradise: open <strong className="text-[#2cb64e]">360° Profile</strong> for deposits, cashouts, game IDs, referrals &amp; ledger — loaded only when you click (fast desk).
+                Hood Games desk: open <strong className="text-[#2cb64e]">360° Profile</strong> for deposits, cashouts, game IDs, referrals &amp; ledger — loaded only when you click (fast desk).
               </p>
               <input
                 type="search"

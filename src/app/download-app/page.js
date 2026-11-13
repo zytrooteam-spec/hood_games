@@ -124,9 +124,8 @@ function DownloadAppContent() {
               <div className="flex items-start gap-2">
                 <span className="w-5 h-5 rounded-full bg-[#12244c] text-white flex items-center justify-center font-bold text-[10px] shrink-0">2</span>
                 <span>
-                  Tap the file and tap <strong>Install</strong>. Hood Gaming installs as its{' '}
-                  <strong>own app</strong> (<code>com.hoodgames.app</code>) — it will{' '}
-                  <strong>not</strong> update or replace Players Paradise.
+                  Tap the file and tap <strong>Install</strong>. Hood Games installs as its{' '}
+                  <strong>own app</strong> (<code>com.hoodgames.app</code>) — separate from any other APK on your phone.
                 </span>
               </div>
               <div className="flex items-start gap-2">

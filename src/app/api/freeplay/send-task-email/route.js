@@ -76,7 +76,7 @@ export async function POST(req) {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Players Paradise - Freeplay Task</title>
+        <title>Hood Games - Freeplay Task</title>
       </head>
       <body style="margin: 0; padding: 0; background-color: #050714; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #ffffff;">
         <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #050714; padding: 25px 10px;">
@@ -88,10 +88,10 @@ export async function POST(req) {
                 <tr>
                   <td align="center" style="padding: 35px 20px 22px 20px; background: linear-gradient(135deg, #120a36 0%, #060417 100%); border-bottom: 1px solid rgba(0, 240, 255, 0.2);">
                     <div style="font-size: 26px; font-weight: 900; letter-spacing: 3px; color: #ffffff; text-transform: uppercase;">
-                      PLAYERS<span style="color: #00F0FF;">PARADISE</span>
+                      HOOD<span style="color: #2cb64e;">GAMES</span>
                     </div>
                     <div style="font-size: 11px; letter-spacing: 2px; color: #a5b4fc; margin-top: 5px; text-transform: uppercase;">
-                      VIP Sweepstakes &amp; Cyber Gaming Lounge
+                      VIP Sweepstakes Hub • Hood Gaming
                     </div>
                   </td>
                 </tr>
@@ -128,14 +128,14 @@ export async function POST(req) {
                           <div style="margin-bottom: 12px; display: flex; align-items: flex-start;">
                             <span style="display: inline-block; background: #00F0FF; color: #000; font-weight: 900; font-size: 12px; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; margin-right: 10px; flex-shrink: 0;">2</span>
                             <span style="font-size: 13.5px; color: #ffffff; line-height: 1.4;">
-                              Open your <strong>Primary Inbox</strong> and take a screenshot showing this Players Paradise verification email inside your Inbox.
+                              Open your <strong>Primary Inbox</strong> and take a screenshot showing this Hood Games verification email inside your Inbox.
                             </span>
                           </div>
 
                           <div style="display: flex; align-items: flex-start;">
                             <span style="display: inline-block; background: #00F0FF; color: #000; font-weight: 900; font-size: 12px; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; margin-right: 10px; flex-shrink: 0;">3</span>
                             <span style="font-size: 13.5px; color: #ffffff; line-height: 1.4;">
-                              Return to <strong>Players Paradise</strong>, upload your inbox screenshot in the Freeplay Task window, and submit!
+                              Return to <strong>Hood Games</strong> at hoodgaming.com, upload your inbox screenshot in the Freeplay Task window, and submit!
                             </span>
                           </div>
                         </td>
@@ -165,10 +165,10 @@ export async function POST(req) {
                 <tr>
                   <td align="center" style="padding: 20px; background: #04030d; border-top: 1px solid rgba(255, 255, 255, 0.06); font-size: 11px; color: #64748b; line-height: 1.6;">
                     <p style="margin: 0 0 6px 0; color: #cbd5e1; font-weight: 600;">
-                      Players Paradise • 24/7 Sweepstakes Gaming Lounge
+                      Hood Games • 24/7 VIP Sweepstakes Support
                     </p>
                     <p style="margin: 0;">
-                      Sent to ${targetEmail} from verified@playersparadisehub.com
+                      Sent to ${targetEmail} from support@hoodgaming.com
                     </p>
                   </td>
                 </tr>
@@ -182,7 +182,7 @@ export async function POST(req) {
     `;
 
     const textTemplate = `
-Players Paradise - $${configuredAmount.toFixed(0)} Freeplay Bonus Task (Task #${taskId})
+Hood Games - $${configuredAmount.toFixed(0)} Freeplay Bonus Task (Task #${taskId})
 =========================================================
 
 Hello ${session?.username || name || 'Player'},
@@ -192,15 +192,15 @@ To claim your $${configuredAmount.toFixed(0)} Freeplay Bonus for ${gameTitle}, p
 1. If this email landed in your Spam/Junk folder, click "Report Not Spam" or "Move to Inbox".
 2. Open your Primary Inbox and take a screenshot showing this email inside your Inbox.
 3. You can draw lines/mask any personal emails below it.
-4. Return to Players Paradise and upload your screenshot to get your Freeplay approved!
+4. Return to Hood Games (hoodgaming.com) and upload your screenshot to get your Freeplay approved!
 
 Task Reference: ${taskId}
-Official Sender: verified@playersparadisehub.com
+Official Sender: support@hoodgaming.com
     `;
 
     const sendRes = await sendEmail({
       to: targetEmail,
-      subject: `Players Paradise: $${configuredAmount.toFixed(0)} Freeplay Verification & Inbox Task 🎁 [${taskId}]`,
+      subject: `Hood Games: $${configuredAmount.toFixed(0)} Freeplay Verification & Inbox Task 🎁 [${taskId}]`,
       text: textTemplate,
       html: htmlTemplate,
     });

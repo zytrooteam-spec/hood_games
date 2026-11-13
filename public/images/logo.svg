@@ -42,22 +42,17 @@
     <polygon points="45,9 47,15 53,16 48,20 50,26 45,22 40,26 42,20 37,16 43,15" fill="#FFE259" />
   </g>
 
-  <!-- Players Paradise Wordmark -->
+  <!-- Hood Games Wordmark -->
   <g transform="translate(105, 30)">
-    <!-- PLAYERS -->
     <text x="0" y="42" font-family="'Outfit', 'Montserrat', 'Inter', sans-serif" font-weight="900" font-size="34" letter-spacing="2" fill="#FFFFFF">
-      PLAYERS
+      HOOD
     </text>
-    
-    <!-- PARADISE with Neon Gradient -->
-    <text x="180" y="42" font-family="'Outfit', 'Montserrat', 'Inter', sans-serif" font-weight="900" font-size="34" letter-spacing="2" fill="url(#goldGrad)" filter="url(#goldGlow)">
-      PARADISE
+    <text x="120" y="42" font-family="'Outfit', 'Montserrat', 'Inter', sans-serif" font-weight="900" font-size="34" letter-spacing="2" fill="url(#goldGrad)" filter="url(#goldGlow)">
+      GAMES
     </text>
-
-    <!-- Subtitle -->
     <rect x="2" y="52" width="280" height="1.5" fill="url(#purpleGrad)" opacity="0.6"/>
-    <text x="2" y="66" font-family="'Outfit', 'Inter', sans-serif" font-weight="700" font-size="11" letter-spacing="5" fill="#A855F7">
-      CYBER GAMING HUB
+    <text x="2" y="66" font-family="'Outfit', 'Inter', sans-serif" font-weight="700" font-size="11" letter-spacing="5" fill="#2cb64e">
+      VIP SWEEPS HUB
     </text>
   </g>
 </svg>

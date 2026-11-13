@@ -193,7 +193,7 @@ export default function FreeplayTaskModal({
 
       if (res.ok && data.success) {
         try {
-          const ch = new BroadcastChannel('paradise_staff_alerts');
+          const ch = new BroadcastChannel('hood_staff_alerts');
           ch.postMessage({
             type: 'NEW_REQUEST',
             category: 'ACCOUNT_CREATION',
@@ -209,7 +209,7 @@ export default function FreeplayTaskModal({
           ch.close();
         } catch {}
         try {
-          localStorage.setItem('paradise_staff_event', JSON.stringify({
+          localStorage.setItem('hood_staff_event', JSON.stringify({
             type: 'NEW_REQUEST',
             category: 'ACCOUNT_CREATION',
             requestId: data.requestId,

@@ -841,7 +841,7 @@ export function StaffTab({ currentUser }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* 6. SITE PROMOTIONS (Players Paradise — no admin push dispatch)       */
+/* 6. SITE PROMOTIONS (Hood Games — no admin push dispatch)               */
 /* ------------------------------------------------------------------ */
 const EMPTY_PROMO = { title: '', badge: 'HOT', description: '', matchPercent: 50, category: 'bonus', active: true, priority: 10 };
 
