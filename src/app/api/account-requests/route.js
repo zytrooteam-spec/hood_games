@@ -18,6 +18,11 @@ import {
   invalidateAuthCache,
   invalidateGameAccountsCache,
 } from '@/lib/authCache';
+import {
+  dedupeStaffPendingGameIdRequests,
+  autoCloseDuplicatePendingInDb,
+  annotateRepeatPendingFlags,
+} from '@/lib/accountRequestDedupe.server';
 
 function bustStaffRequestCaches({ userEmail, userId } = {}) {
   invalidateAccountRequestsCache();
@@ -122,6 +127,11 @@ export async function GET(req) {
         .skip(skip)
         .limit(staffLimit);
       const [rows, count] = await Promise.all([cursor.toArray(), db.collection('accountRequests').countDocuments(query)]);
+      const dupClosed = await autoCloseDuplicatePendingInDb(db, rows);
+      if (dupClosed > 0) {
+        invalidateAccountRequestsCache();
+        pulseStaffStatsAsync();
+      }
       requests = rows;
       totalCount = count;
     } else {
@@ -138,7 +148,11 @@ export async function GET(req) {
         .toArray();
     }
 
-    const mapped = requests.map((r) => mapAccountRequest(r));
+    let mapped = requests.map((r) => mapAccountRequest(r));
+    if (isStaff) {
+      mapped = dedupeStaffPendingGameIdRequests(mapped);
+      mapped = annotateRepeatPendingFlags(mapped);
+    }
     const payload = {
       success: true,
       requests: mapped,
@@ -241,6 +255,34 @@ export async function POST(req) {
         },
         { status: 400 }
       );
+    }
+
+    if (requestType !== 'COIN_LOAD') {
+      const cooldownMs = 12 * 60 * 60 * 1000;
+      const recentReject = await db.collection('accountRequests').findOne(
+        {
+          userId: dbUser._id.toString(),
+          gameTitle: cleanGameTitle,
+          status: { $in: ['rejected', 'REJECTED', 'cancelled'] },
+          rejectedAt: { $gte: new Date(Date.now() - cooldownMs) },
+          $or: [
+            { requestType: { $ne: 'COIN_LOAD' } },
+            { transferAmount: { $lte: 0 } },
+            { transferAmount: { $exists: false } },
+          ],
+        },
+        { sort: { rejectedAt: -1 } }
+      );
+      if (recentReject) {
+        return NextResponse.json(
+          {
+            success: false,
+            recentlyRejected: true,
+            error: `Your ${cleanGameTitle} request was recently reviewed. Please wait up to 12 hours or contact support chat before submitting again.`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     if (requestType === 'COIN_LOAD' && transferAmount > 0) {
@@ -658,6 +700,32 @@ export async function PUT(req) {
           );
         }
       }
+
+      const siblingFilter = {
+        status: { $in: ['pending', 'PENDING', 'Pending'] },
+        gameTitle: reqDoc.gameTitle,
+        $or: [{ userId: reqDoc.userId }, { userEmail: reqDoc.userEmail }],
+        _id: { $ne: reqDoc._id },
+        $and: [
+          {
+            $or: [
+              { requestType: { $ne: 'COIN_LOAD' } },
+              { transferAmount: { $lte: 0 } },
+              { transferAmount: { $exists: false } },
+            ],
+          },
+        ],
+      };
+      await db.collection('accountRequests').updateMany(siblingFilter, {
+        $set: {
+          status: 'rejected',
+          rejectionReason: rejectionReason || 'Closed with duplicate pending request.',
+          rejectedBy: user.username,
+          rejectedAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+
       const freshRejected = await db.collection('accountRequests').findOne(toIdQuery(requestId));
 
       if (reqDoc.freeplayPending) {

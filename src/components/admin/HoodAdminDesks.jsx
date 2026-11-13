@@ -8,7 +8,7 @@ import AffiliateManagementHub from './AffiliateManagementHub';
 import { diffSet } from '@/lib/fastDiff';
 import { staffApiFetch } from '@/lib/staffApiFetch';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
-import { hoodAlert, hoodConfirm } from '@/lib/hoodAlert';
+import { hoodAlert, hoodConfirm, hoodPromptForm } from '@/lib/hoodAlert';
 import { generateGameCredentialPair } from '@/lib/gameCredentials';
 import {
   isClosedAccountRequestStatus,
@@ -314,13 +314,16 @@ export function AccountRequestsDesk({
   };
 
   const cancelReq = async (id) => {
-    const values = await hoodConfirm({
+    const values = await hoodPromptForm({
       title: 'Reject request',
-      message: 'Reject this player request?',
+      message: 'Reason shown to the player.',
+      variant: 'warning',
       confirmLabel: 'Reject',
+      fields: [{ name: 'reason', label: 'Reason', required: true, placeholder: 'e.g. Screenshot unclear' }],
     });
-    if (!values) return;
-    const reason = 'Staff desk unavailable — contact support.';
+    if (!values?.reason) return;
+    const reason = values.reason.trim();
+    markRequestCompletedHidden(id);
     patchRequest(id, { status: 'REJECTED', rejectionReason: reason });
     onMutate?.({ id, status: 'REJECTED', patch: { rejectionReason: reason } });
     try {

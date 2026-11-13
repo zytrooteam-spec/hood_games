@@ -7,7 +7,12 @@ import { compressDataUrlIfNeeded } from '@/lib/serverImageCompress';
 import { requirePlayerDbUser } from '@/lib/requirePlayerDbUser';
 import { publishChatRealtime } from '@/lib/realtimePublish';
 import { buildStaffChatThreads, touchChatThreadOnMessage, clearStaffThreadUnread } from '@/lib/chatThreads.server';
-import { serializeChatMessagesForApi } from '@/lib/chatMessageApi';
+import { serializeChatMessageForApi, serializeChatMessagesForApi } from '@/lib/chatMessageApi';
+import {
+  buildPlayerChatMessageQuery,
+  canonicalPlayerUserId,
+  resolveStaffChatTargetUser,
+} from '@/lib/chatIdentity.server';
 
 function previewText(text, imageUrl) {
   const t = (text || '').trim();
@@ -29,13 +34,18 @@ export async function GET(req) {
         return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
       }
 
-      const uid = String(targetUserId);
+      const target = await resolveStaffChatTargetUser(db, targetUserId);
+      const uid = String(target?.userId || targetUserId);
       const msgLimit = Math.min(120, Math.max(20, parseInt(searchParams.get('limit') || '50', 10) || 50));
+      const player = await db.collection('users').findOne(toIdQuery(uid), {
+        projection: { username: 1, email: 1, balanceSC: 1, balanceGC: 1 },
+      });
+      const msgQuery = player ? buildPlayerChatMessageQuery(player) : { userId: uid };
 
-      const [messages, threadMeta, player] = await Promise.all([
+      const [messages, threadMeta] = await Promise.all([
         db
           .collection('chat_messages')
-          .find({ userId: uid })
+          .find(msgQuery)
           .sort({ createdAt: -1 })
           .limit(msgLimit)
           .toArray()
@@ -44,9 +54,6 @@ export async function GET(req) {
           { userId: uid },
           { projection: { labels: 1, staffNotes: 1, userId: 1 } }
         ),
-        db.collection('users').findOne(toIdQuery(uid), {
-          projection: { username: 1, email: 1, balanceSC: 1, balanceGC: 1 },
-        }),
       ]);
 
       const payload = {
@@ -68,41 +75,66 @@ export async function GET(req) {
       void Promise.all([
         db
           .collection('chat_messages')
-          .updateMany({ userId: uid, senderRole: 'player', read: { $ne: true } }, { $set: { read: true } }),
+          .updateMany({ ...msgQuery, senderRole: 'player', read: { $ne: true } }, { $set: { read: true } }),
         clearStaffThreadUnread(db, uid),
       ]).catch(() => {});
 
       return NextResponse.json(payload, { headers: { 'Cache-Control': 'private, no-store' } });
     }
 
-    const user = await getSessionUser(req, 'admin');
-    const isStaff = user && isStaffRole(user.role);
+    const wantsInbox = searchParams.get('inbox') === '1' || req.headers.get('x-hood-staff-desk') === '1';
+    const wantsPlayerChat =
+      req.headers.get('x-hood-player-chat') === '1' || searchParams.get('scope') === 'player';
 
-    if (isStaff) {
+    const loadPlayerMessages = async () => {
+      const resolved = await requirePlayerDbUser(req);
+      if (!resolved.dbUser) {
+        return NextResponse.json({ success: true, messages: [] }, { headers: { 'Cache-Control': 'no-store' } });
+      }
+      const uid = canonicalPlayerUserId(resolved.dbUser);
+      const msgQuery = buildPlayerChatMessageQuery(resolved.dbUser);
+      await db.collection('chat_messages').updateMany(
+        { ...msgQuery, senderRole: 'staff', read: { $ne: true } },
+        { $set: { read: true } }
+      );
+      const messages = await db.collection('chat_messages').find(msgQuery).sort({ createdAt: 1 }).toArray();
+      return NextResponse.json(
+        { success: true, messages: serializeChatMessagesForApi(messages), userId: uid },
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
+    };
+
+    if (wantsPlayerChat) {
+      const playerSession = await getSessionUser(req, 'player');
+      if (!playerSession) {
+        return NextResponse.json({ success: true, messages: [] }, { headers: { 'Cache-Control': 'no-store' } });
+      }
+      return loadPlayerMessages();
+    }
+
+    if (wantsInbox) {
+      const staff = await getSessionUser(req, 'admin');
+      if (!staff || !isStaffRole(staff.role)) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
+      }
       const threadLimit = Math.min(200, Math.max(20, parseInt(searchParams.get('limit') || '80', 10) || 80));
       const threads = await buildStaffChatThreads(db, { limit: threadLimit });
       return NextResponse.json({ success: true, threads });
     }
 
-    const playerUser = await getSessionUser(req, 'player');
-
-    if (!playerUser) {
-      return NextResponse.json({ success: true, messages: [] });
+    const playerSession = await getSessionUser(req, 'player');
+    if (playerSession) {
+      return loadPlayerMessages();
     }
 
-    const uid = playerUser.id?.toString?.() || playerUser._id?.toString?.() || String(playerUser.id || playerUser._id);
+    const staff = await getSessionUser(req, 'admin');
+    if (staff && isStaffRole(staff.role)) {
+      const threadLimit = Math.min(200, Math.max(20, parseInt(searchParams.get('limit') || '80', 10) || 80));
+      const threads = await buildStaffChatThreads(db, { limit: threadLimit });
+      return NextResponse.json({ success: true, threads });
+    }
 
-    await db.collection('chat_messages').updateMany(
-      { userId: uid, senderRole: 'staff', read: { $ne: true } },
-      { $set: { read: true } }
-    );
-
-    const messages = await db.collection('chat_messages').find({ userId: uid }).sort({ createdAt: 1 }).toArray();
-
-    return NextResponse.json(
-      { success: true, messages: serializeChatMessagesForApi(messages) },
-      { headers: { 'Cache-Control': 'no-store' } }
-    );
+    return NextResponse.json({ success: true, messages: [] }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
     console.error('Chat GET error:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
@@ -113,7 +145,8 @@ export async function POST(req) {
   try {
     await ensureDbReady();
     const referer = req.headers.get('referer') || '';
-    const isAdminContext = referer.includes('/admin');
+    const isAdminContext =
+      req.headers.get('x-hood-staff-desk') === '1' || referer.includes('/admin');
     const user = await getSessionUser(req, isAdminContext ? 'admin' : 'player');
     const body = await req.json();
     const { action, text, imageUrl, userId: targetUserId, label, note, labels, noteId } = body;
@@ -224,17 +257,25 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: 'Please sign in to use live chat.' }, { status: 401 });
     }
 
-    let messageUid = isStaffReply ? String(targetUserId) : '';
+    let messageUid = '';
     let username = isStaffReply ? 'Hood Support Desk' : user?.username || 'Player';
     let playerEmail = user?.email || '';
-    if (!isStaffReply) {
+    if (isStaffReply) {
+      const target = await resolveStaffChatTargetUser(db, targetUserId);
+      if (!target?.userId) {
+        return NextResponse.json({ success: false, error: 'Player thread not found.' }, { status: 404 });
+      }
+      messageUid = target.userId;
+      username = 'Hood Support Desk';
+      playerEmail = target.email || playerEmail;
+    } else {
       const resolved = await requirePlayerDbUser(req);
       if (!resolved.dbUser) {
         return NextResponse.json({ success: false, error: resolved.error || 'Please sign in.' }, { status: 401 });
       }
-      messageUid = resolved.dbUser._id.toString();
+      messageUid = canonicalPlayerUserId(resolved.dbUser);
       username = resolved.dbUser.username || username;
-      playerEmail = resolved.dbUser.email || playerEmail;
+      playerEmail = (resolved.dbUser.email || playerEmail || '').toLowerCase().trim();
     }
 
     const senderRole = isStaffReply ? 'staff' : 'player';
@@ -298,9 +339,14 @@ export async function POST(req) {
       userId: messageUid,
     });
 
+    const saved = serializeChatMessageForApi({
+      ...msgDoc,
+      _id: res.insertedId,
+      id: insertedId,
+    });
     return NextResponse.json({
       success: true,
-      message: { ...msgDoc, _id: res.insertedId, id: insertedId },
+      message: saved,
     });
   } catch (err) {
     console.error('Chat POST error:', err);

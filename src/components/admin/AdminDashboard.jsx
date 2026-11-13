@@ -199,7 +199,7 @@ export default function AdminDashboard({ user, onLogout }) {
 
   const refreshChatInbox = React.useCallback(async () => {
     try {
-      const chatRes = await staffApiFetch(`/api/chat?limit=80&_t=${Date.now()}`);
+      const chatRes = await staffApiFetch(`/api/chat?inbox=1&limit=80&_t=${Date.now()}`);
       const data = await chatRes.json();
       if (data?.success && Array.isArray(data.threads)) {
         setChatThreads((prev) =>

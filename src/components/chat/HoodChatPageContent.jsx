@@ -49,7 +49,7 @@ export default function HoodChatPageContent({ user, onOpenAuth }) {
       return;
     }
     try {
-      const res = await fetch('/api/chat', { cache: 'no-store' });
+      const res = await playerApiFetch('/api/chat', { cache: 'no-store' });
       const data = await res.json();
       if (data?.success && Array.isArray(data.messages)) {
         diffSet(setMessages, data.messages);

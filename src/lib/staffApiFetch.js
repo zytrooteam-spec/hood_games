@@ -5,6 +5,7 @@ export function staffApiFetch(url, init = {}) {
     cache: 'no-store',
     ...init,
     headers: {
+      'X-Hood-Staff-Desk': '1',
       ...(init.headers || {}),
     },
   });

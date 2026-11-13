@@ -22,7 +22,7 @@ export default function HoodLiveChatModal({
   const prevCount = useRef(0);
 
   const fetchMessages = () => {
-    fetch('/api/chat')
+    playerApiFetch('/api/chat')
       .then((r) => r.json())
       .then((d) => {
         if (d?.success && Array.isArray(d?.messages)) {

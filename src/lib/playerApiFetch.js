@@ -10,6 +10,9 @@ export function playerApiFetch(url, init = {}) {
     credentials: 'include',
     cache: 'no-store',
     ...init,
-    headers,
+    headers: {
+      'X-Hood-Player-Chat': '1',
+      ...headers,
+    },
   });
 }

@@ -385,7 +385,14 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
                             {req.userName ? req.userName.charAt(0) : 'P'}
                           </div>
                           <div>
-                            <p className="font-black text-white text-sm">{req.userName}</p>
+                            <p className="font-black text-white text-sm flex items-center gap-2 flex-wrap">
+                              {req.userName}
+                              {req.priorRejectedForGame ? (
+                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                  Re-request
+                                </span>
+                              ) : null}
+                            </p>
                             <p className="text-[11px] text-gray-400 font-mono">{req.userEmail}</p>
                           </div>
                         </div>
