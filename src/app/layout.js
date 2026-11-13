@@ -5,8 +5,9 @@ export const metadata = {
   title: 'Hood Games | Premier Online Sweepstakes Platform',
   description: 'Play America’s favorite sweeps platforms with instant Cash App & Zelle cashouts, 300% match bonus, and weekly Sunday cashback.',
   icons: {
-    icon: '/logo.png',
-    apple: '/logo.png',
+    icon: '/images/logo.svg',
+    apple: '/images/logo.svg',
+    shortcut: '/images/logo.svg',
   },
 };
 

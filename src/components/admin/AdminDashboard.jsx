@@ -570,29 +570,6 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   }, []);
 
-  useSseBackedPoll(refreshAdminStatsOnly, [refreshAdminStatsOnly], hoodSsePoll(HOOD_POLL.STATS, { runOnStart: true }));
-
-  useSseBackedPoll(
-    () => {
-      if (sseLiveRef.current) return;
-      const tab = activeTabRef.current;
-      if (!['overview', 'finance', 'requests', 'game_loads'].includes(tab)) return;
-      refreshDeskQueues();
-    },
-    [refreshDeskQueues],
-    hoodSsePoll(HOOD_POLL.QUEUES)
-  );
-
-  useSseBackedPoll(refreshFinanceQueue, [refreshFinanceQueue], hoodSsePoll(HOOD_POLL.QUEUES));
-
-  useSseBackedPoll(
-    () => {
-      if (activeTabRef.current === 'chat') refreshChatInbox();
-    },
-    [refreshChatInbox],
-    hoodSsePoll(HOOD_POLL.CHAT)
-  );
-
   const refreshFinanceQueue = React.useCallback(async () => {
     try {
       const [depRes, redRes] = await Promise.all([
@@ -633,6 +610,29 @@ export default function AdminDashboard({ user, onLogout }) {
       /* ignore */
     }
   }, [chatThreads, mergeAccountRequestFromServer, syncAdminAlerts]);
+
+  useSseBackedPoll(refreshAdminStatsOnly, [refreshAdminStatsOnly], hoodSsePoll(HOOD_POLL.STATS, { runOnStart: true }));
+
+  useSseBackedPoll(
+    () => {
+      if (sseLiveRef.current) return;
+      const tab = activeTabRef.current;
+      if (!['overview', 'finance', 'requests', 'game_loads'].includes(tab)) return;
+      refreshDeskQueues();
+    },
+    [refreshDeskQueues],
+    hoodSsePoll(HOOD_POLL.QUEUES)
+  );
+
+  useSseBackedPoll(refreshFinanceQueue, [refreshFinanceQueue], hoodSsePoll(HOOD_POLL.QUEUES));
+
+  useSseBackedPoll(
+    () => {
+      if (activeTabRef.current === 'chat') refreshChatInbox();
+    },
+    [refreshChatInbox],
+    hoodSsePoll(HOOD_POLL.CHAT)
+  );
 
   const handleAccountRequestsDeskMutate = React.useCallback(
     (evt) => {
