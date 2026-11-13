@@ -147,7 +147,7 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [] }) {
       gameAccountPassword: gamePassword,
       gamePassword,
     });
-    onMutate?.();
+    onMutate?.({ id, status: 'READY', patch: { gameUsername, gamePassword } });
 
     try {
       const res = await fetch('/api/account-requests', {
@@ -188,7 +188,7 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [] }) {
     if (!ok) return;
     const rid = req.id || req._id;
     patchRequest(rid, { status: 'READY' });
-    onMutate?.();
+    onMutate?.({ id: rid, status: 'READY' });
     const res = await fetch('/api/account-requests', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -213,8 +213,9 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [] }) {
       confirmLabel: 'Reject',
     });
     if (!values) return;
-    removeRequest(id);
-    onMutate?.();
+    const reason = 'Staff desk unavailable — contact support.';
+    patchRequest(id, { status: 'REJECTED', rejectionReason: reason });
+    onMutate?.({ id, status: 'REJECTED', patch: { rejectionReason: reason } });
     try {
       const res = await fetch('/api/account-requests', {
         method: 'PUT',
@@ -222,8 +223,8 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [] }) {
         credentials: 'include',
         body: JSON.stringify({
           requestId: id,
-          action: 'cancel',
-          reason: 'Staff desk unavailable — contact support.',
+          action: 'reject',
+          reason,
         }),
       });
       const data = await res.json();
@@ -245,7 +246,7 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [] }) {
     const ok = await hoodConfirm({ title: 'Dismiss', message: 'Remove from desk?', confirmLabel: 'Dismiss' });
     if (!ok) return;
     removeRequest(id);
-    onMutate?.();
+    onMutate?.({ id, remove: true });
     try {
       const res = await fetch(`/api/account-requests?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',

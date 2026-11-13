@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb, toIdQuery } from '@/lib/mongodb';
 import { getSessionUser, isStaffRole } from '@/lib/auth';
-import { ensureDbInitialized } from '@/lib/initDb';
+import { ensureDbReady } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { compressDataUrlIfNeeded } from '@/lib/serverImageCompress';
 import { requirePlayerDbUser } from '@/lib/requirePlayerDbUser';
@@ -17,71 +17,75 @@ function previewText(text, imageUrl) {
 
 export async function GET(req) {
   try {
-    await ensureDbInitialized();
-    const referer = req.headers.get('referer') || '';
-    const isAdminContext = referer.includes('/admin');
-    const user = await getSessionUser(req, isAdminContext ? 'admin' : 'player');
+    await ensureDbReady();
     const { searchParams } = new URL(req.url);
     const targetUserId = searchParams.get('userId');
-
     const db = await getDb();
+
+    if (targetUserId) {
+      const staff = await getSessionUser(req, 'admin');
+      if (!staff || !isStaffRole(staff.role)) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
+      }
+
+      const uid = String(targetUserId);
+
+      const [messages, threadMeta, player] = await Promise.all([
+        db
+          .collection('chat_messages')
+          .find({ userId: uid })
+          .sort({ createdAt: -1 })
+          .limit(200)
+          .toArray()
+          .then((rows) => rows.reverse()),
+        db.collection('chat_threads').findOne(
+          { userId: uid },
+          { projection: { labels: 1, staffNotes: 1, userId: 1 } }
+        ),
+        db.collection('users').findOne(toIdQuery(uid), {
+          projection: { username: 1, email: 1, balanceSC: 1, balanceGC: 1 },
+        }),
+      ]);
+
+      void db
+        .collection('chat_messages')
+        .updateMany({ userId: uid, senderRole: 'player', read: { $ne: true } }, { $set: { read: true } })
+        .catch(() => {});
+
+      return NextResponse.json(
+        {
+          success: true,
+          messages,
+          threadMeta: threadMeta || { userId: uid, labels: [], staffNotes: [] },
+          player: player
+            ? {
+                id: player._id.toString(),
+                username: player.username,
+                email: player.email,
+                balanceSC: player.balanceSC,
+                balanceGC: player.balanceGC,
+              }
+            : null,
+        },
+        { headers: { 'Cache-Control': 'private, no-store' } }
+      );
+    }
+
+    const user = await getSessionUser(req, 'admin');
     const isStaff = user && isStaffRole(user.role);
 
     if (isStaff) {
-      if (targetUserId) {
-        const uid = String(targetUserId);
-        const markRead = db.collection('chat_messages').updateMany(
-          { userId: uid, senderRole: 'player', read: { $ne: true } },
-          { $set: { read: true } }
-        );
-
-        const [messages, threadMeta, player] = await Promise.all([
-          db
-            .collection('chat_messages')
-            .find({ userId: uid })
-            .sort({ createdAt: -1 })
-            .limit(200)
-            .toArray()
-            .then((rows) => rows.reverse()),
-          db.collection('chat_threads').findOne(
-            { userId: uid },
-            { projection: { labels: 1, staffNotes: 1, userId: 1 } }
-          ),
-          db.collection('users').findOne(toIdQuery(uid), {
-            projection: { username: 1, email: 1, balanceSC: 1, balanceGC: 1 },
-          }),
-        ]);
-
-        await markRead;
-
-        return NextResponse.json(
-          {
-            success: true,
-            messages,
-            threadMeta: threadMeta || { userId: uid, labels: [], staffNotes: [] },
-            player: player
-              ? {
-                  id: player._id.toString(),
-                  username: player.username,
-                  email: player.email,
-                  balanceSC: player.balanceSC,
-                  balanceGC: player.balanceGC,
-                }
-              : null,
-          },
-          { headers: { 'Cache-Control': 'private, no-store' } }
-        );
-      }
-
       const threads = await buildStaffChatThreads(db);
       return NextResponse.json({ success: true, threads });
     }
 
-    if (!user) {
+    const playerUser = await getSessionUser(req, 'player');
+
+    if (!playerUser) {
       return NextResponse.json({ success: true, messages: [] });
     }
 
-    const uid = user.id?.toString?.() || user._id?.toString?.() || String(user.id || user._id);
+    const uid = playerUser.id?.toString?.() || playerUser._id?.toString?.() || String(playerUser.id || playerUser._id);
 
     await db.collection('chat_messages').updateMany(
       { userId: uid, senderRole: 'staff', read: { $ne: true } },
@@ -99,7 +103,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
-    await ensureDbInitialized();
+    await ensureDbReady();
     const referer = req.headers.get('referer') || '';
     const isAdminContext = referer.includes('/admin');
     const user = await getSessionUser(req, isAdminContext ? 'admin' : 'player');

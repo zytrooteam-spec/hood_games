@@ -17,6 +17,7 @@ export async function computeAdminStats(db) {
     }),
     db.collection('accountRequests').countDocuments({
       status: { $in: ['pending', 'PENDING', 'Pending'] },
+      $nor: [{ requestType: 'COIN_LOAD' }, { transferAmount: { $gt: 0 } }],
     }),
     db
       .collection('deposits')

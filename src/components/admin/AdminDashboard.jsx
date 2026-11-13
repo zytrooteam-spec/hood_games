@@ -165,6 +165,8 @@ export default function AdminDashboard({ user, onLogout }) {
   const chatInboxRefreshTimerRef = React.useRef(null);
   const adminLightSyncTimerRef = React.useRef(null);
   const fetchInFlightRef = React.useRef(false);
+  /** Prevent bootstrap poll from resurrecting PENDING after desk reject/approve. */
+  const recentAccountRequestPatchesRef = React.useRef(new Map());
   const conversationReqIdRef = React.useRef(0);
   const conversationCacheRef = React.useRef(new Map());
   const [conversationLoading, setConversationLoading] = useState(false);
@@ -197,7 +199,48 @@ export default function AdminDashboard({ user, onLogout }) {
     }, 180);
   }, []);
 
-  const isPendingReq = (r) => String(r?.status || '').toLowerCase() === 'pending';
+  const isPendingReq = (r) => String(r?.status || '').toUpperCase() === 'PENDING';
+
+  const recordAccountRequestDeskPatch = React.useCallback((id, status, patch = {}) => {
+    const key = String(id || '');
+    if (!key || !status) return;
+    recentAccountRequestPatchesRef.current.set(key, {
+      status,
+      patch,
+      until: Date.now() + 45000,
+    });
+  }, []);
+
+  const mergeAccountRequestFromServer = React.useCallback((r) => {
+    const base = { ...r, gameTitle: sanitizeGameTitle(r.gameTitle) };
+    const key = String(r.id || r._id || '');
+    if (!key) return base;
+    const hold = recentAccountRequestPatchesRef.current.get(key);
+    if (!hold || Date.now() > hold.until) return base;
+    const incoming = String(r.status || '').toUpperCase();
+    const held = String(hold.status || '').toUpperCase();
+    if (incoming === 'PENDING' && held !== 'PENDING') {
+      return { ...base, ...hold.patch, status: hold.status };
+    }
+    if (held !== 'PENDING' && incoming !== held) {
+      return { ...base, ...hold.patch, status: hold.status };
+    }
+    return base;
+  }, []);
+
+  const patchAccountRequestInNav = React.useCallback((id, patch) => {
+    const key = String(id || '');
+    if (!key) return;
+    setAccountRequests((prev) =>
+      (prev || []).map((r) => (String(r.id || r._id) === key ? { ...r, ...patch } : r))
+    );
+  }, []);
+
+  const removeAccountRequestFromNav = React.useCallback((id) => {
+    const key = String(id || '');
+    if (!key) return;
+    setAccountRequests((prev) => (prev || []).filter((r) => String(r.id || r._id) !== key));
+  }, []);
 
   const playAdminChime = React.useCallback(
     (overrideTune = null) => {
@@ -384,6 +427,7 @@ export default function AdminDashboard({ user, onLogout }) {
   const pendingLoadCount = (accountRequests || []).filter(
     (r) => isPendingReq(r) && !r.freeplayPending && Number(r.transferAmount || 0) > 0
   ).length;
+  const pendingAccountDeskCount = pendingGameIdCount + pendingFreeplayCount;
   const unreadChatCount = (chatThreads || []).reduce((s, t) => s + Number(t.unreadCount || 0), 0);
 
   const filteredChatThreads = React.useMemo(() => {
@@ -431,10 +475,7 @@ export default function AdminDashboard({ user, onLogout }) {
     if (Array.isArray(data.redemptions)) diffSet(setRedemptions, data.redemptions);
     const reqRows = data.requests || data.accountRequests;
     if (Array.isArray(reqRows)) {
-      diffSet(
-        setAccountRequests,
-        reqRows.map((r) => ({ ...r, gameTitle: sanitizeGameTitle(r.gameTitle) }))
-      );
+      diffSet(setAccountRequests, reqRows.map((r) => mergeAccountRequestFromServer(r)));
     }
     if (data.settings) {
       diffSet(setSettings, data.settings);
@@ -456,12 +497,10 @@ export default function AdminDashboard({ user, onLogout }) {
 
     const depList = Array.isArray(data.deposits) ? data.deposits : [];
     const redList = Array.isArray(data.redemptions) ? data.redemptions : [];
-    const reqList = Array.isArray(reqRows)
-      ? reqRows.map((r) => ({ ...r, gameTitle: sanitizeGameTitle(r.gameTitle) }))
-      : [];
+    const reqList = Array.isArray(reqRows) ? reqRows.map((r) => mergeAccountRequestFromServer(r)) : [];
     const threadList = Array.isArray(data.threads) ? data.threads : [];
     syncAdminAlerts(depList, redList, reqList, threadList);
-  }, [syncAdminAlerts]);
+  }, [mergeAccountRequestFromServer, syncAdminAlerts]);
 
   const loadCashbackReport = React.useCallback(async () => {
     try {
@@ -489,6 +528,53 @@ export default function AdminDashboard({ user, onLogout }) {
       if (!isSilent) setLoading(false);
     }
   };
+
+  const refreshAdminStatsOnly = React.useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/stats', { credentials: 'include', cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success && data.stats) diffSet(setStats, data.stats);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const handleAccountRequestsDeskMutate = React.useCallback(
+    (evt) => {
+      if (evt?.id) {
+        if (evt.remove) {
+          recordAccountRequestDeskPatch(evt.id, 'DISMISSED', {});
+          removeAccountRequestFromNav(evt.id);
+        } else if (evt.status) {
+          const patch = { status: evt.status, ...(evt.patch || {}) };
+          recordAccountRequestDeskPatch(evt.id, evt.status, evt.patch || {});
+          patchAccountRequestInNav(evt.id, patch);
+          const closed = String(evt.status).toUpperCase();
+          if (closed === 'REJECTED' || closed === 'READY' || closed === 'DISMISSED') {
+            setStats((s) =>
+              s
+                ? {
+                    ...s,
+                    pendingAccountRequests: Math.max(0, Number(s.pendingAccountRequests || 0) - 1),
+                  }
+                : s
+            );
+          }
+        }
+      }
+      refreshAdminStatsOnly();
+      window.setTimeout(() => {
+        refreshAdminStatsOnly();
+        fetchAllData(true);
+      }, 2800);
+    },
+    [
+      patchAccountRequestInNav,
+      removeAccountRequestFromNav,
+      recordAccountRequestDeskPatch,
+      refreshAdminStatsOnly,
+    ]
+  );
 
   const refreshFinanceQueue = React.useCallback(async () => {
     try {
@@ -519,19 +605,17 @@ export default function AdminDashboard({ user, onLogout }) {
       if (redRes.success && Array.isArray(redRes.redemptions)) diffSet(setRedemptions, redRes.redemptions);
       const reqRows = reqRes.requests || reqRes.accountRequests;
       if (reqRes.success && Array.isArray(reqRows)) {
-        diffSet(
-          setAccountRequests,
-          reqRows.map((r) => ({ ...r, gameTitle: sanitizeGameTitle(r.gameTitle) }))
-        );
+        diffSet(setAccountRequests, reqRows.map((r) => mergeAccountRequestFromServer(r)));
       }
       const depList = depRes.success && Array.isArray(depRes.deposits) ? depRes.deposits : [];
       const redList = redRes.success && Array.isArray(redRes.redemptions) ? redRes.redemptions : [];
-      const reqList = reqRes.success && Array.isArray(reqRows) ? reqRows : [];
+      const reqList =
+        reqRes.success && Array.isArray(reqRows) ? reqRows.map((r) => mergeAccountRequestFromServer(r)) : [];
       syncAdminAlerts(depList, redList, reqList, chatThreads);
     } catch {
       /* ignore */
     }
-  }, [chatThreads, syncAdminAlerts]);
+  }, [chatThreads, mergeAccountRequestFromServer, syncAdminAlerts]);
 
   const scheduleLightAdminSync = React.useCallback(() => {
     if (adminLightSyncTimerRef.current) clearTimeout(adminLightSyncTimerRef.current);
@@ -652,29 +736,39 @@ export default function AdminDashboard({ user, onLogout }) {
       return;
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
     try {
-      const res = await staffApiFetch(`/api/chat?userId=${encodeURIComponent(uid)}&_t=${Date.now()}`);
+      const res = await staffApiFetch(`/api/chat?userId=${encodeURIComponent(uid)}&_t=${Date.now()}`, {
+        signal: controller.signal,
+      });
       const data = await res.json();
+      if (String(selectedThreadUserRef.current) !== uid) return;
       if (!isSilent && requestId !== conversationReqIdRef.current) return;
-      if (isSilent && String(selectedThreadUserRef.current) !== uid) return;
-      if (data?.success) {
-        const messages = dedupeChatMessagesById(data.messages || []);
-        const threadMeta = data.threadMeta || { labels: [], staffNotes: [] };
-        const player =
-          data.player ||
-          (() => {
-            const hint = (chatThreads || []).find((t) => String(t.userId) === uid);
-            return hint ? { id: uid, username: hint.username, email: hint.userEmail } : null;
-          })();
-        conversationCacheRef.current.set(uid, { messages, threadMeta, player });
-        diffSet(setThreadMessages, messages);
-        diffSet(setThreadMeta, threadMeta);
-        if (player) diffSet(setThreadPlayerDetail, player);
+      if (!data?.success) {
+        if (!isSilent) hoodAlert.error(data?.error || 'Could not load chat', 'Chat');
+        return;
       }
+      const messages = dedupeChatMessagesById(data.messages || []);
+      const threadMeta = data.threadMeta || { labels: [], staffNotes: [] };
+      const player =
+        data.player ||
+        (() => {
+          const hint = (chatThreads || []).find((t) => String(t.userId) === uid);
+          return hint ? { id: uid, username: hint.username, email: hint.userEmail } : null;
+        })();
+      conversationCacheRef.current.set(uid, { messages, threadMeta, player });
+      setThreadMessages(messages);
+      setThreadMeta(threadMeta);
+      if (player) setThreadPlayerDetail(player);
     } catch (e) {
       console.error(e);
+      if (!isSilent && String(selectedThreadUserRef.current) === uid) {
+        hoodAlert.error('Chat load timed out or failed. Tap refresh or pick the thread again.', 'Chat');
+      }
     } finally {
-      if (!isSilent && requestId === conversationReqIdRef.current) {
+      clearTimeout(timeout);
+      if (!isSilent && String(selectedThreadUserRef.current) === uid) {
         setConversationLoading(false);
       }
     }
@@ -1356,7 +1450,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 <Key size={16} />
                 <span>Account Requests</span>
               </div>
-              <NavCountBadge count={pendingGameIdCount + pendingFreeplayCount} tone="blue" />
+              <NavCountBadge count={pendingAccountDeskCount} tone="blue" />
             </button>
 
             <button
@@ -1663,7 +1757,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 <div className="flex justify-between items-center">
                   <h4 className="text-sm font-black text-white">Game ID Requests</h4>
                   <span className="text-xl font-black text-purple-400 font-mono">
-                    {stats?.pendingAccountRequests || 0}
+                    {pendingAccountDeskCount}
                   </span>
                 </div>
                 <p className="text-xs text-gray-400 mt-2">Players requesting Orion, Kirin, or Panda logins.</p>
@@ -2700,7 +2794,7 @@ export default function AdminDashboard({ user, onLogout }) {
         {activeTab === 'requests' && (
           <AccountRequestsDesk
             initialRequests={accountRequests}
-            onMutate={() => fetchAllData(true)}
+            onMutate={handleAccountRequestsDeskMutate}
           />
         )}
 

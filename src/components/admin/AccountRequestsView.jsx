@@ -66,7 +66,9 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
           ? st === 'PENDING'
           : filter === 'READY'
             ? st === 'READY' || st === 'APPROVED'
-            : st === filter.toUpperCase();
+            : filter === 'REJECTED'
+              ? st === 'REJECTED' || st === 'CANCELLED' || st === 'DISMISSED'
+              : st === filter.toUpperCase();
     
     // Search query
     const q = searchQuery.toLowerCase().trim();
@@ -82,6 +84,10 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
 
   const pendingCount = allRequests.filter((r) => normStatus(r) === 'PENDING').length;
   const readyCount = allRequests.filter((r) => normStatus(r) === 'READY' || normStatus(r) === 'APPROVED').length;
+  const rejectedCount = allRequests.filter((r) => {
+    const st = normStatus(r);
+    return st === 'REJECTED' || st === 'CANCELLED' || st === 'DISMISSED';
+  }).length;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
@@ -134,6 +140,7 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
             {[
               { key: 'PENDING', label: 'Pending', count: pendingCount, color: '#F59E0B' },
               { key: 'READY', label: 'Ready', count: readyCount, color: '#10B981' },
+              { key: 'REJECTED', label: 'Rejected', count: rejectedCount, color: '#F43F5E' },
               { key: 'ALL', label: 'All Requests', count: allRequests.length, color: '#00F0FF' },
             ].map(({ key, label, count, color }) => {
               const isActive = filter === key;
