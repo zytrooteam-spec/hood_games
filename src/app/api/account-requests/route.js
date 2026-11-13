@@ -273,24 +273,9 @@ export async function POST(req) {
         );
       }
     } else {
-      const cooldownMs = 12 * 60 * 60 * 1000;
-      const [existingAcc, existingPending, recentReject] = await Promise.all([
+      const [existingAcc, existingPending] = await Promise.all([
         db.collection('game_accounts').findOne({ userId, gameTitle: cleanGameTitle }),
         db.collection('accountRequests').findOne(pendingQuery),
-        db.collection('accountRequests').findOne(
-          {
-            userId,
-            gameTitle: cleanGameTitle,
-            status: { $in: ['rejected', 'REJECTED', 'cancelled'] },
-            rejectedAt: { $gte: new Date(Date.now() - cooldownMs) },
-            $or: [
-              { requestType: { $ne: 'COIN_LOAD' } },
-              { transferAmount: { $lte: 0 } },
-              { transferAmount: { $exists: false } },
-            ],
-          },
-          { sort: { rejectedAt: -1 } }
-        ),
       ]);
       if (existingAcc) {
         return NextResponse.json(
@@ -308,16 +293,6 @@ export async function POST(req) {
             success: false,
             isPending: true,
             error: `You already have a pending ID request for ${cleanGameTitle}.`,
-          },
-          { status: 400 }
-        );
-      }
-      if (recentReject) {
-        return NextResponse.json(
-          {
-            success: false,
-            recentlyRejected: true,
-            error: `Your ${cleanGameTitle} request was recently reviewed. Please wait up to 12 hours or contact support chat before submitting again.`,
           },
           { status: 400 }
         );
