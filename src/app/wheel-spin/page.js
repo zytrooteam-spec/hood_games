@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useAppShell } from '@/components/layout/AppShell';
 import { Gift, Sparkles, Trophy, Clock, Wallet, ArrowRight, ShieldCheck } from 'lucide-react';
-import { WHEEL_SLICES } from '@/lib/wheelConstants';
+import { WHEEL_SLICES as DEFAULT_WHEEL_SLICES } from '@/lib/wheelConstants';
 import { playTune } from '@/lib/soundAlerts';
 import Link from 'next/link';
 import { diffSet } from '@/lib/fastDiff';
@@ -17,34 +17,21 @@ function WheelSpinPageContent() {
   const [statusMessage, setStatusMessage] = useState('');
   const [wonPrize, setWonPrize] = useState(null);
   const [rotation, setRotation] = useState(0);
+  const [wheelSlices, setWheelSlices] = useState(DEFAULT_WHEEL_SLICES);
   const canvasRef = useRef(null);
-
-  const checkSpinStatus = async () => {
-    try {
-      const res = await fetch('/api/daily-spin');
-      const data = await res.json();
-      if (data?.success) {
-        diffSet(setCanSpin, Boolean(data.canSpin));
-        diffSet(setAvailableSpins, data.availableSpins || 0);
-        diffSet(setStatusMessage, data.message || '');
-      }
-    } catch {}
-  };
+  const rotationRef = useRef(0);
 
   useEffect(() => {
-    checkSpinStatus();
-    const i = setInterval(checkSpinStatus, 8000);
-    return () => clearInterval(i);
-  }, [user]);
+    rotationRef.current = rotation;
+  }, [rotation]);
 
-  useEffect(() => {
+  const drawWheel = (slices) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !slices?.length) return;
     const ctx = canvas.getContext('2d');
     const width = canvas.width;
     const center = width / 2;
     const radius = center - 12;
-    const slices = WHEEL_SLICES;
     const anglePerSegment = (2 * Math.PI) / slices.length;
 
     ctx.clearRect(0, 0, width, width);
@@ -55,7 +42,7 @@ function WheelSpinPageContent() {
       ctx.moveTo(center, center);
       ctx.arc(center, center, radius, startAngle, endAngle);
       ctx.closePath();
-      ctx.fillStyle = seg.color;
+      ctx.fillStyle = seg.color || '#12244c';
       ctx.fill();
       ctx.lineWidth = 2.5;
       ctx.strokeStyle = '#1a3363';
@@ -66,7 +53,7 @@ function WheelSpinPageContent() {
       ctx.textAlign = 'right';
       ctx.fillStyle = seg.text || '#ffffff';
       ctx.font = 'bold 13px Inter, sans-serif';
-      ctx.fillText(seg.label, radius - 18, 5);
+      ctx.fillText(seg.label || '', radius - 18, 5);
       ctx.restore();
     });
     ctx.beginPath();
@@ -81,7 +68,32 @@ function WheelSpinPageContent() {
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#2cb64e';
     ctx.stroke();
-  }, []);
+  };
+
+  const checkSpinStatus = async () => {
+    try {
+      const res = await fetch('/api/daily-spin', { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success) {
+        diffSet(setCanSpin, Boolean(data.canSpin));
+        diffSet(setAvailableSpins, data.availableSpins || 0);
+        diffSet(setStatusMessage, data.message || '');
+        if (Array.isArray(data.slices) && data.slices.length >= 4) {
+          setWheelSlices(data.slices);
+        }
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    checkSpinStatus();
+    const i = setInterval(checkSpinStatus, 8000);
+    return () => clearInterval(i);
+  }, [user]);
+
+  useEffect(() => {
+    drawWheel(wheelSlices);
+  }, [wheelSlices]);
 
   const handleSpin = async () => {
     if (!user) {
@@ -107,9 +119,10 @@ function WheelSpinPageContent() {
       }
 
       const sliceIndex = data.sliceIndex ?? 0;
-      const segmentAngle = 360 / WHEEL_SLICES.length;
+      const count = wheelSlices.length || DEFAULT_WHEEL_SLICES.length;
+      const segmentAngle = 360 / count;
       const targetDeg = 360 - (sliceIndex * segmentAngle + segmentAngle / 2);
-      const finalDeg = rotation + 360 * 6 + targetDeg;
+      const finalDeg = rotationRef.current + 360 * 6 + targetDeg;
       setRotation(finalDeg);
 
       setTimeout(() => {

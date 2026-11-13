@@ -1479,6 +1479,10 @@ export default function AdminDashboard({ user, onLogout }) {
   // Save Settings & 5 Action Cards
   const handleSaveSettings = async (e) => {
     e.preventDefault();
+    if (!settings) {
+      hoodAlert.warning('Settings still loading — wait a moment and save again.', 'Please wait');
+      return;
+    }
     setSavingSettings(true);
     try {
       const res = await fetch('/api/admin/settings', {
@@ -1493,11 +1497,16 @@ export default function AdminDashboard({ user, onLogout }) {
       if (data.success) {
         hoodAlert.success('System settings and 5 Action Cards saved successfully!', 'Settings saved');
         setSettings(data.settings);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('hood-settings-updated'));
+        }
         if (data.settings?.adminDefaultAlertTune) {
           setAlertTune(data.settings.adminDefaultAlertTune);
           localStorage.setItem('hood_admin_alert_tune', data.settings.adminDefaultAlertTune);
         }
         if (data.settings?.playerTouchTune) setPlayerTouchTune(data.settings.playerTouchTune);
+      } else {
+        hoodAlert.error(data.error || data.message || 'Could not save settings', 'Save failed');
       }
     } catch (e) {
       hoodAlert.error('Error saving settings');

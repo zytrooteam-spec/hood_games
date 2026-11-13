@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -83,6 +83,42 @@ export default function HoodPlayerSidebar({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const ONLINE_CAP = 1500;
+  const [onlinePlayers, setOnlinePlayers] = useState(1180);
+  const serverAnchorRef = useRef(1180);
+
+  useEffect(() => {
+    let cancelled = false;
+    const pull = async () => {
+      try {
+        const res = await fetch('/api/site/presence', { cache: 'no-store' });
+        const data = await res.json();
+        if (!cancelled && data?.success && Number.isFinite(data.online)) {
+          const capped = Math.min(ONLINE_CAP, Math.round(data.online));
+          serverAnchorRef.current = capped;
+          setOnlinePlayers(capped);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    pull();
+    const syncInterval = setInterval(pull, 20000);
+    const liveTick = setInterval(() => {
+      setOnlinePlayers((prev) => {
+        const anchor = serverAnchorRef.current;
+        const drift = Math.floor(Math.random() * 9) - 4;
+        const next = prev + drift;
+        const floor = Math.max(260, anchor - 95);
+        return Math.min(ONLINE_CAP, Math.max(floor, next));
+      });
+    }, 3500);
+    return () => {
+      cancelled = true;
+      clearInterval(syncInterval);
+      clearInterval(liveTick);
+    };
+  }, []);
 
   useEffect(() => {
     PLAYER_NAV_ITEMS.forEach((item) => {
@@ -186,7 +222,9 @@ export default function HoodPlayerSidebar({
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#2cb64e] opacity-75" />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-[#2cb64e]" />
                   </span>
-                  <span className="text-gray-300 font-mono text-[11px] font-bold">1,940 PLAYERS</span>
+                  <span className="text-gray-300 font-mono text-[11px] font-bold">
+                    {Math.min(ONLINE_CAP, onlinePlayers).toLocaleString()} PLAYERS
+                  </span>
                 </div>
                 <span className="text-[10px] font-black text-[#2cb64e]">ONLINE</span>
               </div>

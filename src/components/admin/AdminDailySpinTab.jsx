@@ -2,19 +2,27 @@
 
 import React from 'react';
 import { Sparkles, Plus, Trash2 } from 'lucide-react';
-import { getDefaultWheelConfig } from '@/lib/wheelConfig';
+import { getDefaultWheelConfig, resolveWheelConfig } from '@/lib/wheelConfig';
 
 export default function AdminDailySpinTab({ settings, setSettings }) {
-  const wheel = settings?.wheelConfig || getDefaultWheelConfig();
+  const wheel = resolveWheelConfig(settings);
   const slices = wheel.slices || [];
   const odds = wheel.odds || [];
 
   const patchWheel = (next) => {
-    setSettings((prev) => ({
-      ...prev,
-      wheelConfig: { ...wheel, ...next },
-    }));
+    setSettings((prev) => {
+      const base = prev?.wheelConfig || getDefaultWheelConfig();
+      return { ...(prev || {}), wheelConfig: { ...base, ...next } };
+    });
   };
+
+  const WHEEL_PALETTE = [
+    { color: '#12244c', text: '#2cb64e' },
+    { color: '#334155', text: '#94a3b8' },
+    { color: '#0c3d2e', text: '#34d399' },
+    { color: '#3b2f0a', text: '#fbbf24' },
+    { color: '#312e4a', text: '#a78bfa' },
+  ];
 
   const oddsTotal = odds.reduce((s, o) => s + Math.max(0, Number(o.percent || 0)), 0);
 
@@ -32,7 +40,30 @@ export default function AdminDailySpinTab({ settings, setSettings }) {
       </div>
 
       <div className="p-5 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-3">
-        <h4 className="text-sm font-black text-white m-0">Wheel segments ({slices.length})</h4>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-sm font-black text-white m-0">Wheel segments ({slices.length})</h4>
+          <button
+            type="button"
+            onClick={() => {
+              const pick = WHEEL_PALETTE[slices.length % WHEEL_PALETTE.length];
+              patchWheel({
+                slices: [
+                  ...slices,
+                  {
+                    label: 'New slice',
+                    value: 1,
+                    color: pick.color,
+                    text: pick.text,
+                    isBadLuck: false,
+                  },
+                ],
+              });
+            }}
+            className="text-xs font-bold text-[#2cb64e] flex items-center gap-1"
+          >
+            <Plus size={14} /> Add slice
+          </button>
+        </div>
         <p className="text-[10px] text-gray-400 m-0">
           <span className="text-cyan-300 font-bold">Wheel text</span> = any words ($1, Bad Luck, Try Again).{' '}
           <span className="text-amber-300 font-bold">SC credit</span> = numbers only (0 when no payout).
@@ -42,6 +73,7 @@ export default function AdminDailySpinTab({ settings, setSettings }) {
           <span className="col-span-4">Wheel text</span>
           <span className="col-span-2">SC credit</span>
           <span className="col-span-3">No prize</span>
+          <span className="col-span-1" />
         </div>
         <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
           {slices.map((sl, idx) => (
@@ -93,6 +125,18 @@ export default function AdminDailySpinTab({ settings, setSettings }) {
                 />
                 Bad luck
               </label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (slices.length <= 4) return;
+                  patchWheel({ slices: slices.filter((_, i) => i !== idx) });
+                }}
+                className="col-span-1 p-2 rounded-lg text-rose-400 hover:bg-rose-500/10 disabled:opacity-30"
+                title={slices.length <= 4 ? 'Need at least 4 slices' : 'Remove slice'}
+                disabled={slices.length <= 4}
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
           ))}
         </div>

@@ -2,18 +2,20 @@
 
 import React from 'react';
 import { Crown, Plus, Trash2 } from 'lucide-react';
-import { getDefaultVipConfig } from '@/lib/vipConfig';
+import { getDefaultVipConfig, resolveVipConfig } from '@/lib/vipConfig';
 
 export default function AdminVipTab({ settings, setSettings }) {
-  const vip = settings?.vipConfig || getDefaultVipConfig();
+  const vip = resolveVipConfig(settings);
   const tiers = vip.tiers || [];
 
   const patchVip = (next) => {
-    setSettings((prev) => ({
-      ...prev,
-      vipConfig: { ...vip, ...next },
-    }));
+    setSettings((prev) => {
+      const base = prev?.vipConfig || getDefaultVipConfig();
+      return { ...(prev || {}), vipConfig: { ...base, ...next } };
+    });
   };
+
+  const benefitCards = vip.benefitCards || [];
 
   const updateTier = (idx, field, value) => {
     const next = tiers.map((t, i) => (i === idx ? { ...t, [field]: value } : t));
@@ -67,6 +69,85 @@ export default function AdminVipTab({ settings, setSettings }) {
           value={vip.tiersSubheading || ''}
           onChange={(e) => patchVip({ tiersSubheading: e.target.value })}
         />
+        <label className="block text-[10px] font-bold text-gray-400 uppercase">Primary CTA button label</label>
+        <input
+          className="hood-input w-full py-2 px-3 rounded-lg text-xs"
+          value={vip.heroCtaLabel || ''}
+          onChange={(e) => patchVip({ heroCtaLabel: e.target.value })}
+        />
+        <label className="block text-[10px] font-bold text-gray-400 uppercase">Status pill (cashback range)</label>
+        <input
+          className="hood-input w-full py-2 px-3 rounded-lg text-xs"
+          value={vip.statusCashbackRange || ''}
+          onChange={(e) => patchVip({ statusCashbackRange: e.target.value })}
+        />
+        <label className="block text-[10px] font-bold text-gray-400 uppercase">Tiers section heading</label>
+        <input
+          className="hood-input w-full py-2 px-3 rounded-lg text-xs"
+          value={vip.tiersHeading || ''}
+          onChange={(e) => patchVip({ tiersHeading: e.target.value })}
+        />
+      </div>
+
+      <div className="p-5 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-3">
+        <h4 className="text-sm font-black text-white m-0">Benefits section (3 cards)</h4>
+        <label className="block text-[10px] font-bold text-gray-400 uppercase">Benefits eyebrow</label>
+        <input
+          className="hood-input w-full py-2 px-3 rounded-lg text-xs"
+          value={vip.benefitsEyebrow || ''}
+          onChange={(e) => patchVip({ benefitsEyebrow: e.target.value })}
+        />
+        <label className="block text-[10px] font-bold text-gray-400 uppercase">Benefits heading</label>
+        <input
+          className="hood-input w-full py-2 px-3 rounded-lg text-xs"
+          value={vip.benefitsHeading || ''}
+          onChange={(e) => patchVip({ benefitsHeading: e.target.value })}
+        />
+        <label className="block text-[10px] font-bold text-gray-400 uppercase">Benefits subheading</label>
+        <textarea
+          className="hood-input w-full py-2 px-3 rounded-lg text-xs min-h-[60px]"
+          value={vip.benefitsSubheading || ''}
+          onChange={(e) => patchVip({ benefitsSubheading: e.target.value })}
+        />
+        <div className="space-y-3 pt-2">
+          {benefitCards.map((card, idx) => (
+            <div key={idx} className="p-3 rounded-xl bg-[#070d1e] border border-[#1a3363] space-y-2">
+              <span className="text-[10px] font-black text-cyan-300 uppercase">Card #{idx + 1}</span>
+              <input
+                className="hood-input w-full py-2 px-2 rounded-lg text-xs"
+                placeholder="Title"
+                value={card.title || ''}
+                onChange={(e) => {
+                  const next = benefitCards.map((c, i) => (i === idx ? { ...c, title: e.target.value } : c));
+                  patchVip({ benefitCards: next });
+                }}
+              />
+              <textarea
+                className="hood-input w-full py-2 px-2 rounded-lg text-xs min-h-[56px]"
+                placeholder="Body copy"
+                value={card.body || ''}
+                onChange={(e) => {
+                  const next = benefitCards.map((c, i) => (i === idx ? { ...c, body: e.target.value } : c));
+                  patchVip({ benefitCards: next });
+                }}
+              />
+              <select
+                className="hood-input w-full py-2 px-2 rounded-lg text-xs"
+                value={card.icon || 'Coins'}
+                onChange={(e) => {
+                  const next = benefitCards.map((c, i) => (i === idx ? { ...c, icon: e.target.value } : c));
+                  patchVip({ benefitCards: next });
+                }}
+              >
+                {['Coins', 'Zap', 'Headphones'].map((ic) => (
+                  <option key={ic} value={ic}>
+                    {ic}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="p-5 rounded-2xl bg-[#09142a] border border-[#1a3363] space-y-4">

@@ -59,7 +59,20 @@ function Field({ label, children }) {
 /* ------------------------------------------------------------------ */
 /* 1. GAMES LIBRARY                                                    */
 /* ------------------------------------------------------------------ */
-const EMPTY_GAME = { title: '', platform: '', category: 'slots', playUrl: '', image: '', badge: 'NEW', description: '', priority: 10, active: true };
+const EMPTY_GAME = {
+  title: '',
+  platform: '',
+  category: 'slots',
+  playUrl: '',
+  image: '',
+  badge: 'NEW',
+  rtp: 98.2,
+  rating: 4.9,
+  description: '',
+  priority: 10,
+  active: true,
+};
+const GAME_BADGE_PRESETS = ['HOT', 'Featured', 'VIP', 'NEW', 'LIVE', ''];
 
 export function GamesLibraryTab() {
   const [games, setGames] = useState([]);
@@ -125,7 +138,14 @@ export function GamesLibraryTab() {
     e.preventDefault();
     setSaving(true);
     try {
-      const body = { ...editing, priority: Number(editing.priority || 10), active: !!editing.active, isActive: !!editing.active };
+      const body = {
+        ...editing,
+        priority: Number(editing.priority || 10),
+        rtp: Number(editing.rtp ?? 98.2),
+        rating: Number(editing.rating ?? 4.9),
+        active: !!editing.active,
+        isActive: !!editing.active,
+      };
       const res = await fetch('/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await res.json();
       if (!res.ok || !d.success) return hoodAlert.error(d.error || 'Failed to save game (image may be too large — try a smaller file)', 'Save failed');
@@ -236,7 +256,42 @@ export function GamesLibraryTab() {
                   quality={0.85}
                 />
               </div>
-              <Field label="Badge"><input className={inputCls} value={editing.badge} onChange={(e) => setEditing({ ...editing, badge: e.target.value })} /></Field>
+              <Field label="Label badge (HOT / Featured / VIP)">
+                <input
+                  className={inputCls}
+                  list="hood-game-badge-presets"
+                  value={editing.badge ?? ''}
+                  onChange={(e) => setEditing({ ...editing, badge: e.target.value })}
+                  placeholder="HOT, Featured, VIP, or blank"
+                />
+                <datalist id="hood-game-badge-presets">
+                  {GAME_BADGE_PRESETS.filter(Boolean).map((b) => (
+                    <option key={b} value={b} />
+                  ))}
+                </datalist>
+              </Field>
+              <Field label="RTP % (shown on card)">
+                <input
+                  type="number"
+                  step="0.1"
+                  min="80"
+                  max="100"
+                  className={inputCls}
+                  value={editing.rtp ?? 98.2}
+                  onChange={(e) => setEditing({ ...editing, rtp: e.target.value })}
+                />
+              </Field>
+              <Field label="Star rating">
+                <input
+                  type="number"
+                  step="0.1"
+                  min="1"
+                  max="5"
+                  className={inputCls}
+                  value={editing.rating ?? 4.9}
+                  onChange={(e) => setEditing({ ...editing, rating: e.target.value })}
+                />
+              </Field>
               <Field label="Sort Priority"><input type="number" className={inputCls} value={editing.priority} onChange={(e) => setEditing({ ...editing, priority: e.target.value })} /></Field>
             </div>
             <Field label="Description"><textarea rows={2} className={inputCls} value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></Field>

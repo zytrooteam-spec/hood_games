@@ -26,12 +26,17 @@ function VipPageContent() {
   const [vipCfg, setVipCfg] = useState(getDefaultVipConfig());
 
   useEffect(() => {
-    fetch('/api/admin/settings', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d?.success) setVipCfg(resolveVipConfig(d.settings));
-      })
-      .catch(() => {});
+    const load = () => {
+      fetch('/api/admin/settings', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d?.success) setVipCfg(resolveVipConfig(d.settings));
+        })
+        .catch(() => {});
+    };
+    load();
+    window.addEventListener('hood-settings-updated', load);
+    return () => window.removeEventListener('hood-settings-updated', load);
   }, []);
 
   const tiers = vipCfg.tiers || [];
