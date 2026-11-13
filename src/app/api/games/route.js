@@ -48,6 +48,8 @@ function slimGameForAdminList(g) {
 function bustGamesCache() {
   cache.del('hood_games');
   cache.del('hood_games_public');
+  cache.del('hood_games_public_slim');
+  cache.del('hood_games_public_full');
   cache.del('hood_games_admin_all_slim');
   cache.del('hood_games_admin_all_full');
 }
@@ -65,31 +67,38 @@ export async function GET(req) {
     const db = await getDb();
     const query = isAdmin && all ? {} : { isActive: { $ne: false }, active: { $ne: false } };
     const adminSlim = isAdmin && all && !includeImages;
+    const playerSlim = !isAdmin && !includeImages;
     const cacheKey = adminSlim
       ? 'hood_games_admin_all_slim'
       : isAdmin && all
         ? 'hood_games_admin_all_full'
-        : 'hood_games_public';
+        : playerSlim
+          ? 'hood_games_public_slim'
+          : 'hood_games_public_full';
 
     const cached = cache.get(cacheKey);
     if (cached) {
       return NextResponse.json(
-        { success: true, games: cached, slim: adminSlim },
-        { headers: { 'Cache-Control': adminSlim ? 'private, max-age=60' : 'private, max-age=30' } }
+        { success: true, games: cached, slim: adminSlim || playerSlim },
+        {
+          headers: {
+            'Cache-Control': adminSlim || playerSlim ? 'private, max-age=45' : 'private, max-age=30',
+          },
+        }
       );
     }
 
     const games = await db.collection('games').find(query).sort({ priority: 1, title: 1 }).toArray();
     let sanitized = games.map(mapGameForClient);
-    if (adminSlim) sanitized = sanitized.map(slimGameForAdminList);
-    const ttl = adminSlim ? 120 : isAdmin && all ? 90 : 45;
+    if (adminSlim || playerSlim) sanitized = sanitized.map(slimGameForAdminList);
+    const ttl = adminSlim ? 120 : isAdmin && all ? 90 : playerSlim ? 60 : 45;
     cache.set(cacheKey, sanitized, ttl);
 
     return NextResponse.json(
-      { success: true, games: sanitized, slim: adminSlim },
+      { success: true, games: sanitized, slim: adminSlim || playerSlim },
       {
         headers: {
-          'Cache-Control': adminSlim ? 'private, max-age=60' : isAdmin && all ? 'private, max-age=45' : 'private, max-age=30',
+          'Cache-Control': adminSlim || playerSlim ? 'private, max-age=45' : isAdmin && all ? 'private, max-age=45' : 'private, max-age=30',
         },
       }
     );

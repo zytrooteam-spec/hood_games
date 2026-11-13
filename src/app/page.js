@@ -318,6 +318,7 @@ export default function HomePage() {
       <GameRequestModal
         isOpen={requestModal.open}
         initialGame={requestModal.game}
+        platformGames={games}
         onClose={() => setRequestModal({ open: false, game: null })}
         user={user}
         onSuccess={() => {

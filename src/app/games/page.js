@@ -11,7 +11,8 @@ import { Gamepad2, Sparkles, Zap, Gift } from 'lucide-react';
 import Link from 'next/link';
 import { playTune } from '@/lib/soundAlerts';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
-import { readGamesCache, writeGamesCache } from '@/lib/gameAssets';
+import { readGamesCache, writeGamesCache, mergeGamesPreserveImages } from '@/lib/gameAssets';
+import { playerApiFetch } from '@/lib/playerApiFetch';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 import { HOOD_POLL } from '@/lib/pollingConfig';
 import { hoodSsePoll } from '@/lib/ssePollOptions';
@@ -36,9 +37,8 @@ function GamesContent() {
   const [loadCoinsModal, setLoadCoinsModal] = useState({ open: false, game: null, userAccount: null });
   const [spinModalOpen, setSpinModalOpen] = useState(false);
 
-  const loadGames = (isSilent = false) => {
-    if (!isSilent && games.length === 0) setLoadingGames(true);
-    fetch('/api/games', { cache: 'no-store' })
+  const hydrateGameImages = () => {
+    playerApiFetch('/api/games?includeImages=1', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
         if (d?.success && Array.isArray(d?.games)) {
@@ -46,8 +46,28 @@ function GamesContent() {
             ...g,
             title: sanitizeGameTitle(g.title),
           }));
-          diffSet(setGames, sanitized);
+          diffSet(setGames, (prev) => mergeGamesPreserveImages(prev, sanitized));
+          writeGamesCache(sanitized, { preserveExistingImages: true });
+        }
+      })
+      .catch(() => {});
+  };
+
+  const loadGames = (isSilent = false) => {
+    if (!isSilent && games.length === 0) setLoadingGames(true);
+    playerApiFetch('/api/games', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success && Array.isArray(d?.games)) {
+          const sanitized = d.games.map((g) => ({
+            ...g,
+            title: sanitizeGameTitle(g.title),
+          }));
+          diffSet(setGames, (prev) => mergeGamesPreserveImages(prev, sanitized));
           writeGamesCache(sanitized);
+          if (sanitized.some((g) => g._imageOmitted)) {
+            window.setTimeout(hydrateGameImages, 200);
+          }
         }
       })
       .catch(() => {})
@@ -58,7 +78,8 @@ function GamesContent() {
     const cached = readGamesCache();
     if (cached?.length) diffSet(setGames, cached.map((g) => ({ ...g, title: sanitizeGameTitle(g.title) })));
     loadGames(Boolean(cached?.length));
-    return startSseBackedPoll(() => loadGames(true), hoodSsePoll(HOOD_POLL.LISTS));
+    const stop = startSseBackedPoll(() => loadGames(true), hoodSsePoll(HOOD_POLL.LISTS));
+    return () => stop();
   }, []);
 
   return (
@@ -166,6 +187,7 @@ function GamesContent() {
       <GameRequestModal
         isOpen={requestModal.open}
         initialGame={requestModal.game}
+        platformGames={games}
         onClose={() => setRequestModal({ open: false, game: null })}
         user={user}
         onSuccess={() => {

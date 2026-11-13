@@ -18,26 +18,24 @@ export async function resolvePlayerDbUser(session, usersCol) {
     }
   }
 
-  for (const id of idCandidates) {
-    const row = await usersCol.findOne(toIdQuery(id));
-    if (row) return row;
-  }
-
   const email = String(session.email || '')
     .toLowerCase()
     .trim();
-  if (email) {
-    const row = await usersCol.findOne({ email });
-    if (row) return row;
-  }
-
   const username = String(session.username || '').trim();
+
+  const orClauses = [];
+  for (const id of idCandidates) {
+    orClauses.push(toIdQuery(id));
+  }
+  if (email) orClauses.push({ email });
   if (username.length >= 2) {
-    const row = await usersCol.findOne({
+    orClauses.push({
       username: new RegExp(`^${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
     });
-    if (row) return row;
   }
+  if (orClauses.length === 0) return null;
 
-  return null;
+  const flatOr = orClauses.flatMap((c) => (c.$or ? c.$or : [c]));
+  const row = await usersCol.findOne({ $or: flatOr });
+  return row || null;
 }

@@ -30,6 +30,34 @@ function bustStaffRequestCaches({ userEmail, userId } = {}) {
   if (userId) invalidateAuthCache(String(userId));
 }
 
+function deferAccountRequestSideEffects(payload) {
+  const { requestType, transferAmount, cleanGameTitle, dbUser, reqDoc, insertedId } = payload;
+  notifyStaff({
+    title:
+      requestType === 'COIN_LOAD'
+        ? `⚡ Coin load: $${transferAmount.toFixed(2)} → ${cleanGameTitle}`
+        : `🎮 New Game ID: ${cleanGameTitle}`,
+    message: `Player ${dbUser.username} — ${requestType === 'COIN_LOAD' ? 'load coins' : 'request credentials'}.`,
+    type: requestType === 'COIN_LOAD' ? 'coin_load' : 'account_request',
+    data: { requestId: insertedId.toString() },
+  });
+  publishAccountRequestCreated({
+    request: {
+      ...reqDoc,
+      _id: insertedId,
+      id: insertedId.toString(),
+      gameTitle: cleanGameTitle,
+    },
+    userEmail: dbUser.email,
+    userId: dbUser._id.toString(),
+  });
+  pulseStaffStatsAsync();
+  pulseStaffScope('requests');
+  if (requestType === 'COIN_LOAD') publishCoinDeskPulse({ requestId: insertedId.toString() });
+  invalidateAccountRequestsCache();
+  invalidateAuthCache(dbUser._id.toString());
+}
+
 const STAFF_LIST_PROJECTION = {
   userId: 1,
   userEmail: 1,
@@ -169,7 +197,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
-    await ensureDbInitialized();
+    await ensureDbReady();
     const session = await getSessionUser(req, 'player');
     if (!session) {
       return NextResponse.json({ success: false, error: 'Please log in to continue.' }, { status: 401 });
@@ -220,11 +248,50 @@ export async function POST(req) {
           { status: 400 }
         );
       }
+    }
+
+    const userId = dbUser._id.toString();
+    const pendingQuery = {
+      userId,
+      gameTitle: cleanGameTitle,
+      status: { $in: ['pending', 'PENDING', 'Pending'] },
+    };
+    if (requestType === 'COIN_LOAD') {
+      pendingQuery.$or = [{ requestType: 'COIN_LOAD' }, { transferAmount: { $gt: 0 } }];
+    }
+
+    if (requestType === 'COIN_LOAD') {
+      const existingPending = await db.collection('accountRequests').findOne(pendingQuery);
+      if (existingPending) {
+        return NextResponse.json(
+          {
+            success: false,
+            isPending: true,
+            error: `You already have a pending coin load request for ${cleanGameTitle}.`,
+          },
+          { status: 400 }
+        );
+      }
     } else {
-      const existingAcc = await db.collection('game_accounts').findOne({
-        userId: dbUser._id.toString(),
-        gameTitle: cleanGameTitle,
-      });
+      const cooldownMs = 12 * 60 * 60 * 1000;
+      const [existingAcc, existingPending, recentReject] = await Promise.all([
+        db.collection('game_accounts').findOne({ userId, gameTitle: cleanGameTitle }),
+        db.collection('accountRequests').findOne(pendingQuery),
+        db.collection('accountRequests').findOne(
+          {
+            userId,
+            gameTitle: cleanGameTitle,
+            status: { $in: ['rejected', 'REJECTED', 'cancelled'] },
+            rejectedAt: { $gte: new Date(Date.now() - cooldownMs) },
+            $or: [
+              { requestType: { $ne: 'COIN_LOAD' } },
+              { transferAmount: { $lte: 0 } },
+              { transferAmount: { $exists: false } },
+            ],
+          },
+          { sort: { rejectedAt: -1 } }
+        ),
+      ]);
       if (existingAcc) {
         return NextResponse.json(
           {
@@ -235,44 +302,16 @@ export async function POST(req) {
           { status: 400 }
         );
       }
-    }
-
-    const pendingQuery = {
-      userId: dbUser._id.toString(),
-      gameTitle: cleanGameTitle,
-      status: { $in: ['pending', 'PENDING', 'Pending'] },
-    };
-  if (requestType === 'COIN_LOAD') {
-      pendingQuery.$or = [{ requestType: 'COIN_LOAD' }, { transferAmount: { $gt: 0 } }];
-    }
-    const existingPending = await db.collection('accountRequests').findOne(pendingQuery);
-    if (existingPending) {
-      return NextResponse.json(
-        {
-          success: false,
-          isPending: true,
-          error: `You already have a pending ${requestType === 'COIN_LOAD' ? 'coin load' : 'ID'} request for ${cleanGameTitle}.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (requestType !== 'COIN_LOAD') {
-      const cooldownMs = 12 * 60 * 60 * 1000;
-      const recentReject = await db.collection('accountRequests').findOne(
-        {
-          userId: dbUser._id.toString(),
-          gameTitle: cleanGameTitle,
-          status: { $in: ['rejected', 'REJECTED', 'cancelled'] },
-          rejectedAt: { $gte: new Date(Date.now() - cooldownMs) },
-          $or: [
-            { requestType: { $ne: 'COIN_LOAD' } },
-            { transferAmount: { $lte: 0 } },
-            { transferAmount: { $exists: false } },
-          ],
-        },
-        { sort: { rejectedAt: -1 } }
-      );
+      if (existingPending) {
+        return NextResponse.json(
+          {
+            success: false,
+            isPending: true,
+            error: `You already have a pending ID request for ${cleanGameTitle}.`,
+          },
+          { status: 400 }
+        );
+      }
       if (recentReject) {
         return NextResponse.json(
           {
@@ -324,34 +363,7 @@ export async function POST(req) {
 
     const res = await db.collection('accountRequests').insertOne(reqDoc);
 
-    notifyStaff({
-      title:
-        requestType === 'COIN_LOAD'
-          ? `⚡ Coin load: $${transferAmount.toFixed(2)} → ${cleanGameTitle}`
-          : `🎮 New Game ID: ${cleanGameTitle}`,
-      message: `Player ${dbUser.username} — ${requestType === 'COIN_LOAD' ? 'load coins' : 'request credentials'}.`,
-      type: requestType === 'COIN_LOAD' ? 'coin_load' : 'account_request',
-      data: { requestId: res.insertedId.toString() },
-    });
-
-    publishAccountRequestCreated({
-      request: {
-        ...reqDoc,
-        _id: res.insertedId,
-        id: res.insertedId.toString(),
-        gameTitle: cleanGameTitle,
-      },
-      userEmail: dbUser.email,
-      userId: dbUser._id.toString(),
-    });
-    pulseStaffStatsAsync();
-    pulseStaffScope('requests');
-    if (requestType === 'COIN_LOAD') publishCoinDeskPulse({ requestId: res.insertedId.toString() });
-
-    invalidateAccountRequestsCache();
-    invalidateAuthCache(dbUser._id.toString());
-
-    return NextResponse.json({
+    const responseBody = {
       success: true,
       requestId: res.insertedId.toString(),
       request: { ...reqDoc, _id: res.insertedId, id: res.insertedId.toString() },
@@ -359,7 +371,18 @@ export async function POST(req) {
         requestType === 'COIN_LOAD'
           ? `Load request submitted! $${transferAmount.toFixed(2)} SC held in escrow until staff approves.`
           : `Request for ${cleanGameTitle} submitted! Staff will issue credentials shortly.`,
+    };
+
+    deferAccountRequestSideEffects({
+      requestType,
+      transferAmount,
+      cleanGameTitle,
+      dbUser,
+      reqDoc,
+      insertedId: res.insertedId,
     });
+
+    return NextResponse.json(responseBody);
   } catch (err) {
     console.error('Account request error:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

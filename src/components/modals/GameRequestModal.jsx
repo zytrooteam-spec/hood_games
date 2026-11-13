@@ -1,34 +1,80 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { X, Key, Check, AlertCircle, ArrowRight, Gamepad2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Key, Check, ArrowRight, Gamepad2 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { hoodAlert } from '@/lib/hoodAlert';
 import { playerApiFetch } from '@/lib/playerApiFetch';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
+import { readGamesCache } from '@/lib/gameAssets';
 
 export default function GameRequestModal({
   isOpen,
   initialGame,
+  platformGames,
   onClose,
   user,
   onSuccess,
 }) {
   const [gamesList, setGamesList] = useState([]);
   const [selectedGameTitle, setSelectedGameTitle] = useState('');
+  const [selectedGameId, setSelectedGameId] = useState('');
   const [transferAmount, setTransferAmount] = useState('0');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState(null);
 
-  // Dynamically fetch active games from the database
+  const lockedToGame = Boolean(initialGame?.title || initialGame?.platform);
+
+  const seedFromInitial = useMemo(() => {
+    if (!initialGame) return { title: '', id: '' };
+    return {
+      title: sanitizeGameTitle(initialGame.title || initialGame.platform || ''),
+      id: String(initialGame._id || initialGame.id || ''),
+    };
+  }, [initialGame]);
+
   useEffect(() => {
     if (!isOpen) {
       setSuccessMsg(null);
       return;
     }
 
-    fetch('/api/games')
+    if (seedFromInitial.title) {
+      setSelectedGameTitle(seedFromInitial.title);
+      setSelectedGameId(seedFromInitial.id);
+    }
+
+    const fromParent = Array.isArray(platformGames)
+      ? platformGames
+          .filter((g) => g.active !== false)
+          .map((g) => ({ ...g, title: sanitizeGameTitle(g.title) }))
+      : null;
+
+    if (fromParent?.length) {
+      diffSet(setGamesList, fromParent);
+      if (!seedFromInitial.title && fromParent[0]?.title) {
+        setSelectedGameTitle(fromParent[0].title);
+        setSelectedGameId(String(fromParent[0]._id || fromParent[0].id || ''));
+      }
+      return;
+    }
+
+    const cached = readGamesCache();
+    if (cached?.length) {
+      const active = cached
+        .filter((g) => g.active !== false)
+        .map((g) => ({ ...g, title: sanitizeGameTitle(g.title) }));
+      if (active.length) {
+        diffSet(setGamesList, active);
+        if (!seedFromInitial.title) {
+          setSelectedGameTitle(active[0].title);
+          setSelectedGameId(String(active[0]._id || active[0].id || ''));
+        }
+      }
+    }
+
+    playerApiFetch('/api/games', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
         if (d?.success && Array.isArray(d?.games)) {
@@ -39,17 +85,14 @@ export default function GameRequestModal({
               title: sanitizeGameTitle(g.title),
             }));
           diffSet(setGamesList, activeGames);
-
-          // If initialGame provided, use its title; otherwise pick first active game
-          if (initialGame?.title) {
-            setSelectedGameTitle(sanitizeGameTitle(initialGame.title));
-          } else if (activeGames.length > 0) {
+          if (!seedFromInitial.title && activeGames.length > 0) {
             setSelectedGameTitle(activeGames[0].title);
+            setSelectedGameId(String(activeGames[0]._id || activeGames[0].id || ''));
           }
         }
       })
       .catch(() => {});
-  }, [isOpen, initialGame]);
+  }, [isOpen, platformGames, seedFromInitial]);
 
   if (!isOpen) return null;
 
@@ -60,7 +103,7 @@ export default function GameRequestModal({
       return;
     }
 
-    const finalGameTitle = sanitizeGameTitle(selectedGameTitle || initialGame?.title || 'Game Platform');
+    const finalGameTitle = sanitizeGameTitle(selectedGameTitle || seedFromInitial.title || 'Game Platform');
     if (!finalGameTitle) {
       hoodAlert.warning('Please select a game platform.', 'Select a game');
       return;
@@ -69,22 +112,28 @@ export default function GameRequestModal({
     setSubmitting(true);
     playTune('click');
 
+    const ctrl = new AbortController();
+    const timeout = window.setTimeout(() => ctrl.abort(), 20000);
+
     try {
       const res = await playerApiFetch('/api/account-requests', {
         method: 'POST',
+        signal: ctrl.signal,
         body: JSON.stringify({
-          gameId: initialGame?.id,
+          gameId: selectedGameId || seedFromInitial.id || undefined,
           gameTitle: finalGameTitle,
           transferAmount: Number(transferAmount || 0),
           notes,
         }),
       });
+      clearTimeout(timeout);
       const data = await res.json();
       if (!data.success) {
         hoodAlert.error(data.error || 'Request failed', 'Request failed');
       } else {
         setSuccessMsg(data.message);
         playTune('win');
+        window.dispatchEvent(new CustomEvent('hood-game-accounts-refresh'));
         try {
           const staffChannel = new BroadcastChannel('hood_staff_alerts');
           staffChannel.postMessage({
@@ -101,7 +150,12 @@ export default function GameRequestModal({
         try {
           localStorage.setItem(
             'hood_staff_event',
-            JSON.stringify({ title: 'New game ID request', tune: 'marimba', t: Date.now() })
+            JSON.stringify({
+              type: 'NEW_GAME_ID_REQUEST',
+              title: 'New game ID request',
+              tune: 'marimba',
+              t: Date.now(),
+            })
           );
         } catch {
           /* ignore */
@@ -109,11 +163,20 @@ export default function GameRequestModal({
         if (onSuccess) onSuccess();
       }
     } catch (err) {
-      hoodAlert.error('Network error submitting request');
+      clearTimeout(timeout);
+      const timedOut = err?.name === 'AbortError';
+      hoodAlert.error(
+        timedOut
+          ? 'Server is slow — your request may still be queued. Check Game Id tab in a moment.'
+          : 'Network error submitting request',
+        timedOut ? 'Still processing' : 'Request failed'
+      );
     } finally {
       setSubmitting(false);
     }
   };
+
+  const displayTitle = selectedGameTitle || seedFromInitial.title || 'Game Platform';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
@@ -131,9 +194,7 @@ export default function GameRequestModal({
             <Key size={13} />
             <span>Generate Login Credentials</span>
           </div>
-          <h3 className="text-2xl font-black text-white">
-            {selectedGameTitle || 'Game Platform'} Account
-          </h3>
+          <h3 className="text-2xl font-black text-white">{displayTitle} Account</h3>
           <p className="text-xs text-gray-300">
             Request official player credentials configured directly in the database.
           </p>
@@ -156,29 +217,41 @@ export default function GameRequestModal({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Dynamic Game Platform Dropdown */}
-            <div>
-              <label className="text-xs font-bold text-gray-300 block mb-1">
-                Select Platform (Dynamic Active Games)
-              </label>
-              <select
-                value={selectedGameTitle}
-                onChange={(e) => setSelectedGameTitle(e.target.value)}
-                className="hood-input w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#070d1e]"
-              >
-                {gamesList.length > 0 ? (
-                  gamesList.map((g) => (
-                    <option key={g._id || g.id || g.title} value={g.title}>
-                      {g.title} {g.category ? `(${g.category})` : ''}
+            {lockedToGame ? (
+              <div className="rounded-xl border border-[#2cb64e]/40 bg-[#2cb64e]/10 px-4 py-3 flex items-center gap-3">
+                <Gamepad2 size={20} className="text-[#2cb64e] shrink-0" />
+                <div className="min-w-0 text-left">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Platform</p>
+                  <p className="text-sm font-black text-white truncate">{displayTitle}</p>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs font-bold text-gray-300 block mb-1">Select platform</label>
+                <select
+                  value={selectedGameTitle}
+                  onChange={(e) => {
+                    const title = e.target.value;
+                    setSelectedGameTitle(title);
+                    const match = gamesList.find((g) => g.title === title);
+                    setSelectedGameId(String(match?._id || match?.id || ''));
+                  }}
+                  className="hood-input w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#070d1e]"
+                >
+                  {gamesList.length > 0 ? (
+                    gamesList.map((g) => (
+                      <option key={g._id || g.id || g.title} value={g.title}>
+                        {g.title} {g.category ? `(${g.category})` : ''}
+                      </option>
+                    ))
+                  ) : (
+                    <option value={selectedGameTitle || ''}>
+                      {selectedGameTitle || 'Loading platforms...'}
                     </option>
-                  ))
-                ) : (
-                  <option value={selectedGameTitle || 'Game Platform'}>
-                    {selectedGameTitle || 'Loading platforms...'}
-                  </option>
-                )}
-              </select>
-            </div>
+                  )}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="text-xs font-bold text-gray-300 block mb-1">

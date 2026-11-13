@@ -288,6 +288,7 @@ function GameIdsContent() {
       <GameRequestModal
         isOpen={requestModal.open}
         initialGame={requestModal.game}
+        platformGames={gamesCatalog}
         onClose={() => setRequestModal({ open: false, game: null })}
         user={user}
         onSuccess={() => {
