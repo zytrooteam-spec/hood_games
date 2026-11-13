@@ -95,6 +95,7 @@ import Player360ProfileModal from './Player360ProfileModal';
 import { HOOD_ADMIN_BOOTSTRAP, readJson, writeJson } from '@/lib/clientCache';
 import { staffApiFetch } from '@/lib/staffApiFetch';
 import { REALTIME_TYPES } from '@/lib/realtimePublish';
+import { mergeAccountRequestRowFromServer } from '@/lib/accountRequestDeskMerge';
 
 export default function AdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -217,28 +218,17 @@ export default function AdminDashboard({ user, onLogout }) {
   const recordAccountRequestDeskPatch = React.useCallback((id, status, patch = {}) => {
     const key = String(id || '');
     if (!key || !status) return;
+    const until = Date.now() + (String(status).toUpperCase() === 'PENDING' ? 60_000 : 300_000);
     recentAccountRequestPatchesRef.current.set(key, {
       status,
       patch,
-      until: Date.now() + 45000,
+      until,
     });
   }, []);
 
   const mergeAccountRequestFromServer = React.useCallback((r) => {
     const base = { ...r, gameTitle: sanitizeGameTitle(r.gameTitle) };
-    const key = String(r.id || r._id || '');
-    if (!key) return base;
-    const hold = recentAccountRequestPatchesRef.current.get(key);
-    if (!hold || Date.now() > hold.until) return base;
-    const incoming = String(r.status || '').toUpperCase();
-    const held = String(hold.status || '').toUpperCase();
-    if (incoming === 'PENDING' && held !== 'PENDING') {
-      return { ...base, ...hold.patch, status: hold.status };
-    }
-    if (held !== 'PENDING' && incoming !== held) {
-      return { ...base, ...hold.patch, status: hold.status };
-    }
-    return base;
+    return mergeAccountRequestRowFromServer(base, recentAccountRequestPatchesRef.current);
   }, []);
 
   const patchAccountRequestInNav = React.useCallback((id, patch) => {

@@ -11,6 +11,11 @@ import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 import { hoodAlert, hoodConfirm } from '@/lib/hoodAlert';
 import { generateGameCredentialPair } from '@/lib/gameCredentials';
 import {
+  isClosedAccountRequestStatus,
+  mergeAccountRequestListFromServer,
+  mergeAccountRequestListsPreferLocalClosed,
+} from '@/lib/accountRequestDeskMerge';
+import {
   HoodAdminModal,
   HoodAdminModalHeader,
   HoodAdminModalBody,
@@ -38,14 +43,28 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive
   const [approvalModal, setApprovalModal] = useState({ open: false, request: null, username: '', password: '' });
   const [submitting, setSubmitting] = useState(false);
   const skipParentSeedUntilRef = useRef(0);
+  const closedRequestPatchesRef = useRef(new Map());
 
-  const markLocalMutation = () => {
-    skipParentSeedUntilRef.current = Date.now() + 15000;
+  const markLocalMutation = (ms = 120_000) => {
+    skipParentSeedUntilRef.current = Date.now() + ms;
+  };
+
+  const recordClosedPatch = (id, status, patch = {}) => {
+    const key = String(id || '');
+    if (!key || !status) return;
+    closedRequestPatchesRef.current.set(key, {
+      status,
+      patch,
+      until: Date.now() + 300_000,
+    });
   };
 
   const patchRequest = (id, patch) => {
     markLocalMutation();
     const key = String(id);
+    if (patch?.status && isClosedAccountRequestStatus(patch.status)) {
+      recordClosedPatch(key, patch.status, patch);
+    }
     setRequests((prev) =>
       prev.map((r) => (String(r.id || r._id) === key ? { ...r, ...patch } : r))
     );
@@ -64,8 +83,11 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive
       const d = await res.json();
       const rows = d.accountRequests || d.requests || [];
       if (d.success && Array.isArray(rows)) {
-        if (Date.now() < skipParentSeedUntilRef.current) return;
-        diffSet(setRequests, gameIdDeskRows(rows));
+        const merged = mergeAccountRequestListFromServer(
+          gameIdDeskRows(rows),
+          closedRequestPatchesRef.current
+        );
+        diffSet(setRequests, merged);
       }
     } finally {
       if (!silent) setRefreshing(false);
@@ -75,14 +97,18 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive
   useEffect(() => {
     if (!initialRequests?.length) return;
     if (Date.now() < skipParentSeedUntilRef.current) return;
-    diffSet(setRequests, gameIdDeskRows(initialRequests));
+    setRequests((prev) => {
+      const parentRows = gameIdDeskRows(initialRequests);
+      const merged = mergeAccountRequestListsPreferLocalClosed(parentRows, prev);
+      const withPatches = mergeAccountRequestListFromServer(merged, closedRequestPatchesRef.current);
+      return withPatches;
+    });
   }, [initialRequests]);
 
   const scheduleReconcile = () => {
     window.setTimeout(() => {
-      skipParentSeedUntilRef.current = 0;
       load(true);
-    }, 3000);
+    }, 4000);
   };
 
   useEffect(() => {
