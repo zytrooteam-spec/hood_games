@@ -107,6 +107,7 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
   const formatRelativeTime = (dateStr) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return '';
     const now = new Date();
     const diffSec = Math.floor((now - date) / 1000);
     if (diffSec < 60) return 'Just now';
@@ -114,7 +115,32 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
     if (diffMin < 60) return `${diffMin}m ago`;
     const diffHr = Math.floor(diffMin / 60);
     if (diffHr < 24) return `${diffHr}h ago`;
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
+  /** Staff desk: relative = when player submitted (createdAt), not reject time. */
+  const formatSubmitted = (dateStr) => {
+    if (!dateStr) return { relative: '—', absolute: '—' };
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return { relative: '—', absolute: '—' };
+    return {
+      relative: formatRelativeTime(dateStr),
+      absolute: date.toLocaleString([], {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
+  };
+
+  const shortRequestId = (id) => {
+    const s = String(id || '');
+    if (!s) return '';
+    return s.length > 8 ? `…${s.slice(-6)}` : s;
   };
 
   return (
@@ -360,7 +386,12 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
                   <th style={{ padding: '14px 18px', color: '#9A91A8', fontWeight: 900, fontSize: '11px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Requested Game</th>
                   <th style={{ padding: '14px 18px', color: '#9A91A8', fontWeight: 900, fontSize: '11px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Status</th>
                   <th style={{ padding: '14px 18px', color: '#9A91A8', fontWeight: 900, fontSize: '11px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Issued Credentials</th>
-                  <th style={{ padding: '14px 18px', color: '#9A91A8', fontWeight: 900, fontSize: '11px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Time</th>
+                  <th
+                    style={{ padding: '14px 18px', color: '#9A91A8', fontWeight: 900, fontSize: '11px', letterSpacing: '0.05em', textTransform: 'uppercase' }}
+                    title="When the player submitted this request (not when you rejected)"
+                  >
+                    Submitted
+                  </th>
                   <th style={{ padding: '14px 18px', color: '#9A91A8', fontWeight: 900, fontSize: '11px', letterSpacing: '0.05em', textTransform: 'uppercase', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -493,15 +524,21 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
                       </td>
 
                       <td className="p-4 whitespace-nowrap text-gray-400 text-xs">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-white flex items-center gap-1">
-                            <Clock size={11} />
-                            {formatRelativeTime(req.createdAt)}
-                          </span>
-                          <span className="text-[10px] text-gray-500 mt-0.5">
-                            {new Date(req.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
+                        {(() => {
+                          const t = formatSubmitted(req.createdAt);
+                          return (
+                            <div className="flex flex-col gap-0.5" title={`Request ID ${req.id || req._id}`}>
+                              <span className="font-bold text-white flex items-center gap-1">
+                                <Clock size={11} className="shrink-0 text-gray-500" />
+                                {t.relative}
+                              </span>
+                              <span className="text-[10px] text-gray-500">{t.absolute}</span>
+                              {shortRequestId(req.id || req._id) ? (
+                                <span className="text-[9px] font-mono text-gray-600">ID {shortRequestId(req.id || req._id)}</span>
+                              ) : null}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       <td className="p-4 text-right whitespace-nowrap">
@@ -676,9 +713,15 @@ const AccountRequestsView = React.memo(function AccountRequestsView({
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-white/5">
-                      <span>Time:</span>
-                      <span>{formatRelativeTime(req.createdAt)}</span>
+                    <div className="flex flex-col gap-0.5 text-[11px] text-gray-400 pt-1 border-t border-white/5">
+                      <div className="flex items-center justify-between">
+                        <span>Submitted</span>
+                        <span className="font-bold text-gray-300">{formatSubmitted(req.createdAt).relative}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-500 text-right">{formatSubmitted(req.createdAt).absolute}</span>
+                      {shortRequestId(req.id || req._id) ? (
+                        <span className="text-[9px] font-mono text-gray-600 text-right">ID {shortRequestId(req.id || req._id)}</span>
+                      ) : null}
                     </div>
                   </div>
 
