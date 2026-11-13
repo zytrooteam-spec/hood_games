@@ -26,6 +26,7 @@ import {
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 import { HOOD_POLL } from '@/lib/pollingConfig';
 import { hoodSsePoll } from '@/lib/ssePollOptions';
+import { prefetchPlayerChat } from '@/lib/playerChatCache';
 
 export const AppShellContext = createContext({
   user: null,
@@ -178,6 +179,12 @@ export default function AppShell({ children }) {
       unsubPlayer();
     };
   }, []);
+
+  useEffect(() => {
+    const uid = user?.id || user?._id;
+    if (!uid || String(user?.role || '').toLowerCase() !== 'player') return;
+    prefetchPlayerChat(uid);
+  }, [user?.id, user?._id, user?.role]);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', {

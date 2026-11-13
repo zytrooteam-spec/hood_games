@@ -22,6 +22,7 @@ import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 import { HOOD_POLL } from '@/lib/pollingConfig';
 import { hoodSsePoll } from '@/lib/ssePollOptions';
 import { REALTIME_TYPES } from '@/lib/realtimePublish';
+import { readPlayerChatCache, writePlayerChatCache } from '@/lib/playerChatCache';
 
 const STAFF_ROLES = new Set(['admin', 'superadmin', 'staff', 'coin_manager', 'financial_manager', 'support_admin']);
 
@@ -31,7 +32,11 @@ function isStaffUser(user) {
 
 export default function HoodChatPageContent({ user, onOpenAuth }) {
   const staffViewer = isStaffUser(user);
-  const [messages, setMessages] = useState([]);
+  const playerCacheId = user?.id || user?._id;
+  const [messages, setMessages] = useState(() =>
+    playerCacheId ? readPlayerChatCache(playerCacheId) || [] : []
+  );
+  const [syncing, setSyncing] = useState(false);
   const [input, setInput] = useState('');
   const [attachedImage, setAttachedImage] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -42,17 +47,23 @@ export default function HoodChatPageContent({ user, onOpenAuth }) {
   const scrollRef = useRef(null);
   const lastStaffCount = useRef(0);
   const fetchRef = useRef(null);
+  const userRef = useRef(user);
+  userRef.current = user;
 
-  const fetchMessages = async () => {
-    if (!user) {
+  const fetchMessages = React.useCallback(async ({ background = false } = {}) => {
+    const u = userRef.current;
+    if (!u) {
       setMessages([]);
       return;
     }
+    const uid = String(u.id || u._id || '');
+    if (!background) setSyncing(true);
     try {
-      const res = await playerApiFetch('/api/chat', { cache: 'no-store' });
+      const res = await playerApiFetch(`/api/chat?limit=60&_t=${Date.now()}`);
       const data = await res.json();
       if (data?.success && Array.isArray(data.messages)) {
         diffSet(setMessages, data.messages);
+        if (uid) writePlayerChatCache(uid, data.messages);
         const staffCount = data.messages.filter((m) => m.senderRole === 'staff').length;
         if (staffCount > lastStaffCount.current && lastStaffCount.current > 0) {
           playTune('bell', 0.6);
@@ -61,14 +72,23 @@ export default function HoodChatPageContent({ user, onOpenAuth }) {
       }
     } catch {
       /* ignore */
+    } finally {
+      setSyncing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchMessages();
+    const uid = String(user?.id || user?._id || '');
+    if (!uid) {
+      setMessages([]);
+      return;
+    }
+    const cached = readPlayerChatCache(uid);
+    if (cached?.length) setMessages(cached);
+    fetchMessages({ background: Boolean(cached?.length) });
     fetchRef.current = fetchMessages;
-    return startSseBackedPoll(() => fetchMessages(), hoodSsePoll(HOOD_POLL.CHAT));
-  }, [user?.email, user?.id]);
+    return startSseBackedPoll(() => fetchMessages({ background: true }), hoodSsePoll(HOOD_POLL.CHAT));
+  }, [user?.email, user?.id, user?._id, fetchMessages]);
 
   useEffect(() => {
     let bc;
@@ -140,10 +160,15 @@ export default function HoodChatPageContent({ user, onOpenAuth }) {
         throw new Error(data.error || 'Failed to send');
       }
       if (data.message) {
-        setMessages((prev) => [...prev, data.message]);
+        setMessages((prev) => {
+          const next = [...prev, data.message];
+          const uid = String(user?.id || user?._id || '');
+          if (uid) writePlayerChatCache(uid, next);
+          return next;
+        });
       }
       playTune('coin', 0.5);
-      fetchMessages();
+      fetchMessages({ background: true });
     } catch (err) {
       setInput(textToSend);
       setAttachedImage(imageToSend);
@@ -242,13 +267,26 @@ export default function HoodChatPageContent({ user, onOpenAuth }) {
                   <p className="text-[10px] text-gray-400">Logged in as {user.username} (player)</p>
                 </div>
               </div>
-              <button type="button" onClick={() => fetchMessages()} className="p-2 rounded-xl bg-[#070d1e] border border-[#1a3363] text-gray-400 hover:text-white" title="Refresh">
-                <RefreshCw size={14} />
+              <button
+                type="button"
+                onClick={() => fetchMessages({ background: false })}
+                className="p-2 rounded-xl bg-[#070d1e] border border-[#1a3363] text-gray-400 hover:text-white"
+                title="Refresh"
+              >
+                <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
               </button>
             </div>
 
             <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#070d1e]/80">
-              {messages.length === 0 ? (
+              {syncing && messages.length > 0 ? (
+                <p className="text-[10px] text-center text-gray-500 font-bold uppercase tracking-wide">Updating…</p>
+              ) : null}
+              {messages.length === 0 && syncing ? (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500 gap-2 py-12">
+                  <RefreshCw size={22} className="animate-spin text-[#2cb64e]/70" />
+                  <p className="text-xs font-bold">Loading your conversation…</p>
+                </div>
+              ) : messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center text-gray-400 gap-2 py-12">
                   <ImageIcon size={28} className="text-[#2cb64e]" />
                   <p className="text-sm font-bold text-gray-200">No messages yet</p>

@@ -9,24 +9,28 @@ import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 import { HOOD_POLL } from '@/lib/pollingConfig';
 import { hoodSsePoll } from '@/lib/ssePollOptions';
 import { REALTIME_TYPES } from '@/lib/realtimePublish';
+import { readPlayerChatCache, writePlayerChatCache } from '@/lib/playerChatCache';
 
 export default function HoodLiveChatModal({
   isOpen,
   onClose,
   user,
 }) {
-  const [messages, setMessages] = useState([]);
+  const playerId = user?.id || user?._id;
+  const [messages, setMessages] = useState(() => (playerId ? readPlayerChatCache(playerId) || [] : []));
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef(null);
   const prevCount = useRef(0);
 
   const fetchMessages = () => {
-    playerApiFetch('/api/chat')
+    playerApiFetch(`/api/chat?limit=60&_t=${Date.now()}`)
       .then((r) => r.json())
       .then((d) => {
         if (d?.success && Array.isArray(d?.messages)) {
           diffSet(setMessages, d.messages);
+          const uid = String(user?.id || user?._id || '');
+          if (uid) writePlayerChatCache(uid, d.messages);
         }
       })
       .catch(() => {});

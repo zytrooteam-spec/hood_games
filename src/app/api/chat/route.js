@@ -107,14 +107,34 @@ export async function GET(req) {
       }
       const uid = canonicalPlayerUserId(resolved.dbUser);
       const msgQuery = buildPlayerChatMessageQuery(resolved.dbUser);
-      await db.collection('chat_messages').updateMany(
-        { ...msgQuery, senderRole: 'staff', read: { $ne: true } },
-        { $set: { read: true } }
-      );
-      const messages = await db.collection('chat_messages').find(msgQuery).sort({ createdAt: 1 }).toArray();
+      const msgLimit = Math.min(100, Math.max(15, parseInt(searchParams.get('limit') || '60', 10) || 60));
+      const listProjection = {
+        text: 1,
+        senderRole: 1,
+        username: 1,
+        userId: 1,
+        userEmail: 1,
+        createdAt: 1,
+        read: 1,
+        staffUsername: 1,
+        imageUrl: 1,
+      };
+      const rows = await db
+        .collection('chat_messages')
+        .find(msgQuery, { projection: listProjection })
+        .sort({ createdAt: -1 })
+        .limit(msgLimit)
+        .toArray();
+      const messages = rows.reverse();
+
+      void db
+        .collection('chat_messages')
+        .updateMany({ ...msgQuery, senderRole: 'staff', read: { $ne: true } }, { $set: { read: true } })
+        .catch(() => {});
+
       return NextResponse.json(
         { success: true, messages: serializeChatMessagesForApi(messages), userId: uid },
-        { headers: { 'Cache-Control': 'no-store' } }
+        { headers: { 'Cache-Control': 'private, max-age=8' } }
       );
     };
 
