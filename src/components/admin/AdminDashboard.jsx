@@ -169,6 +169,7 @@ export default function AdminDashboard({ user, onLogout }) {
   const chatInboxRefreshTimerRef = React.useRef(null);
   const adminLightSyncTimerRef = React.useRef(null);
   const fetchInFlightRef = React.useRef(false);
+  const adminFullHydratedRef = React.useRef(false);
   /** Prevent bootstrap poll from resurrecting PENDING after desk reject/approve. */
   const recentAccountRequestPatchesRef = React.useRef(new Map());
   const conversationReqIdRef = React.useRef(0);
@@ -428,9 +429,11 @@ export default function AdminDashboard({ user, onLogout }) {
   const pendingGameIdCount = (accountRequests || []).filter(
     (r) => isPendingReq(r) && !r.freeplayPending && Number(r.transferAmount || 0) <= 0
   ).length;
-  const pendingLoadCount = (accountRequests || []).filter(
+  const pendingLoadCountListed = (accountRequests || []).filter(
     (r) => isPendingReq(r) && !r.freeplayPending && Number(r.transferAmount || 0) > 0
   ).length;
+  const pendingLoadCount =
+    pendingLoadCountListed > 0 ? pendingLoadCountListed : Number(stats?.pendingCoinLoads || 0);
   const pendingAccountDeskCount = pendingGameIdCount + pendingFreeplayCount;
   const unreadChatCount = (chatThreads || []).reduce((s, t) => s + Number(t.unreadCount || 0), 0);
 
@@ -515,23 +518,36 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   }, []);
 
-  // One HTTP round-trip on boot; SSE handles instant updates (poll = rare backup)
-  const fetchAllData = async (isSilent = false) => {
-    if (fetchInFlightRef.current) return;
-    fetchInFlightRef.current = true;
-    if (!isSilent) setLoading(true);
-    try {
-      const res = await fetch('/api/admin/bootstrap', { credentials: 'include', cache: 'no-store' });
-      const data = await res.json();
-      applyBootstrapPayload(data);
-      if (data?.success) writeJson(HOOD_ADMIN_BOOTSTRAP, { data, t: Date.now() });
-    } catch (err) {
-      console.error(err);
-    } finally {
-      fetchInFlightRef.current = false;
-      if (!isSilent) setLoading(false);
-    }
-  };
+  const fetchAdminPayload = React.useCallback(
+    async (isSilent = false, { lite = false } = {}) => {
+      if (fetchInFlightRef.current && isSilent) return;
+      fetchInFlightRef.current = true;
+      if (!isSilent && !lite) setLoading(true);
+      try {
+        const url = lite ? '/api/admin/bootstrap?lite=1' : '/api/admin/bootstrap';
+        const res = await fetch(url, { credentials: 'include', cache: 'no-store' });
+        const data = await res.json();
+        applyBootstrapPayload(data);
+        if (data?.success && !data.lite) {
+          adminFullHydratedRef.current = true;
+          writeJson(HOOD_ADMIN_BOOTSTRAP, { data, t: Date.now() });
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        fetchInFlightRef.current = false;
+        if (!isSilent && !lite) setLoading(false);
+      }
+    },
+    [applyBootstrapPayload]
+  );
+
+  const fetchAllData = (isSilent = false) => fetchAdminPayload(isSilent, { full: true });
+
+  const fetchAdminLite = React.useCallback(
+    (isSilent = true) => fetchAdminPayload(isSilent, { lite: true }),
+    [fetchAdminPayload]
+  );
 
   const refreshAdminStatsOnly = React.useCallback(async () => {
     try {
@@ -542,43 +558,6 @@ export default function AdminDashboard({ user, onLogout }) {
       /* ignore */
     }
   }, []);
-
-  const handleAccountRequestsDeskMutate = React.useCallback(
-    (evt) => {
-      if (evt?.id) {
-        if (evt.remove) {
-          recordAccountRequestDeskPatch(evt.id, 'DISMISSED', {});
-          removeAccountRequestFromNav(evt.id);
-        } else if (evt.status) {
-          const patch = { status: evt.status, ...(evt.patch || {}) };
-          recordAccountRequestDeskPatch(evt.id, evt.status, evt.patch || {});
-          patchAccountRequestInNav(evt.id, patch);
-          const closed = String(evt.status).toUpperCase();
-          if (closed === 'REJECTED' || closed === 'READY' || closed === 'DISMISSED') {
-            setStats((s) =>
-              s
-                ? {
-                    ...s,
-                    pendingAccountRequests: Math.max(0, Number(s.pendingAccountRequests || 0) - 1),
-                  }
-                : s
-            );
-          }
-        }
-      }
-      refreshAdminStatsOnly();
-      window.setTimeout(() => {
-        refreshAdminStatsOnly();
-        fetchAllData(true);
-      }, 2800);
-    },
-    [
-      patchAccountRequestInNav,
-      removeAccountRequestFromNav,
-      recordAccountRequestDeskPatch,
-      refreshAdminStatsOnly,
-    ]
-  );
 
   const refreshFinanceQueue = React.useCallback(async () => {
     try {
@@ -621,6 +600,44 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   }, [chatThreads, mergeAccountRequestFromServer, syncAdminAlerts]);
 
+  const handleAccountRequestsDeskMutate = React.useCallback(
+    (evt) => {
+      if (evt?.id) {
+        if (evt.remove) {
+          recordAccountRequestDeskPatch(evt.id, 'DISMISSED', {});
+          removeAccountRequestFromNav(evt.id);
+        } else if (evt.status) {
+          const patch = { status: evt.status, ...(evt.patch || {}) };
+          recordAccountRequestDeskPatch(evt.id, evt.status, evt.patch || {});
+          patchAccountRequestInNav(evt.id, patch);
+          const closed = String(evt.status).toUpperCase();
+          if (closed === 'REJECTED' || closed === 'READY' || closed === 'DISMISSED') {
+            setStats((s) =>
+              s
+                ? {
+                    ...s,
+                    pendingAccountRequests: Math.max(0, Number(s.pendingAccountRequests || 0) - 1),
+                  }
+                : s
+            );
+          }
+        }
+      }
+      refreshAdminStatsOnly();
+      window.setTimeout(() => {
+        refreshAdminStatsOnly();
+        refreshDeskQueues();
+      }, 1200);
+    },
+    [
+      patchAccountRequestInNav,
+      removeAccountRequestFromNav,
+      recordAccountRequestDeskPatch,
+      refreshAdminStatsOnly,
+      refreshDeskQueues,
+    ]
+  );
+
   const scheduleLightAdminSync = React.useCallback(() => {
     if (adminLightSyncTimerRef.current) clearTimeout(adminLightSyncTimerRef.current);
     adminLightSyncTimerRef.current = setTimeout(() => {
@@ -630,20 +647,44 @@ export default function AdminDashboard({ user, onLogout }) {
 
   useEffect(() => {
     const cached = readJson(HOOD_ADMIN_BOOTSTRAP);
-    if (cached?.data?.success) applyBootstrapPayload(cached.data);
-    fetchAllData(Boolean(cached?.data?.success));
+    const hadCache = Boolean(cached?.data?.success);
+    if (hadCache) {
+      applyBootstrapPayload(cached.data);
+      adminFullHydratedRef.current = true;
+      setLoading(false);
+    }
+    void (async () => {
+      await fetchAdminLite(true);
+      setLoading(false);
+      if (!adminFullHydratedRef.current) {
+        window.setTimeout(() => fetchAllData(true), 100);
+      }
+    })();
     const onRefresh = () => scheduleLightAdminSync();
     window.addEventListener('hood-admin-refresh', onRefresh);
-    // SSE = instant; light poll backup only (avoids hammering VPS)
-    const interval = setInterval(() => {
+  }, [applyBootstrapPayload, fetchAdminLite, scheduleLightAdminSync]);
+
+  useEffect(() => {
+    const liteInterval = setInterval(() => {
+      if (!document.hidden) fetchAdminLite(true);
+    }, 45000);
+    const fullInterval = setInterval(() => {
       if (!document.hidden) fetchAllData(true);
-    }, 28000);
+    }, 180000);
     return () => {
-      clearInterval(interval);
-      window.removeEventListener('hood-admin-refresh', onRefresh);
-      if (adminLightSyncTimerRef.current) clearTimeout(adminLightSyncTimerRef.current);
+      clearInterval(liteInterval);
+      clearInterval(fullInterval);
     };
-  }, [scheduleLightAdminSync]);
+  }, [fetchAdminLite]);
+
+  useEffect(() => {
+    if (activeTab === 'finance' && !deposits.length && !redemptions.length) {
+      refreshFinanceQueue();
+    }
+    if ((activeTab === 'requests' || activeTab === 'game_loads') && !accountRequests.length) {
+      refreshDeskQueues();
+    }
+  }, [activeTab, accountRequests.length, deposits.length, redemptions.length, refreshDeskQueues, refreshFinanceQueue]);
 
   useEffect(() => {
     if (activeTab === 'settings' && !cashbackReport) {
@@ -2815,6 +2856,7 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {activeTab === 'requests' && (
           <AccountRequestsDesk
+            deskActive={activeTab === 'requests'}
             initialRequests={accountRequests}
             onMutate={handleAccountRequestsDeskMutate}
           />

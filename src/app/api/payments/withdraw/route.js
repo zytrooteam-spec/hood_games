@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getDb, toIdQuery } from '@/lib/mongodb';
 import { getSessionUser, isStaffRole } from '@/lib/auth';
-import { ensureDbInitialized } from '@/lib/initDb';
+import { ensureDbReady, ensureDbInitialized } from '@/lib/initDb';
+import { ADMIN_BOOTSTRAP_HEAVY_LIMIT } from '@/lib/adminBootstrap.server';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { publishFinanceWithdraw } from '@/lib/realtimePublish';
-import { STAFF_LIST_LIMIT } from '@/lib/adminStats.server';
 import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
 import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
 import { findUserGameAccount } from '@/lib/gameAccounts';
@@ -53,7 +53,7 @@ function mapRedemptionRow(r) {
 
 export async function GET(req) {
   try {
-    await ensureDbInitialized();
+    await ensureDbReady();
     const { user, isStaff, dbUser } = await resolveStaffOrPlayer(req);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -73,30 +73,16 @@ export async function GET(req) {
     let redemptions;
     if (isStaff) {
       const filter = statusParam && statusParam !== 'all' ? { status: statusParam } : {};
-      if (lightweight) {
-        redemptions = await db
-          .collection('redemptions')
-          .aggregate([
-            { $match: filter },
-            { $sort: { createdAt: -1 } },
-            { $limit: STAFF_LIST_LIMIT },
-            {
-              $addFields: {
-                hasGameScreenshot: { $ne: [{ $ifNull: ['$gameScreenshot', ''] }, ''] },
-                hasQrCodeImage: { $ne: [{ $ifNull: ['$qrCodeImage', ''] }, ''] },
-              },
-            },
-            { $project: { gameScreenshot: 0, qrCodeImage: 0, proofImage: 0 } },
-          ])
-          .toArray();
-      } else {
-        redemptions = await db
-          .collection('redemptions')
-          .find(filter, { projection: noBlobProjection })
-          .sort({ createdAt: -1 })
-          .limit(STAFF_LIST_LIMIT)
-          .toArray();
-      }
+      const staffLimit = ADMIN_BOOTSTRAP_HEAVY_LIMIT;
+      const projection = lightweight
+        ? { gameScreenshot: 0, qrCodeImage: 0, proofImage: 0 }
+        : noBlobProjection;
+      redemptions = await db
+        .collection('redemptions')
+        .find(filter, { projection })
+        .sort({ createdAt: -1 })
+        .limit(staffLimit)
+        .toArray();
     } else {
       const uid = dbUser?._id?.toString() || user.userId || user.id || user._id?.toString?.();
       const email = (dbUser?.email || user.email || '').toLowerCase().trim();

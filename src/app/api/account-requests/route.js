@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb, toIdQuery } from '@/lib/mongodb';
 import { getSessionUser, isStaffRole } from '@/lib/auth';
-import { ensureDbInitialized } from '@/lib/initDb';
+import { ensureDbReady, ensureDbInitialized } from '@/lib/initDb';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { sanitizeGameTitle } from '@/lib/fastDiff';
 import { mapAccountRequest } from '@/lib/mapAccountRequest';
@@ -64,7 +64,7 @@ function buildStaffQuery(searchParams) {
 
 export async function GET(req) {
   try {
-    await ensureDbInitialized();
+    await ensureDbReady();
     const admin = await getSessionUser(req, 'admin');
     const player = await getSessionUser(req, 'player');
 
@@ -80,7 +80,8 @@ export async function GET(req) {
     let requests;
     if (isStaff) {
       const query = buildStaffQuery(searchParams);
-      requests = await db.collection('accountRequests').find(query).sort({ createdAt: -1 }).limit(250).toArray();
+      const staffLimit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '120', 10) || 120));
+      requests = await db.collection('accountRequests').find(query).sort({ createdAt: -1 }).limit(staffLimit).toArray();
     } else {
       const usersCol = db.collection('users');
       const dbUser = await resolvePlayerDbUser(user, usersCol);

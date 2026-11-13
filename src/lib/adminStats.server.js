@@ -6,6 +6,7 @@ export async function computeAdminStats(db) {
     pendingDeposits,
     pendingRedemptions,
     pendingAccountRequests,
+    pendingCoinLoads,
     depositVolAgg,
     redeemVolAgg,
   ] = await Promise.all([
@@ -18,6 +19,10 @@ export async function computeAdminStats(db) {
     db.collection('accountRequests').countDocuments({
       status: { $in: ['pending', 'PENDING', 'Pending'] },
       $nor: [{ requestType: 'COIN_LOAD' }, { transferAmount: { $gt: 0 } }],
+    }),
+    db.collection('accountRequests').countDocuments({
+      status: { $in: ['pending', 'PENDING', 'Pending'] },
+      $or: [{ requestType: 'COIN_LOAD' }, { transferAmount: { $gt: 0 } }],
     }),
     db
       .collection('deposits')
@@ -43,6 +48,7 @@ export async function computeAdminStats(db) {
     pendingDeposits,
     pendingRedemptions,
     pendingAccountRequests,
+    pendingCoinLoads,
     totalDepositVol,
     totalRedeemVol,
     netRevenue: totalDepositVol - totalRedeemVol,

@@ -30,7 +30,7 @@ function gameIdDeskRows(rows) {
   );
 }
 
-export function AccountRequestsDesk({ onMutate, initialRequests = [] }) {
+export function AccountRequestsDesk({ onMutate, initialRequests = [], deskActive = true }) {
   const [requests, setRequests] = useState(() => gameIdDeskRows(initialRequests));
   const [filter, setFilter] = useState('PENDING');
   const [refreshing, setRefreshing] = useState(false);
@@ -85,8 +85,11 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [] }) {
   };
 
   useEffect(() => {
-    load(true);
-    const onInstant = () => load(true);
+    if (!deskActive) return;
+    if (!initialRequests?.length) load(true);
+    const onInstant = () => {
+      if (deskActive) load(true);
+    };
     window.addEventListener('hood-admin-desk-sync', onInstant);
     window.addEventListener('hood-admin-refresh', onInstant);
     window.addEventListener('hood_staff_event_local', onInstant);
@@ -105,8 +108,8 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [] }) {
       /* ignore */
     }
     const interval = setInterval(() => {
-      if (!document.hidden) load(true);
-    }, 4000);
+      if (!document.hidden && deskActive) load(true);
+    }, 18000);
     return () => {
       clearInterval(interval);
       window.removeEventListener('hood-admin-desk-sync', onInstant);
@@ -115,7 +118,7 @@ export function AccountRequestsDesk({ onMutate, initialRequests = [] }) {
       window.removeEventListener('storage', onStorage);
       if (bc) bc.close();
     };
-  }, [load]);
+  }, [deskActive, initialRequests?.length, load]);
 
   const openApprove = (req) => {
     const pair = generateGameCredentialPair(req.userName || req.userEmail?.split('@')[0] || 'player');

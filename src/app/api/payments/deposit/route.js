@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getDb, toIdQuery } from '@/lib/mongodb';
 import { getSessionUser, isStaffRole } from '@/lib/auth';
-import { ensureDbInitialized } from '@/lib/initDb';
+import { ensureDbReady, ensureDbInitialized } from '@/lib/initDb';
+import { ADMIN_BOOTSTRAP_HEAVY_LIMIT } from '@/lib/adminBootstrap.server';
 import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
 import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
@@ -11,7 +12,7 @@ import { invalidateAuthCache, invalidateGameAccountsCache } from '@/lib/authCach
 
 export async function GET(req) {
   try {
-    await ensureDbInitialized();
+    await ensureDbReady();
     const { user, isStaff, dbUser } = await resolveStaffOrPlayer(req);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -21,7 +22,7 @@ export async function GET(req) {
 
     let deposits;
     if (isStaff) {
-      deposits = await listStaffDeposits(db);
+      deposits = await listStaffDeposits(db, { limit: ADMIN_BOOTSTRAP_HEAVY_LIMIT });
     } else {
       const uid = dbUser?._id?.toString() || user.userId || user.id || user._id?.toString?.();
       const email = (dbUser?.email || user.email || '').toLowerCase().trim();

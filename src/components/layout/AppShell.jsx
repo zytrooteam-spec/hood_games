@@ -113,8 +113,7 @@ export default function AppShell({ children }) {
       if (document.hidden) return;
       fetchUser(true);
       fetchUnreadNotifs();
-      loadSiteSettings();
-    }, 18000);
+    }, 45000);
 
     const handleUserSync = (e) => {
       if (e?.detail) {
