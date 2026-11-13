@@ -384,6 +384,28 @@ export function playPlayerTouch(volume = 0.35) {
   playTune(getPlayerTouchTune(), volume);
 }
 
+const ADMIN_ALERT_GAP_MS = 3200;
+let lastAdminAlertAt = 0;
+let adminAlertQueued = null;
+
+/** One desk chime per burst — avoids 4–5 overlapping fanfares on batch requests. */
+export function playAdminAlertChime(tuneId = 'chaching', volume = 0.75) {
+  if (typeof window === 'undefined') return;
+  const run = () => {
+    lastAdminAlertAt = Date.now();
+    adminAlertQueued = null;
+    playTune(tuneId, volume);
+  };
+  const now = Date.now();
+  if (now - lastAdminAlertAt >= ADMIN_ALERT_GAP_MS) {
+    run();
+    return;
+  }
+  if (!adminAlertQueued) {
+    adminAlertQueued = setTimeout(run, ADMIN_ALERT_GAP_MS - (now - lastAdminAlertAt));
+  }
+}
+
 export function playTune(tuneId = 'chaching', volume = 0.7) {
   if (typeof window === 'undefined') return;
   let resolvedTune = TUNE_ALIASES[tuneId] || tuneId || 'chaching';

@@ -51,6 +51,7 @@ import HoodChatMessageBubble from '@/components/chat/HoodChatMessageBubble';
 import AdminPagination from '@/components/admin/AdminPagination';
 import {
   playTune,
+  playAdminAlertChime,
   unlockAudioContext,
   updateFaviconBadge,
   sendDesktopNotification,
@@ -173,6 +174,9 @@ export default function AdminDashboard({ user, onLogout }) {
   const seenLoadReqRef = React.useRef(new Set());
   const seenFreeplayReqRef = React.useRef(new Set());
   const seenChatKeysRef = React.useRef(new Set());
+  const staffDeskTabIdRef = React.useRef(
+    typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `desk_${Date.now()}`
+  );
   const activeTabRef = React.useRef(activeTab);
   const selectedThreadUserRef = React.useRef(selectedThreadUser);
   const claimChatInboxAlertRef = React.useRef(createChatInboxDedup());
@@ -260,10 +264,15 @@ export default function AdminDashboard({ user, onLogout }) {
   }, []);
 
   const playAdminChime = React.useCallback(
-    (overrideTune = null) => {
+    (overrideTune = null, { preview = false } = {}) => {
       if (!audioAlertsEnabled || typeof window === 'undefined') return;
       unlockAudioContext();
-      playTune(overrideTune || alertTune, alertVolume);
+      const tune = overrideTune || alertTune;
+      if (preview) {
+        playTune(tune, alertVolume);
+        return;
+      }
+      playAdminAlertChime(tune, alertVolume);
     },
     [audioAlertsEnabled, alertTune, alertVolume]
   );
@@ -287,6 +296,7 @@ export default function AdminDashboard({ user, onLogout }) {
       bc = new BroadcastChannel('hood_staff_alerts');
       bc.onmessage = (ev) => {
         if (ev?.data?.silent) return;
+        if (ev?.data?.origin === staffDeskTabIdRef.current) return;
         playAdminChime(ev?.data?.tune);
         if (ev?.data?.type === 'NEW_GAME_ID_REQUEST' || ev?.data?.type === 'NEW_COIN_LOAD') {
           window.dispatchEvent(new CustomEvent('hood-admin-refresh'));
@@ -300,7 +310,7 @@ export default function AdminDashboard({ user, onLogout }) {
       if (e.key === 'hood_staff_event' && e.newValue) {
         try {
           const p = JSON.parse(e.newValue);
-          if (!p?.silent) playAdminChime(p?.tune);
+          if (!p?.silent && p?.origin !== staffDeskTabIdRef.current) playAdminChime(p?.tune);
         } catch {
           /* ignore */
         }
@@ -339,26 +349,48 @@ export default function AdminDashboard({ user, onLogout }) {
       }
 
       const broadcast = (payload) => {
+        const msg = { ...payload, origin: staffDeskTabIdRef.current };
         try {
           const ch = new BroadcastChannel('hood_staff_alerts');
-          ch.postMessage(payload);
+          ch.postMessage(msg);
           ch.close();
         } catch {
           /* ignore */
         }
         try {
           if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('hood_staff_event', JSON.stringify({ ...payload, t: Date.now() }));
+            localStorage.setItem('hood_staff_event', JSON.stringify({ ...msg, t: Date.now() }));
           }
         } catch {
           /* ignore */
         }
       };
 
-      const notifyNew = (title, body, tab, tune = 'chaching') => {
+      const alertBatchRef = { items: [] };
+
+      const notifyNew = (title, body, _tab, tune = 'chaching') => {
+        alertBatchRef.items.push({ title, body, tune });
+      };
+
+      const flushAlertBatch = () => {
+        const batch = alertBatchRef.items;
+        if (!batch.length) return;
+        alertBatchRef.items = [];
+        const tune = batch[0].tune || 'chaching';
+        const title =
+          batch.length > 1
+            ? `🔔 ${batch.length} new desk items`
+            : batch[0].title;
+        const body =
+          batch.length > 1
+            ? batch
+                .map((b) => b.title.replace(/^[^\s]+\s/, ''))
+                .slice(0, 4)
+                .join(' · ')
+            : batch[0].body;
         playAdminChime(tune);
         sendDesktopNotification(title, body, '/admin');
-        broadcast({ title, tune });
+        broadcast({ title, tune, batchSize: batch.length });
       };
 
       const track = (items, seenSet, onNew) => {
@@ -410,12 +442,20 @@ export default function AdminDashboard({ user, onLogout }) {
 
       (threadList || []).forEach((t) => {
         if (Number(t.unreadCount || 0) <= 0) return;
-        const key = `${t.userId}:${t.lastMessage?.createdAt || t.updatedAt || Date.now()}`;
+        const lm = t.lastMessage;
+        const msgAnchor =
+          (typeof lm === 'object' && lm ? lm.id || lm._id || lm.createdAt : lm) ||
+          t.lastMessageAt ||
+          t.updatedAt ||
+          'open';
+        const key = `${t.userId}:${msgAnchor}`;
         if (!seenChatKeysRef.current.has(key)) {
           seenChatKeysRef.current.add(key);
           notifyNew('💬 Live Chat', `New message from ${t.username || 'player'}`, 'chat', 'bell');
         }
       });
+
+      flushAlertBatch();
     },
     [playAdminChime]
   );
@@ -425,7 +465,7 @@ export default function AdminDashboard({ user, onLogout }) {
     const perm = await requestDesktopNotificationPermission();
     setDesktopNotifPerm(perm);
     if (perm === 'granted') {
-      playAdminChime('bell');
+      playAdminChime('bell', { preview: true });
       sendDesktopNotification(
         '🔔 Hood Admin Alerts On',
         'Sound + badge alerts for deposits, cashouts, game requests & chat.',
@@ -1900,7 +1940,7 @@ export default function AdminDashboard({ user, onLogout }) {
               onChange={(e) => {
                 setAlertTune(e.target.value);
                 localStorage.setItem('hood_admin_alert_tune', e.target.value);
-                playAdminChime(e.target.value);
+                playAdminChime(e.target.value, { preview: true });
               }}
               className="hood-input flex-1 py-1 px-2 rounded-lg text-[10px] font-bold"
             >
@@ -2996,7 +3036,7 @@ export default function AdminDashboard({ user, onLogout }) {
                         setSettings({ ...settings, adminDefaultAlertTune: v });
                         setAlertTune(v);
                         localStorage.setItem('hood_admin_alert_tune', v);
-                        playAdminChime(v);
+                        playAdminChime(v, { preview: true });
                       }}
                     >
                       {AVAILABLE_TUNES.map((t) => (
