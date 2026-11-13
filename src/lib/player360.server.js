@@ -21,18 +21,19 @@ export async function findPlayerByStaffId(db, userId) {
   return u;
 }
 
-function ownerFilter(u) {
+function ownerClauses(u) {
   const uIdStr = u._id.toString();
+  const clauses = [{ userId: uIdStr }];
   const uEmail = (u.email || '').toLowerCase().trim();
+  if (uEmail) clauses.push({ userEmail: uEmail });
   const uUsername = u.username || '';
-  return {
-    $or: [
-      { userId: uIdStr },
-      { userEmail: uEmail },
-      { username: uUsername },
-      { userName: uUsername },
-    ],
-  };
+  if (uUsername) clauses.push({ username: uUsername }, { userName: uUsername });
+  return clauses;
+}
+
+function ownerFilter(u) {
+  const clauses = ownerClauses(u);
+  return clauses.length === 1 ? clauses[0] : { $or: clauses };
 }
 
 export async function buildPlayer360(db, userId) {
@@ -44,45 +45,87 @@ export async function buildPlayer360(db, userId) {
   const uEmail = (u.email || '').toLowerCase().trim();
   const uUsername = u.username || '';
 
+  const refCode = u.referralCode || '';
+  const referralQuery = refCode
+    ? {
+        $or: [{ referredBy: uUsername }, { referredByCode: refCode }],
+        role: { $in: ['player', null] },
+      }
+    : uUsername
+      ? { referredBy: uUsername, role: { $in: ['player', null] } }
+      : null;
+
+  const listProjectionDeposit = {
+    amount: 1,
+    method: 1,
+    methodName: 1,
+    status: 1,
+    senderTag: 1,
+    note: 1,
+    hasProof: 1,
+    createdAt: 1,
+  };
+  const listProjectionWithdraw = {
+    amount: 1,
+    gameTitle: 1,
+    method: 1,
+    payoutMethod: 1,
+    payoutAddress: 1,
+    destinationAddress: 1,
+    status: 1,
+    hasProof: 1,
+    gameScreenshot: 1,
+    createdAt: 1,
+  };
+
   const [
     deposits,
     withdrawals,
     gameAccounts,
     accountRequests,
     referrals,
+    referralsCount,
     ledger,
     depAgg,
     withAgg,
   ] = await Promise.all([
-    db
-      .collection('deposits')
-      .find(filter, { projection: { proofImage: 0, receiptImage: 0 } })
-      .sort({ createdAt: -1 })
-      .limit(80)
-      .toArray(),
+    db.collection('deposits').find(filter, { projection: listProjectionDeposit }).sort({ createdAt: -1 }).limit(60).toArray(),
     db
       .collection('redemptions')
-      .find(filter, { projection: { proofImage: 0, gameScreenshot: 0, qrCodeImage: 0 } })
-      .sort({ createdAt: -1 })
-      .limit(80)
-      .toArray(),
-    db.collection('game_accounts').find({ $or: [{ userId: uIdStr }, { userEmail: uEmail }] }).sort({ updatedAt: -1 }).toArray(),
-    db.collection('accountRequests').find(filter).sort({ createdAt: -1 }).limit(50).toArray(),
-    db
-      .collection('users')
-      .find({
-        $or: [{ referredBy: uUsername }, { referredByCode: u.referralCode || '___none___' }],
-        role: { $in: ['player', null] },
-      })
-      .project({ username: 1, email: 1, createdAt: 1, balanceSC: 1 })
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .toArray(),
-    db
-      .collection('ledger')
-      .find({ $or: [{ userId: uIdStr }, { username: uUsername }] })
+      .find(filter, { projection: listProjectionWithdraw })
       .sort({ createdAt: -1 })
       .limit(60)
+      .toArray(),
+    db
+      .collection('game_accounts')
+      .find({ $or: [{ userId: uIdStr }, ...(uEmail ? [{ userEmail: uEmail }] : [])] })
+      .project({ gameTitle: 1, platform: 1, username: 1, gameUsername: 1, password: 1, gamePassword: 1, status: 1, createdAt: 1, updatedAt: 1 })
+      .sort({ updatedAt: -1 })
+      .limit(40)
+      .toArray(),
+    db
+      .collection('accountRequests')
+      .find(filter)
+      .project({ gameTitle: 1, transferAmount: 1, status: 1, createdAt: 1 })
+      .sort({ createdAt: -1 })
+      .limit(40)
+      .toArray(),
+    referralQuery
+      ? db
+          .collection('users')
+          .find(referralQuery)
+          .project({ username: 1, email: 1, createdAt: 1, balanceSC: 1 })
+          .sort({ createdAt: -1 })
+          .limit(60)
+          .toArray()
+      : Promise.resolve([]),
+    referralQuery ? db.collection('users').countDocuments(referralQuery) : Promise.resolve(0),
+    db
+      .collection('ledger')
+      .find({ $or: [{ userId: uIdStr }, ...(uUsername ? [{ username: uUsername }] : [])] })
+      .project({ type: 1, action: 1, amount: 1, balanceAfter: 1, reason: 1, note: 1, processedBy: 1, performedBy: 1, staffUsername: 1, createdAt: 1 })
+      .sort({ createdAt: -1 })
+      .limit(50)
       .toArray(),
     db
       .collection('deposits')
@@ -178,7 +221,7 @@ export async function buildPlayer360(db, userId) {
       totalDepositsAmount,
       totalWithdrawalsAmount,
       netMargin: Number((totalDepositsAmount - totalWithdrawalsAmount).toFixed(2)),
-      referralsCount: referrals.length,
+      referralsCount: Number(referralsCount) || referrals.length,
       gameAccountsCount: gameAccounts.length,
       depositsCount: depAgg[0]?.count || deposits.length,
       withdrawalsCount: withAgg[0]?.count || withdrawals.length,

@@ -107,6 +107,7 @@ import { hoodSsePoll } from '@/lib/ssePollOptions';
 import { useSseBackedPoll } from '@/lib/sseBackedPoll';
 import { useAdminCrossTabSync } from '@/hooks/useAdminCrossTabSync';
 import { readAdminChatThreadCache, writeAdminChatThreadCache } from '@/lib/adminChatConvCache';
+import { prefetchPlayer360 } from '@/lib/player360ClientCache';
 
 export default function AdminDashboard({ user, onLogout }) {
   useAdminCrossTabSync();
@@ -145,6 +146,15 @@ export default function AdminDashboard({ user, onLogout }) {
   // Player editing modal states
   const [selectedPlayerToEdit, setSelectedPlayerToEdit] = useState(null);
   const [player360Id, setPlayer360Id] = useState(null);
+  const [player360Seed, setPlayer360Seed] = useState(null);
+
+  const openPlayer360 = React.useCallback((row) => {
+    const id = String(row?.id || row?._id || '').trim();
+    if (!id) return;
+    setPlayer360Seed(row);
+    setPlayer360Id(id);
+    prefetchPlayer360(id);
+  }, []);
   const [playerSearch, setPlayerSearch] = useState('');
   const [usersListLoading, setUsersListLoading] = useState(false);
   const [editBalanceSC, setEditBalanceSC] = useState('');
@@ -918,7 +928,11 @@ export default function AdminDashboard({ user, onLogout }) {
     if (String(selectedThreadUserRef.current) === uid) {
       setThreadMessages(messages);
       setThreadMeta(threadMeta);
-      if (player) setThreadPlayerDetail(player);
+      if (player) {
+        setThreadPlayerDetail(player);
+        const pid = String(player.id || player._id || uid);
+        if (pid) prefetchPlayer360(pid);
+      }
     }
   }, []);
 
@@ -2471,7 +2485,8 @@ export default function AdminDashboard({ user, onLogout }) {
                     <div className="flex flex-wrap gap-2 text-[10px] w-full sm:w-auto items-center">
                       <button
                         type="button"
-                        onClick={() => setPlayer360Id(String(threadPlayerDetail.id || selectedThreadUser))}
+                        onMouseEnter={() => prefetchPlayer360(String(threadPlayerDetail.id || selectedThreadUser))}
+                        onClick={() => openPlayer360({ ...threadPlayerDetail, id: threadPlayerDetail.id || selectedThreadUser })}
                         className="px-2 py-1 rounded-lg border border-[#2cb64e]/45 text-[#2cb64e] font-black uppercase tracking-wide hover:bg-[#2cb64e]/10"
                       >
                         360° Profile
@@ -3221,7 +3236,9 @@ export default function AdminDashboard({ user, onLogout }) {
                       <td className="p-3 text-right space-x-1">
                         <button
                           type="button"
-                          onClick={() => setPlayer360Id(String(u._id || u.id))}
+                          onMouseEnter={() => prefetchPlayer360(String(u._id || u.id))}
+                          onFocus={() => prefetchPlayer360(String(u._id || u.id))}
+                          onClick={() => openPlayer360(u)}
                           className="px-3 py-1 rounded text-[10px] font-bold inline-flex items-center gap-1 border border-[#2cb64e]/50 text-[#2cb64e] hover:bg-[#2cb64e]/10"
                         >
                           <Eye size={11} />
@@ -3421,7 +3438,11 @@ export default function AdminDashboard({ user, onLogout }) {
 
         {player360Id && (<Player360ProfileModal
               userId={player360Id}
-              onClose={() => setPlayer360Id(null)}
+              initialUser={player360Seed}
+              onClose={() => {
+                setPlayer360Id(null);
+                setPlayer360Seed(null);
+              }}
               onUserUpdated={() => {
                 loadPlayerDirectory(playerSearch, playerDirectoryPage, playerDirectoryPageSize);
                 if (selectedThreadUser) loadConversation(selectedThreadUser, true);

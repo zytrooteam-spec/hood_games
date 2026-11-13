@@ -23,6 +23,38 @@ import {
   Send,
 } from 'lucide-react';
 import { hoodAlert } from '@/lib/hoodAlert';
+import { peekPlayer360, setPlayer360Cache, invalidatePlayer360 } from '@/lib/player360ClientCache';
+
+function seedFromRow(row) {
+  if (!row) return null;
+  const id = String(row.id || row._id || '').trim();
+  if (!id) return null;
+  const status = row.status || 'active';
+  return {
+    user: {
+      id,
+      _id: id,
+      username: row.username || 'Player',
+      email: row.email || '',
+      balanceSC: Number(row.balanceSC || 0),
+      balanceGC: Number(row.balanceGC || 0),
+      role: row.role || 'player',
+      status,
+      isBanned: Boolean(row.isBanned) || status === 'banned' || status === 'suspended',
+      referralCode: row.referralCode || '',
+      referredBy: row.referredBy || row.referredByCode || '',
+      deviceId: row.deviceId || null,
+      boundDevices: row.boundDevices || [],
+    },
+    deposits: [],
+    withdrawals: [],
+    gameAccounts: [],
+    accountRequests: [],
+    referrals: [],
+    ledger: [],
+    stats: null,
+  };
+}
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Sparkles },
@@ -33,9 +65,10 @@ const TABS = [
   { id: 'ledger', label: 'Ledger', icon: History },
 ];
 
-export default function Player360ProfileModal({ userId, onClose, onUserUpdated, onOpenChat }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+export default function Player360ProfileModal({ userId, initialUser, onClose, onUserUpdated, onOpenChat }) {
+  const [data, setData] = useState(() => peekPlayer360(userId) || seedFromRow(initialUser));
+  const [loading, setLoading] = useState(() => !peekPlayer360(userId) && !initialUser);
+  const [detailLoading, setDetailLoading] = useState(() => !peekPlayer360(userId));
   const [activeSubTab, setActiveSubTab] = useState('overview');
   const [copiedField, setCopiedField] = useState(null);
   const [adjustMode, setAdjustMode] = useState('add');
@@ -46,24 +79,44 @@ export default function Player360ProfileModal({ userId, onClose, onUserUpdated, 
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
 
-  const fetchProfile = useCallback(async () => {
-    if (!userId) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/users?userId=${encodeURIComponent(userId)}`, { cache: 'no-store' });
-      const d = await res.json();
-      if (d.success) setData(d);
-      else hoodAlert.error(d.error || 'Failed to load profile');
-    } catch {
-      hoodAlert.error('Network error loading profile');
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
+  const fetchProfile = useCallback(
+    async ({ background = false } = {}) => {
+      if (!userId) return;
+      const cached = peekPlayer360(userId);
+      if (cached) {
+        setData(cached);
+        setLoading(false);
+      } else if (!background) {
+        setLoading(true);
+      }
+      if (!cached) setDetailLoading(true);
+      try {
+        const res = await fetch(`/api/users?userId=${encodeURIComponent(userId)}`, { cache: 'no-store' });
+        const d = await res.json();
+        if (d.success) {
+          const payload = { ...d };
+          delete payload.success;
+          setPlayer360Cache(userId, payload);
+          setData(payload);
+        } else if (!cached) hoodAlert.error(d.error || 'Failed to load profile');
+      } catch {
+        if (!cached) hoodAlert.error('Network error loading profile');
+      } finally {
+        setLoading(false);
+        setDetailLoading(false);
+      }
+    },
+    [userId]
+  );
 
   useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
+    const cached = peekPlayer360(userId);
+    const seed = cached || seedFromRow(initialUser);
+    if (seed) setData(seed);
+    setLoading(!cached && !initialUser);
+    setDetailLoading(!cached);
+    fetchProfile({ background: Boolean(cached || initialUser) });
+  }, [userId, initialUser, fetchProfile]);
 
   const copyText = (text, field) => {
     if (!text) return;
@@ -99,6 +152,7 @@ export default function Player360ProfileModal({ userId, onClose, onUserUpdated, 
     if (d.success) {
       hoodAlert.success(d.message || 'Balance updated');
       setAdjustAmount('');
+      invalidatePlayer360(data.user.id);
       onUserUpdated?.(data.user.id, d.newBalance);
       fetchProfile();
     } else hoodAlert.error(d.error || 'Update failed');
@@ -214,8 +268,15 @@ export default function Player360ProfileModal({ userId, onClose, onUserUpdated, 
                 <ArrowUpRight size={13} /> Chat desk
               </button>
             )}
-            <button type="button" onClick={fetchProfile} className="p-2 rounded-xl border border-[#1a3363] text-gray-400 hover:text-white">
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            <button
+              type="button"
+              onClick={() => {
+                invalidatePlayer360(userId);
+                fetchProfile();
+              }}
+              className="p-2 rounded-xl border border-[#1a3363] text-gray-400 hover:text-white"
+            >
+              <RefreshCw size={16} className={detailLoading ? 'animate-spin' : ''} />
             </button>
             <button type="button" onClick={onClose} className="p-2 rounded-xl border border-[#1a3363] text-gray-400 hover:text-white">
               <X size={18} />
@@ -315,9 +376,9 @@ export default function Player360ProfileModal({ userId, onClose, onUserUpdated, 
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 bg-[#070d1e]">
-          {loading ? (
+          {loading && !data?.user ? (
             <div className="py-16 text-center text-gray-500 text-sm font-bold uppercase">Loading player 360°…</div>
-          ) : !data ? (
+          ) : !data?.user ? (
             <div className="py-12 text-center text-gray-500">No data</div>
           ) : (
             <>
@@ -338,11 +399,18 @@ export default function Player360ProfileModal({ userId, onClose, onUserUpdated, 
                             : tone === 'amber'
                               ? 'text-amber-300'
                               : 'text-white';
+                      const pending = detailLoading && data.stats == null;
                       return (
                         <div key={label} className="p-3 rounded-xl border border-[#1a3363] bg-[#09142a]">
                           <div className="text-[10px] font-black uppercase text-gray-500">{label}</div>
                           <div className={`text-xl font-black font-mono mt-1 ${valueClass}`}>
-                            {typeof val === 'number' && label !== 'Referrals' ? `$${Number(val).toFixed(2)}` : val ?? 0}
+                            {pending ? (
+                              <span className="inline-block h-6 w-20 rounded bg-[#1a3363]/60 animate-pulse" />
+                            ) : typeof val === 'number' && label !== 'Referrals' ? (
+                              `$${Number(val).toFixed(2)}`
+                            ) : (
+                              (val ?? 0)
+                            )}
                           </div>
                         </div>
                       );
@@ -388,6 +456,7 @@ export default function Player360ProfileModal({ userId, onClose, onUserUpdated, 
 
               {activeSubTab === 'deposits' && (
                 <ProfileTable
+                  loading={detailLoading}
                   empty="No deposits"
                   rows={data.deposits}
                   cols={['amount', 'methodName', 'status', 'createdAt']}
@@ -397,6 +466,7 @@ export default function Player360ProfileModal({ userId, onClose, onUserUpdated, 
               )}
               {activeSubTab === 'withdrawals' && (
                 <ProfileTable
+                  loading={detailLoading}
                   empty="No cashouts"
                   rows={data.withdrawals}
                   cols={['amount', 'gameTitle', 'payoutMethod', 'status', 'createdAt']}
@@ -430,10 +500,20 @@ export default function Player360ProfileModal({ userId, onClose, onUserUpdated, 
                 </div>
               )}
               {activeSubTab === 'referrals' && (
-                <ProfileTable empty="No referrals" rows={data.referrals} cols={['username', 'email', 'balanceSC', 'createdAt']} />
+                <ProfileTable
+                  loading={detailLoading}
+                  empty="No referrals"
+                  rows={data.referrals}
+                  cols={['username', 'email', 'balanceSC', 'createdAt']}
+                />
               )}
               {activeSubTab === 'ledger' && (
-                <ProfileTable empty="No ledger" rows={data.ledger} cols={['type', 'amount', 'balanceAfter', 'reason', 'processedBy', 'createdAt']} />
+                <ProfileTable
+                  loading={detailLoading}
+                  empty="No ledger"
+                  rows={data.ledger}
+                  cols={['type', 'amount', 'balanceAfter', 'reason', 'processedBy', 'createdAt']}
+                />
               )}
             </>
           )}
@@ -462,7 +542,16 @@ export default function Player360ProfileModal({ userId, onClose, onUserUpdated, 
   );
 }
 
-function ProfileTable({ rows = [], cols, empty, proofKey, proofApi }) {
+function ProfileTable({ rows = [], cols, empty, proofKey, proofApi, loading = false }) {
+  if (loading && !rows.length) {
+    return (
+      <div className="space-y-2 py-4" aria-busy="true">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-10 rounded-lg bg-[#1a3363]/50 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
   if (!rows.length) return <p className="text-gray-500 text-sm py-8 text-center">{empty}</p>;
   return (
     <div className="overflow-x-auto rounded-xl border border-[#1a3363]">
