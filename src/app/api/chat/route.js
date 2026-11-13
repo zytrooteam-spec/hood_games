@@ -7,6 +7,7 @@ import { compressDataUrlIfNeeded } from '@/lib/serverImageCompress';
 import { requirePlayerDbUser } from '@/lib/requirePlayerDbUser';
 import { publishChatRealtime } from '@/lib/realtimePublish';
 import { buildStaffChatThreads, touchChatThreadOnMessage, clearStaffThreadUnread } from '@/lib/chatThreads.server';
+import { serializeChatMessagesForApi } from '@/lib/chatMessageApi';
 
 function previewText(text, imageUrl) {
   const t = (text || '').trim();
@@ -29,7 +30,7 @@ export async function GET(req) {
       }
 
       const uid = String(targetUserId);
-      const msgLimit = Math.min(200, Math.max(20, parseInt(searchParams.get('limit') || '100', 10) || 100));
+      const msgLimit = Math.min(120, Math.max(20, parseInt(searchParams.get('limit') || '50', 10) || 50));
 
       const [messages, threadMeta, player] = await Promise.all([
         db
@@ -58,7 +59,7 @@ export async function GET(req) {
       return NextResponse.json(
         {
           success: true,
-          messages,
+          messages: serializeChatMessagesForApi(messages),
           threadMeta: threadMeta || { userId: uid, labels: [], staffNotes: [] },
           player: player
             ? {
@@ -98,7 +99,10 @@ export async function GET(req) {
 
     const messages = await db.collection('chat_messages').find({ userId: uid }).sort({ createdAt: 1 }).toArray();
 
-    return NextResponse.json({ success: true, messages }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json(
+      { success: true, messages: serializeChatMessagesForApi(messages) },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
   } catch (err) {
     console.error('Chat GET error:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

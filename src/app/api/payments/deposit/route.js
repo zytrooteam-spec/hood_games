@@ -7,6 +7,7 @@ import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { resolveStaffOrPlayer } from '@/lib/staffOrPlayerApi';
 import { requirePlayerDbUser, playerIdentity } from '@/lib/requirePlayerDbUser';
 import { publishFinanceDeposit, publishWalletSync } from '@/lib/realtimePublish';
+import { compressDataUrlIfNeeded } from '@/lib/serverImageCompress';
 import { pulseStaffStatsAsync, pulseStaffScope } from '@/lib/staffDeskPulse.server';
 import { listStaffDeposits } from '@/lib/staffDeposits.server';
 import { invalidateAuthCache, invalidateGameAccountsCache } from '@/lib/authCache';
@@ -61,7 +62,27 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: 'Minimum deposit is $5.00' }, { status: 400 });
     }
 
+  const proofRaw = typeof proofImage === 'string' ? proofImage.trim() : '';
+  if (!proofRaw || !proofRaw.startsWith('data:image')) {
+    return NextResponse.json(
+      { success: false, error: 'Payment receipt screenshot is required (Cash App / Zelle proof).' },
+      { status: 400 }
+    );
+  }
+
     const db = await getDb();
+
+  const compressedProof = await compressDataUrlIfNeeded(proofRaw, {
+    maxChars: 120_000,
+    maxSize: 1024,
+    quality: 68,
+  });
+  if (!compressedProof || compressedProof.length > 200_000) {
+    return NextResponse.json(
+      { success: false, error: 'Screenshot is too large. Please upload a smaller image.' },
+      { status: 400 }
+    );
+  }
 
     // Check system bonus settings
     const settings = await db.collection('system_settings').findOne({ key: 'general' });
@@ -88,7 +109,8 @@ export async function POST(req) {
       totalExpectedSC,
       method: method || 'Cash App',
       senderTag: senderTag || '',
-      proofImage: proofImage || null,
+      proofImage: compressedProof,
+      hasProof: true,
       note: note || '',
       gameTitle: (gameTitle || '').trim() || null,
       gameAccountUsername: (gameAccountUsername || '').trim() || null,

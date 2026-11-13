@@ -227,10 +227,22 @@ export async function POST(req) {
       });
     }
 
+    const compressOpts = { maxChars: 120_000, maxSize: 1024, quality: 68 };
     const [compressedGameShot, compressedQr] = await Promise.all([
-      compressDataUrlIfNeeded(gameScreenshot),
-      compressDataUrlIfNeeded(qrCodeImage),
+      compressDataUrlIfNeeded(gameScreenshot, compressOpts),
+      compressDataUrlIfNeeded(qrCodeImage, compressOpts),
     ]);
+    if (
+      !compressedGameShot ||
+      !compressedQr ||
+      compressedGameShot.length > 200_000 ||
+      compressedQr.length > 200_000
+    ) {
+      return NextResponse.json(
+        { success: false, error: 'Screenshots are too large after compression. Try smaller photos.' },
+        { status: 400 }
+      );
+    }
 
     const redemptionDoc = {
       userId,

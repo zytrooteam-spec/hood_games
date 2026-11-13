@@ -866,9 +866,11 @@ export default function AdminDashboard({ user, onLogout }) {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    const timeout = setTimeout(() => controller.abort(), 45000);
     try {
-      const res = await staffApiFetch(`/api/chat?userId=${encodeURIComponent(uid)}&_t=${Date.now()}`, {
+      const res = await staffApiFetch(
+        `/api/chat?userId=${encodeURIComponent(uid)}&limit=50&_t=${Date.now()}`,
+        {
         signal: controller.signal,
       });
       const data = await res.json();
@@ -894,9 +896,13 @@ export default function AdminDashboard({ user, onLogout }) {
         prev.map((t) => (threadKey(t) === uid ? { ...t, unreadCount: 0 } : t))
       );
     } catch (e) {
-      console.error(e);
-      if (!isSilent && String(selectedThreadUserRef.current) === uid) {
+      const aborted = e?.name === 'AbortError';
+      if (!aborted) console.error(e);
+      if (!isSilent && !aborted && String(selectedThreadUserRef.current) === uid) {
         hoodAlert.error('Chat load timed out or failed. Tap refresh or pick the thread again.', 'Chat');
+      }
+      if (!isSilent && aborted && conversationCacheRef.current.get(uid) && String(selectedThreadUserRef.current) === uid) {
+        hoodAlert.warning('Live sync slow — showing cached messages. Retrying in background.', 'Chat');
       }
     } finally {
       clearTimeout(timeout);

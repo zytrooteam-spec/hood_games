@@ -41,18 +41,20 @@ export default function UnifiedCashierModal({
   const [submittingDeposit, setSubmittingDeposit] = useState(false);
   const [depositSuccess, setDepositSuccess] = useState(null);
 
-  const handleProofChange = (e) => {
+  const handleProofChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) {
       hoodAlert.warning('File size must be under 8MB', 'File too large');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setProofImage(reader.result);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const { compressImageFile } = await import('@/lib/imageCompress');
+      const compressed = await compressImageFile(file, { maxSize: 1024, quality: 0.62, maxChars: 110000 });
+      setProofImage(compressed || '');
+    } catch {
+      hoodAlert.warning('Could not process image. Try another screenshot.');
+    }
   };
 
   // Withdraw Form State
@@ -135,6 +137,11 @@ export default function UnifiedCashierModal({
     const num = Number(depositAmount);
     if (isNaN(num) || num < 5) {
       hoodAlert.warning('Minimum deposit is $5.00', 'Deposit amount');
+      return;
+    }
+
+    if (!proofImage) {
+      hoodAlert.warning('Upload your payment receipt screenshot (required).', 'Screenshot required');
       return;
     }
 
@@ -427,10 +434,9 @@ export default function UnifiedCashierModal({
                   />
                 </div>
 
-                {/* Optional Screenshot Proof Upload */}
                 <div>
                   <label className="text-xs font-bold text-gray-300 block mb-1">
-                    Payment Receipt Screenshot (Optional)
+                    Payment Receipt Screenshot <span className="text-rose-400">*</span>
                   </label>
                   <div className="relative border border-dashed border-[#1a3363] hover:border-[#2cb64e]/50 rounded-xl p-3 bg-[#070d1e] text-center cursor-pointer transition-colors">
                     <input

@@ -54,7 +54,7 @@ export default function HoodRedeemPanel({
     }
     setGameScreenshotName(file.name);
     try {
-      const compressed = await compressImageFile(file, { maxSize: 900, quality: 0.55 });
+      const compressed = await compressImageFile(file, { maxSize: 1024, quality: 0.62, maxChars: 110000 });
       setGameScreenshot(compressed || '');
     } catch {
       const reader = new FileReader();
@@ -72,7 +72,7 @@ export default function HoodRedeemPanel({
     }
     setQrCodeImageName(file.name);
     try {
-      const compressed = await compressImageFile(file, { maxSize: 800, quality: 0.65 });
+      const compressed = await compressImageFile(file, { maxSize: 1024, quality: 0.62, maxChars: 110000 });
       setQrCodeImage(compressed || '');
     } catch {
       const reader = new FileReader();
