@@ -6,7 +6,7 @@ import AdminImageField from './AdminImageField';
 import { diffSet } from '@/lib/fastDiff';
 import { playTune } from '@/lib/soundAlerts';
 import { hoodAlert, hoodConfirm } from '@/lib/hoodAlert';
-import { readGamesCache, writeGamesCache } from '@/lib/gameAssets';
+import { readGamesCache, writeGamesCache, mergeGamesPreserveImages } from '@/lib/gameAssets';
 import { staffApiFetch } from '@/lib/staffApiFetch';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 import { HOOD_POLL } from '@/lib/pollingConfig';
@@ -74,8 +74,11 @@ export function GamesLibraryTab() {
       const res = await staffApiFetch('/api/games?all=true&includeImages=0', { cache: 'no-store' });
       const d = await res.json();
       if (d?.success && Array.isArray(d.games)) {
-        diffSet(setGames, d.games);
-        writeGamesCache(d.games);
+        diffSet(setGames, (prev) => {
+          const merged = mergeGamesPreserveImages(prev, d.games);
+          writeGamesCache(merged);
+          return merged;
+        });
       }
     } catch {
       /* ignore */
@@ -91,8 +94,11 @@ export function GamesLibraryTab() {
       const res = await staffApiFetch('/api/games?all=true&includeImages=1', { cache: 'no-store' });
       const d = await res.json();
       if (d?.success && Array.isArray(d.games)) {
-        diffSet(setGames, d.games);
-        writeGamesCache(d.games);
+        diffSet(setGames, (prev) => {
+          const merged = mergeGamesPreserveImages(prev, d.games);
+          writeGamesCache(merged);
+          return merged;
+        });
       }
     } catch {
       /* ignore */
@@ -110,8 +116,13 @@ export function GamesLibraryTab() {
   }, [load]);
 
   useEffect(() => {
+    const t = window.setTimeout(() => hydrateImages(), 150);
+    return () => clearTimeout(t);
+  }, [hydrateImages]);
+
+  useEffect(() => {
     if (!games.some((g) => g._imageOmitted)) return;
-    const t = window.setTimeout(() => hydrateImages(), 400);
+    const t = window.setTimeout(() => hydrateImages(), 200);
     return () => clearTimeout(t);
   }, [games, hydrateImages]);
 
@@ -179,7 +190,19 @@ export function GamesLibraryTab() {
         {games.map((g) => (
           <div key={g._id} className={`${cardCls} p-4 flex gap-3 ${g.active === false ? 'opacity-50' : ''}`}>
             <div className="w-14 h-14 rounded-xl bg-[#070d1e] border border-[#1a3363] overflow-hidden shrink-0 flex items-center justify-center">
-              {g.image ? <img src={g.image} alt={g.title} className="w-full h-full object-cover" /> : <span className="text-[#2cb64e] font-black">{g.title?.[0]}</span>}
+              {g.image || g.thumbnail || g.imageUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={g.image || g.thumbnail || g.imageUrl}
+                  alt={g.title}
+                  className={`w-full h-full ${String(g.image || g.thumbnail || '').startsWith('data:image') ? 'object-contain p-1' : 'object-cover'}`}
+                  onError={() => {
+                    if (!g._imageOmitted) hydrateImages();
+                  }}
+                />
+              ) : (
+                <span className="text-[#2cb64e] font-black">{g.title?.[0]}</span>
+              )}
             </div>
             <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-center gap-2">
