@@ -32,15 +32,6 @@ function bustStaffRequestCaches({ userEmail, userId } = {}) {
 
 function deferAccountRequestSideEffects(payload) {
   const { requestType, transferAmount, cleanGameTitle, dbUser, reqDoc, insertedId } = payload;
-  notifyStaff({
-    title:
-      requestType === 'COIN_LOAD'
-        ? `⚡ Coin load: $${transferAmount.toFixed(2)} → ${cleanGameTitle}`
-        : `🎮 New Game ID: ${cleanGameTitle}`,
-    message: `Player ${dbUser.username} — ${requestType === 'COIN_LOAD' ? 'load coins' : 'request credentials'}.`,
-    type: requestType === 'COIN_LOAD' ? 'coin_load' : 'account_request',
-    data: { requestId: insertedId.toString() },
-  });
   publishAccountRequestCreated({
     request: {
       ...reqDoc,
@@ -51,8 +42,17 @@ function deferAccountRequestSideEffects(payload) {
     userEmail: dbUser.email,
     userId: dbUser._id.toString(),
   });
-  pulseStaffStatsAsync();
   pulseStaffScope('requests');
+  notifyStaff({
+    title:
+      requestType === 'COIN_LOAD'
+        ? `⚡ Coin load: $${transferAmount.toFixed(2)} → ${cleanGameTitle}`
+        : `🎮 New Game ID: ${cleanGameTitle}`,
+    message: `Player ${dbUser.username} — ${requestType === 'COIN_LOAD' ? 'load coins' : 'request credentials'}.`,
+    type: requestType === 'COIN_LOAD' ? 'coin_load' : 'account_request',
+    data: { requestId: insertedId.toString() },
+  });
+  pulseStaffStatsAsync();
   if (requestType === 'COIN_LOAD') publishCoinDeskPulse({ requestId: insertedId.toString() });
   invalidateAccountRequestsCache();
   invalidateAuthCache(dbUser._id.toString());
@@ -373,14 +373,19 @@ export async function POST(req) {
           : `Request for ${cleanGameTitle} submitted! Staff will issue credentials shortly.`,
     };
 
-    deferAccountRequestSideEffects({
+    const sideEffects = {
       requestType,
       transferAmount,
       cleanGameTitle,
       dbUser,
       reqDoc,
       insertedId: res.insertedId,
-    });
+    };
+    if (typeof setImmediate === 'function') {
+      setImmediate(() => deferAccountRequestSideEffects(sideEffects));
+    } else {
+      void Promise.resolve().then(() => deferAccountRequestSideEffects(sideEffects));
+    }
 
     return NextResponse.json(responseBody);
   } catch (err) {

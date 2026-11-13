@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Key, Check, ArrowRight, Gamepad2 } from 'lucide-react';
+import { X, Key, ArrowRight, Gamepad2 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
 import { hoodAlert } from '@/lib/hoodAlert';
 import { playerApiFetch } from '@/lib/playerApiFetch';
@@ -21,8 +21,7 @@ export default function GameRequestModal({
   const [selectedGameId, setSelectedGameId] = useState('');
   const [transferAmount, setTransferAmount] = useState('0');
   const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [successMsg, setSuccessMsg] = useState(null);
+  const submitLockRef = React.useRef(false);
 
   const lockedToGame = Boolean(initialGame?.title || initialGame?.platform);
 
@@ -36,7 +35,7 @@ export default function GameRequestModal({
 
   useEffect(() => {
     if (!isOpen) {
-      setSuccessMsg(null);
+      submitLockRef.current = false;
       return;
     }
 
@@ -96,8 +95,39 @@ export default function GameRequestModal({
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e) => {
+  const pingStaffDesk = (extra = {}) => {
+    try {
+      const staffChannel = new BroadcastChannel('hood_staff_alerts');
+      staffChannel.postMessage({
+        type: 'NEW_GAME_ID_REQUEST',
+        title: 'New game ID request',
+        tune: 'marimba',
+        ...extra,
+      });
+      staffChannel.close();
+    } catch {
+      /* ignore */
+    }
+    try {
+      localStorage.setItem(
+        'hood_staff_event',
+        JSON.stringify({
+          type: 'NEW_GAME_ID_REQUEST',
+          title: 'New game ID request',
+          tune: 'marimba',
+          t: Date.now(),
+          ...extra,
+        })
+      );
+    } catch {
+      /* ignore */
+    }
+    window.dispatchEvent(new CustomEvent('hood-admin-refresh'));
+  };
+
+  const handleSubmit = (e) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     if (!user) {
       hoodAlert.warning('Please log in first.', 'Login required');
       return;
@@ -109,71 +139,59 @@ export default function GameRequestModal({
       return;
     }
 
-    setSubmitting(true);
+    submitLockRef.current = true;
     playTune('click');
 
-    const ctrl = new AbortController();
-    const timeout = window.setTimeout(() => ctrl.abort(), 20000);
+    const body = {
+      gameId: selectedGameId || seedFromInitial.id || undefined,
+      gameTitle: finalGameTitle,
+      transferAmount: Number(transferAmount || 0),
+      notes,
+    };
 
-    try {
-      const res = await playerApiFetch('/api/account-requests', {
-        method: 'POST',
-        signal: ctrl.signal,
-        body: JSON.stringify({
-          gameId: selectedGameId || seedFromInitial.id || undefined,
-          gameTitle: finalGameTitle,
-          transferAmount: Number(transferAmount || 0),
-          notes,
-        }),
-      });
-      clearTimeout(timeout);
-      const data = await res.json();
-      if (!data.success) {
-        hoodAlert.error(data.error || 'Request failed', 'Request failed');
-      } else {
-        setSuccessMsg(data.message);
+    pingStaffDesk({ prefetch: true, gameTitle: finalGameTitle });
+    hoodAlert.success(
+      `${finalGameTitle} request sent — staff desk notified. Check Game Id for status.`,
+      'Request queued'
+    );
+    onClose?.();
+
+    const ctrl = new AbortController();
+    const timeout = window.setTimeout(() => ctrl.abort(), 25000);
+
+    void playerApiFetch('/api/account-requests', {
+      method: 'POST',
+      signal: ctrl.signal,
+      body: JSON.stringify(body),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        clearTimeout(timeout);
+        submitLockRef.current = false;
+        if (!data?.success) {
+          hoodAlert.error(data?.error || 'Request failed', 'Request failed');
+          return;
+        }
         playTune('win');
         window.dispatchEvent(new CustomEvent('hood-game-accounts-refresh'));
-        try {
-          const staffChannel = new BroadcastChannel('hood_staff_alerts');
-          staffChannel.postMessage({
-            type: 'NEW_GAME_ID_REQUEST',
-            requestId: data.requestId,
-            request: data.request,
-            title: 'New game ID request',
-            tune: 'marimba',
-          });
-          staffChannel.close();
-        } catch {
-          /* ignore */
-        }
-        try {
-          localStorage.setItem(
-            'hood_staff_event',
-            JSON.stringify({
-              type: 'NEW_GAME_ID_REQUEST',
-              title: 'New game ID request',
-              tune: 'marimba',
-              t: Date.now(),
-            })
-          );
-        } catch {
-          /* ignore */
-        }
-        if (onSuccess) onSuccess();
-      }
-    } catch (err) {
-      clearTimeout(timeout);
-      const timedOut = err?.name === 'AbortError';
-      hoodAlert.error(
-        timedOut
-          ? 'Server is slow — your request may still be queued. Check Game Id tab in a moment.'
-          : 'Network error submitting request',
-        timedOut ? 'Still processing' : 'Request failed'
-      );
-    } finally {
-      setSubmitting(false);
-    }
+        pingStaffDesk({
+          requestId: data.requestId,
+          request: data.request,
+          gameTitle: finalGameTitle,
+        });
+        onSuccess?.();
+      })
+      .catch((err) => {
+        clearTimeout(timeout);
+        submitLockRef.current = false;
+        const timedOut = err?.name === 'AbortError';
+        hoodAlert.error(
+          timedOut
+            ? 'Server is slow — your request may still be queued. Check Game Id tab in a moment.'
+            : 'Network error submitting request',
+          timedOut ? 'Still processing' : 'Request failed'
+        );
+      });
   };
 
   const displayTitle = selectedGameTitle || seedFromInitial.title || 'Game Platform';
@@ -200,23 +218,7 @@ export default function GameRequestModal({
           </p>
         </div>
 
-        {successMsg ? (
-          <div className="p-6 rounded-2xl bg-emerald-950/40 border border-[#2cb64e] text-center space-y-3">
-            <div className="w-12 h-12 rounded-full bg-[#2cb64e]/20 text-[#2cb64e] flex items-center justify-center mx-auto">
-              <Check size={24} />
-            </div>
-            <h4 className="text-base font-black text-white">Credentials In Queue!</h4>
-            <p className="text-xs text-gray-300">{successMsg}</p>
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn-hood-green px-6 py-2 rounded-xl text-xs font-bold"
-            >
-              Done
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
             {lockedToGame ? (
               <div className="rounded-xl border border-[#2cb64e]/40 bg-[#2cb64e]/10 px-4 py-3 flex items-center gap-3">
                 <Gamepad2 size={20} className="text-[#2cb64e] shrink-0" />
@@ -285,14 +287,12 @@ export default function GameRequestModal({
 
             <button
               type="submit"
-              disabled={submitting}
               className="w-full btn-hood-green py-3 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2"
             >
-              <span>{submitting ? 'Submitting Request...' : 'REQUEST CREDENTIALS NOW'}</span>
+              <span>REQUEST CREDENTIALS NOW</span>
               <ArrowRight size={15} />
             </button>
           </form>
-        )}
       </div>
     </div>
   );
