@@ -105,6 +105,7 @@ import { HOOD_POLL } from '@/lib/pollingConfig';
 import { hoodSsePoll } from '@/lib/ssePollOptions';
 import { useSseBackedPoll } from '@/lib/sseBackedPoll';
 import { useAdminCrossTabSync } from '@/hooks/useAdminCrossTabSync';
+import { readAdminChatThreadCache, writeAdminChatThreadCache } from '@/lib/adminChatConvCache';
 
 export default function AdminDashboard({ user, onLogout }) {
   useAdminCrossTabSync();
@@ -865,6 +866,47 @@ export default function AdminDashboard({ user, onLogout }) {
     };
   }, [playAdminChime, scheduleChatInboxRefresh, refreshDeskQueues, scheduleLightAdminSync]);
 
+  const applyConversationPayload = React.useCallback((uid, messages, threadMeta, player) => {
+    conversationCacheRef.current.set(uid, { messages, threadMeta, player });
+    writeAdminChatThreadCache(uid, { messages, threadMeta, player });
+    if (String(selectedThreadUserRef.current) === uid) {
+      setThreadMessages(messages);
+      setThreadMeta(threadMeta);
+      if (player) setThreadPlayerDetail(player);
+    }
+  }, []);
+
+  const prefetchConversation = React.useCallback(
+    async (userId) => {
+      const uid = String(userId || '');
+      if (!uid || conversationCacheRef.current.has(uid)) return;
+      const disk = readAdminChatThreadCache(uid);
+      if (disk?.messages?.length) {
+        conversationCacheRef.current.set(uid, {
+          messages: disk.messages,
+          threadMeta: disk.threadMeta || { labels: [], staffNotes: [] },
+          player: disk.player,
+        });
+        return;
+      }
+      try {
+        const res = await staffApiFetch(
+          `/api/chat?userId=${encodeURIComponent(uid)}&limit=80`,
+          { cache: 'no-store' }
+        );
+        const data = await res.json();
+        if (!data?.success) return;
+        const messages = dedupeChatMessagesById(data.messages || []);
+        const threadMeta = data.threadMeta || { labels: [], staffNotes: [] };
+        const player = data.player || null;
+        applyConversationPayload(uid, messages, threadMeta, player);
+      } catch {
+        /* ignore warm-up */
+      }
+    },
+    [applyConversationPayload]
+  );
+
   const loadConversation = async (userId, isSilent = false) => {
     const uid = String(userId || '');
     if (!uid) return;
@@ -874,12 +916,24 @@ export default function AdminDashboard({ user, onLogout }) {
       requestId = ++conversationReqIdRef.current;
       setSelectedThreadUser(uid);
       setChatDeskPane('conversation');
-      const cached = conversationCacheRef.current.get(uid);
+      let cached = conversationCacheRef.current.get(uid);
+      if (!cached) {
+        const disk = readAdminChatThreadCache(uid);
+        if (disk?.messages?.length) {
+          cached = {
+            messages: disk.messages,
+            threadMeta: disk.threadMeta || { labels: [], staffNotes: [] },
+            player: disk.player,
+          };
+          conversationCacheRef.current.set(uid, cached);
+        }
+      }
       const threadHint = (chatThreads || []).find((t) => String(t.userId) === uid);
       if (cached) {
         setThreadMessages(cached.messages);
         setThreadMeta(cached.threadMeta);
         setThreadPlayerDetail(cached.player);
+        setConversationLoading(false);
       } else {
         setThreadMessages([]);
         setThreadMeta({ labels: [], staffNotes: [] });
@@ -888,17 +942,18 @@ export default function AdminDashboard({ user, onLogout }) {
             ? { id: uid, username: threadHint.username, email: threadHint.userEmail }
             : null
         );
+        setConversationLoading(true);
       }
-      setConversationLoading(true);
     } else if (String(selectedThreadUserRef.current) !== uid) {
+      if (!conversationCacheRef.current.has(uid)) await prefetchConversation(uid);
       return;
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 22000);
+    const timeout = setTimeout(() => controller.abort(), 12000);
     try {
       const res = await staffApiFetch(
-        `/api/chat?userId=${encodeURIComponent(uid)}&limit=35&_t=${Date.now()}`,
+        `/api/chat?userId=${encodeURIComponent(uid)}&limit=80&_t=${Date.now()}`,
         {
         signal: controller.signal,
       });
@@ -917,10 +972,7 @@ export default function AdminDashboard({ user, onLogout }) {
           const hint = (chatThreads || []).find((t) => String(t.userId) === uid);
           return hint ? { id: uid, username: hint.username, email: hint.userEmail } : null;
         })();
-      conversationCacheRef.current.set(uid, { messages, threadMeta, player });
-      setThreadMessages(messages);
-      setThreadMeta(threadMeta);
-      if (player) setThreadPlayerDetail(player);
+      applyConversationPayload(uid, messages, threadMeta, player);
       setChatThreads((prev) =>
         prev.map((t) => (threadKey(t) === uid ? { ...t, unreadCount: 0 } : t))
       );
@@ -941,14 +993,32 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   };
 
-  // Poll conversation silently if a thread is open
+  // Poll open thread (Winning Heaven CHAT interval)
   useEffect(() => {
     if (!selectedThreadUser) return;
-    const interval = setInterval(() => {
+    const tick = () => {
       if (!document.hidden) loadConversation(selectedThreadUser, true);
-    }, 10000);
-    return () => clearInterval(interval);
+    };
+    tick();
+    const interval = setInterval(tick, HOOD_POLL.CHAT);
+    const onPulse = () => tick();
+    window.addEventListener('hood-admin-desk-sync', onPulse);
+    window.addEventListener('hood_staff_event_local', onPulse);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('hood-admin-desk-sync', onPulse);
+      window.removeEventListener('hood_staff_event_local', onPulse);
+    };
   }, [selectedThreadUser]);
+
+  useEffect(() => {
+    if (activeTab !== 'chat' || !chatThreads.length) return;
+    const warm = chatThreads
+      .filter((t) => t.unreadCount > 0)
+      .slice(0, 5)
+      .map((t) => t.userId);
+    warm.forEach((id) => prefetchConversation(id));
+  }, [activeTab, chatThreads, prefetchConversation]);
 
   useEffect(() => {
     if (activeTab !== 'chat') return;
@@ -2264,6 +2334,8 @@ export default function AdminDashboard({ user, onLogout }) {
                         key={t.userId}
                         type="button"
                         onClick={() => loadConversation(t.userId)}
+                        onMouseEnter={() => prefetchConversation(t.userId)}
+                        onFocus={() => prefetchConversation(t.userId)}
                         className={`w-full text-left p-3 transition-colors ${
                           selectedThreadUser === t.userId ? 'bg-[#12244c] ring-1 ring-inset ring-[#2cb64e]/35' : 'hover:bg-[#0e2042]'
                         }`}
