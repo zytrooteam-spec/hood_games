@@ -62,10 +62,10 @@ function Field({ label, children }) {
 const EMPTY_GAME = { title: '', platform: '', category: 'slots', playUrl: '', image: '', badge: 'NEW', description: '', priority: 10, active: true };
 
 export function GamesLibraryTab() {
-  const [games, setGames] = useState(() => readGamesCache() || []);
+  const [games, setGames] = useState([]);
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(() => !(readGamesCache()?.length > 0));
+  const [loading, setLoading] = useState(true);
   const hydratingRef = React.useRef(false);
 
   const load = useCallback(async (silent = false) => {

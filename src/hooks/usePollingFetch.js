@@ -8,19 +8,20 @@ import { playerApiFetch } from '@/lib/playerApiFetch';
 
 /**
  * Player-side cache-first fetch + SSE-backed poll (Winning Heaven usePollingSWR analogue).
+ * Cache is applied after mount only — avoids React hydration mismatch (#418).
  */
 export default function usePollingFetch(
   url,
   { cacheKey, pollMs = 0, enabled = true, fetcher = playerApiFetch } = {}
 ) {
   const active = enabled && Boolean(url);
-  const initial = cacheKey ? readJson(cacheKey) : null;
-  const [data, setData] = useState(initial);
-  const [loading, setLoading] = useState(!initial);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const dataRef = useRef(data);
   dataRef.current = data;
   const inFlightRef = useRef(false);
+  const cacheHydratedRef = useRef(false);
 
   const revalidate = useCallback(
     async (silent = true) => {
@@ -46,9 +47,23 @@ export default function usePollingFetch(
   );
 
   useEffect(() => {
-    if (!active) return;
-    revalidate(Boolean(initial));
-  }, [active, revalidate, initial]);
+    if (!cacheKey || cacheHydratedRef.current) return;
+    cacheHydratedRef.current = true;
+    const cached = readJson(cacheKey);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+    }
+  }, [cacheKey]);
+
+  useEffect(() => {
+    if (!active) {
+      setLoading(false);
+      return;
+    }
+    const hadCache = Boolean(cacheKey && readJson(cacheKey));
+    revalidate(hadCache);
+  }, [active, revalidate, cacheKey]);
 
   useEffect(() => {
     if (!active || !pollMs) return;

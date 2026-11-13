@@ -55,8 +55,8 @@ export default function HomePage() {
   }, []);
 
   const [settings, setSettings] = useState(null);
-  const [games, setGames] = useState(() => readGamesCache() || []);
-  const [loadingGames, setLoadingGames] = useState(() => !(readGamesCache()?.length > 0));
+  const [games, setGames] = useState([]);
+  const [loadingGames, setLoadingGames] = useState(true);
   const accountsUrl = user?.email
     ? `/api/game-accounts?email=${encodeURIComponent(user.email)}`
     : null;

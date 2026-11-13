@@ -12,39 +12,35 @@ import { getGameThumbnail, readGamesCache, writeGamesCache } from '@/lib/gameAss
 import { findGameForAccount } from '@/lib/matchGameAccount';
 import usePollingFetch from '@/hooks/usePollingFetch';
 import { HOOD_POLL } from '@/lib/pollingConfig';
-import { HOOD_GAME_ACCOUNTS_SNAPSHOT, readJson } from '@/lib/clientCache';
+import { HOOD_GAME_ACCOUNTS_SNAPSHOT } from '@/lib/clientCache';
 
 function GameIdsContent() {
   const { user, openAuth } = useAppShell();
   const accountsUrl = user?.email
     ? `/api/game-accounts?email=${encodeURIComponent(user.email)}`
     : null;
-  const initialSnap = readJson(HOOD_GAME_ACCOUNTS_SNAPSHOT);
   const { data: deskData, loading: deskPolling } = usePollingFetch(accountsUrl, {
     cacheKey: user?.email ? HOOD_GAME_ACCOUNTS_SNAPSHOT : null,
     pollMs: HOOD_POLL.PLAYER,
     enabled: Boolean(user?.email),
   });
-  const snap = deskData || initialSnap;
-  const accounts = (snap?.gameAccounts || []).map((a) => ({
+  const accounts = (deskData?.gameAccounts || []).map((a) => ({
     ...a,
     gameTitle: sanitizeGameTitle(a.gameTitle),
   }));
-  const pendingRequests = (snap?.pendingRequests || []).map((r) => ({
+  const pendingRequests = (deskData?.pendingRequests || []).map((r) => ({
     ...r,
     gameTitle: sanitizeGameTitle(r.gameTitle),
   }));
-  const [gamesCatalog, setGamesCatalog] = useState(() => readGamesCache() || []);
-  const loadingDesk =
-    Boolean(user?.email) &&
-    deskPolling &&
-    !deskData &&
-    !(Array.isArray(initialSnap?.gameAccounts) && initialSnap.gameAccounts.length);
+  const [gamesCatalog, setGamesCatalog] = useState([]);
+  const loadingDesk = Boolean(user?.email) && deskPolling && !deskData;
   const [copiedId, setCopiedId] = useState(null);
   const [requestModal, setRequestModal] = useState({ open: false, game: null });
   const [loadCoinsModal, setLoadCoinsModal] = useState({ open: false, game: null, userAccount: null });
 
   useEffect(() => {
+    const cachedGames = readGamesCache();
+    if (cachedGames?.length) setGamesCatalog(cachedGames);
     fetch('/api/games', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {

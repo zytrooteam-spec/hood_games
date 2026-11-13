@@ -79,14 +79,11 @@ import {
   LedgerTab,
   StaffTab,
   PromosTab,
-  AccountRequestsDesk,
-  CoinAllotmentDesk,
-  AffiliatesDesk,
-  AdminDailySpinTab,
-  AdminVipTab,
-  Player360ProfileModal,
-  AdminTabFallback,
-} from './AdminLazyChunks';
+} from './AdminExtraTabs';
+import { AccountRequestsDesk, CoinAllotmentDesk, AffiliatesDesk } from './HoodAdminDesks';
+import AdminDailySpinTab from './AdminDailySpinTab';
+import AdminVipTab from './AdminVipTab';
+import Player360ProfileModal from './Player360ProfileModal';
 import {
   HoodAdminModal,
   HoodAdminModalHeader,
@@ -109,22 +106,12 @@ import { hoodSsePoll } from '@/lib/ssePollOptions';
 import { useSseBackedPoll } from '@/lib/sseBackedPoll';
 import { useAdminCrossTabSync } from '@/hooks/useAdminCrossTabSync';
 
-function AdminTabSuspense({ children, label }) {
-  return (
-    <React.Suspense fallback={<AdminTabFallback label={label} />}>{children}</React.Suspense>
-  );
-}
-
 export default function AdminDashboard({ user, onLogout }) {
   useAdminCrossTabSync();
   const [activeTab, setActiveTab] = useState('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    const cached = readJson(HOOD_ADMIN_BOOTSTRAP);
-    return !cached?.data?.success;
-  });
+  const [loading, setLoading] = useState(true);
 
   // Data states
   const [deposits, setDeposits] = useState([]);
@@ -2679,10 +2666,7 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* 5. CASHBACK & SYSTEM SETTINGS (REQUIREMENT #7)           */}
         {/* ======================================================== */}
         {activeTab === 'daily_spin' && (
-          <form onSubmit={handleSaveSettings} className="w-full max-w-5xl space-y-6">
-            <AdminTabSuspense label="Opening wheel settings…">
-              <AdminDailySpinTab settings={settings} setSettings={setSettings} />
-            </AdminTabSuspense>
+          <form onSubmit={handleSaveSettings} className="w-full max-w-5xl space-y-6"><AdminDailySpinTab settings={settings} setSettings={setSettings} />
             <button
               type="submit"
               disabled={savingSettings}
@@ -2694,10 +2678,7 @@ export default function AdminDashboard({ user, onLogout }) {
         )}
 
         {activeTab === 'vip_privilege' && (
-          <form onSubmit={handleSaveSettings} className="w-full max-w-5xl space-y-6">
-            <AdminTabSuspense label="Opening VIP settings…">
-              <AdminVipTab settings={settings} setSettings={setSettings} />
-            </AdminTabSuspense>
+          <form onSubmit={handleSaveSettings} className="w-full max-w-5xl space-y-6"><AdminVipTab settings={settings} setSettings={setSettings} />
             <button
               type="submit"
               disabled={savingSettings}
@@ -3027,15 +3008,12 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {/* 6. GAME ID REQUESTS                                      */}
         {/* ======================================================== */}
-        {activeTab === 'requests' && (
-          <AdminTabSuspense label="Opening Game ID desk…">
-            <AccountRequestsDesk
+        {activeTab === 'requests' && (<AccountRequestsDesk
               deskActive={activeTab === 'requests'}
               initialRequests={accountRequests}
               pendingNavCount={pendingAccountDeskCount}
               onMutate={handleAccountRequestsDeskMutate}
             />
-          </AdminTabSuspense>
         )}
 
         {/* ======================================================== */}
@@ -3257,63 +3235,39 @@ export default function AdminDashboard({ user, onLogout }) {
         {/* ======================================================== */}
         {/* 8. PAYMENT GATEWAYS                                      */}
         {/* ======================================================== */}
-        {activeTab === 'gateways' && (
-          <AdminTabSuspense label="Opening gateways…">
-            <GatewaysTab />
-          </AdminTabSuspense>
+        {activeTab === 'gateways' && (<GatewaysTab />
         )}
 
         {/* ======================================================== */}
         {/* 9. GAME CREDIT LOADS                                     */}
         {/* ======================================================== */}
-        {activeTab === 'game_loads' && (
-          <AdminTabSuspense label="Opening coin desk…">
-            <CoinAllotmentDesk sessionUser={user} onMutate={() => fetchAllData(true)} />
-          </AdminTabSuspense>
+        {activeTab === 'game_loads' && (<CoinAllotmentDesk sessionUser={user} onMutate={() => fetchAllData(true)} />
         )}
 
         {/* ======================================================== */}
         {/* 10. GAMES LIBRARY                                        */}
         {/* ======================================================== */}
-        <div className={activeTab === 'games_lib' ? undefined : 'hidden'} aria-hidden={activeTab !== 'games_lib'}>
-          <AdminTabSuspense label="Opening games library…">
-            <GamesLibraryTab />
-          </AdminTabSuspense>
+        <div className={activeTab === 'games_lib' ? undefined : 'hidden'} aria-hidden={activeTab !== 'games_lib'}><GamesLibraryTab />
         </div>
 
         {/* ======================================================== */}
         {/* 11. FINANCIAL LEDGER / TX AUDIT                          */}
         {/* ======================================================== */}
-        <div className={activeTab === 'ledger' ? undefined : 'hidden'} aria-hidden={activeTab !== 'ledger'}>
-          <AdminTabSuspense label="Opening ledger…">
-            <LedgerTab />
-          </AdminTabSuspense>
+        <div className={activeTab === 'ledger' ? undefined : 'hidden'} aria-hidden={activeTab !== 'ledger'}><LedgerTab />
         </div>
 
-        {activeTab === 'promos' && (
-          <AdminTabSuspense label="Opening promos…">
-            <PromosTab />
-          </AdminTabSuspense>
+        {activeTab === 'promos' && (<PromosTab />
         )}
 
-        {activeTab === 'affiliates' && (
-          <AdminTabSuspense label="Opening affiliates…">
-            <AffiliatesDesk mode="affiliates" onRefresh={() => fetchAllData(true)} />
-          </AdminTabSuspense>
+        {activeTab === 'affiliates' && (<AffiliatesDesk mode="affiliates" onRefresh={() => fetchAllData(true)} />
         )}
-        {activeTab === 'affiliate_commissions' && (
-          <AdminTabSuspense label="Opening commissions…">
-            <AffiliatesDesk mode="affiliate_commissions" onRefresh={() => fetchAllData(true)} />
-          </AdminTabSuspense>
+        {activeTab === 'affiliate_commissions' && (<AffiliatesDesk mode="affiliate_commissions" onRefresh={() => fetchAllData(true)} />
         )}
 
         {/* ======================================================== */}
         {/* 12. STAFF MANAGEMENT                                     */}
         {/* ======================================================== */}
-        {activeTab === 'staff' && (
-          <AdminTabSuspense label="Opening staff…">
-            <StaffTab currentUser={user} />
-          </AdminTabSuspense>
+        {activeTab === 'staff' && (<StaffTab currentUser={user} />
         )}
 
         {/* ======================================================== */}
@@ -3338,9 +3292,7 @@ export default function AdminDashboard({ user, onLogout }) {
           </HoodAdminModalActions>
         </HoodAdminModal>
 
-        {player360Id && (
-          <AdminTabSuspense label="Loading player profile…">
-            <Player360ProfileModal
+        {player360Id && (<Player360ProfileModal
               userId={player360Id}
               onClose={() => setPlayer360Id(null)}
               onUserUpdated={() => {
@@ -3353,7 +3305,6 @@ export default function AdminDashboard({ user, onLogout }) {
                 loadConversation(String(p.id), false);
               }}
             />
-          </AdminTabSuspense>
         )}
       </main>
     </div>

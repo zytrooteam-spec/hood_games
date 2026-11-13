@@ -7,17 +7,18 @@ import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 import { hoodSsePoll } from '@/lib/ssePollOptions';
 
 /**
- * Winning Heaven pattern: show cached JSON instantly, revalidate in background, keep previous rows while loading.
+ * Winning Heaven pattern: show cached JSON instantly, revalidate in background.
+ * Cache hydrates after mount to avoid hydration mismatch.
  */
 export default function useAdminCachedFetch(url, { cacheKey, pollMs = 0, enabled = true } = {}) {
   const active = enabled && Boolean(url);
-  const initial = cacheKey ? readJson(cacheKey) : null;
-  const [data, setData] = useState(initial);
-  const [loading, setLoading] = useState(!initial);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const dataRef = useRef(data);
   dataRef.current = data;
   const inFlightRef = useRef(false);
+  const cacheHydratedRef = useRef(false);
 
   const revalidate = useCallback(
     async (silent = true) => {
@@ -43,9 +44,20 @@ export default function useAdminCachedFetch(url, { cacheKey, pollMs = 0, enabled
   );
 
   useEffect(() => {
+    if (!cacheKey || cacheHydratedRef.current) return;
+    cacheHydratedRef.current = true;
+    const cached = readJson(cacheKey);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+    }
+  }, [cacheKey]);
+
+  useEffect(() => {
     if (!active) return;
-    revalidate(Boolean(initial));
-  }, [active, revalidate, initial]);
+    const hadCache = Boolean(cacheKey && readJson(cacheKey));
+    revalidate(hadCache);
+  }, [active, revalidate, cacheKey]);
 
   useEffect(() => {
     if (!active || !pollMs) return;

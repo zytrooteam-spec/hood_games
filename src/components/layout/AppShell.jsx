@@ -47,7 +47,7 @@ export default function AppShell({ children }) {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [user, setUser] = useState(() => readSessionSnapshot());
+  const [user, setUser] = useState(null);
   // Never block page paint on /api/auth/me — show shell + routes immediately (guest or cached user).
   const [sessionReady, setSessionReady] = useState(true);
 
@@ -105,7 +105,9 @@ export default function AppShell({ children }) {
 
   useEffect(() => {
     unlockAudioContext();
-    fetchUser(Boolean(readSessionSnapshot()));
+    const cachedUser = readSessionSnapshot();
+    if (cachedUser) setUser(cachedUser);
+    fetchUser(Boolean(cachedUser));
     fetchUnreadNotifs();
     const applySettings = (settings) => {
       if (!settings) return;

@@ -20,8 +20,8 @@ import { HOOD_GAME_ACCOUNTS_SNAPSHOT } from '@/lib/clientCache';
 
 function GamesContent() {
   const { user, fetchUser, openAuth } = useAppShell();
-  const [games, setGames] = useState(() => readGamesCache() || []);
-  const [loadingGames, setLoadingGames] = useState(() => !(readGamesCache()?.length > 0));
+  const [games, setGames] = useState([]);
+  const [loadingGames, setLoadingGames] = useState(true);
   const accountsUrl = user?.email
     ? `/api/game-accounts?email=${encodeURIComponent(user.email)}`
     : null;

@@ -58,11 +58,8 @@ export function AccountRequestsDesk({
   deskActive = true,
   pendingNavCount = 0,
 }) {
-  const cachedReq = readJson(HOOD_ADMIN_REQUESTS_CACHE);
-  const [requests, setRequests] = useState(() =>
-    gameIdDeskRows(cachedReq?.accountRequests?.length ? cachedReq.accountRequests : initialRequests)
-  );
-  const [hiddenIds, setHiddenIds] = useState(() => readCompletedRequestIds());
+  const [requests, setRequests] = useState(() => gameIdDeskRows(initialRequests));
+  const [hiddenIds, setHiddenIds] = useState({});
   const [filter, setFilter] = useState('PENDING');
   const [refreshing, setRefreshing] = useState(false);
   const [approvalModal, setApprovalModal] = useState({ open: false, request: null, username: '', password: '' });
@@ -87,6 +84,11 @@ export function AccountRequestsDesk({
 
   useEffect(() => {
     hydratePatchMapFromStaffCloses(closedRequestPatchesRef.current);
+    setHiddenIds(readCompletedRequestIds());
+    const cachedReq = readJson(HOOD_ADMIN_REQUESTS_CACHE);
+    if (cachedReq?.accountRequests?.length) {
+      setRequests(gameIdDeskRows(cachedReq.accountRequests));
+    }
   }, []);
 
   const patchRequest = (id, patch) => {

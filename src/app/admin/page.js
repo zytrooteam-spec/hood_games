@@ -1,12 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { lazyWithRetry } from '@/lib/lazyWithRetry';
+import AdminDashboard from '@/components/admin/AdminDashboard';
 import { ShieldCheck, Lock, User, Eye, EyeOff, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
-
-const AdminDashboard = lazyWithRetry(() => import('@/components/admin/AdminDashboard'));
 import { playTune } from '@/lib/soundAlerts';
 import { broadcastAdminSession } from '@/lib/sessionClient';
 import { HOOD_ADMIN_SESSION, readJson, writeJson } from '@/lib/clientCache';
@@ -20,8 +18,8 @@ function readCachedAdminUser() {
 
 export default function AdminPage() {
   const router = useRouter();
-  const [user, setUser] = useState(() => readCachedAdminUser());
-  const [loading, setLoading] = useState(() => !readCachedAdminUser());
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // Dedicated Admin Login Form State (Strictly Login, Zero Register)
   const [identifier, setIdentifier] = useState('');
@@ -55,6 +53,11 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
+    const cached = readCachedAdminUser();
+    if (cached) {
+      setUser(cached);
+      setLoading(false);
+    }
     fetchSession();
   }, []);
 
@@ -239,16 +242,5 @@ export default function AdminPage() {
     );
   }
 
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[#050a14] text-sm font-bold text-gray-400 gap-3">
-          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
-          Loading admin console…
-        </div>
-      }
-    >
-      <AdminDashboard user={user} onLogout={handleLogout} />
-    </Suspense>
-  );
+  return <AdminDashboard user={user} onLogout={handleLogout} />;
 }
