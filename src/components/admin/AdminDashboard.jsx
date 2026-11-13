@@ -48,6 +48,7 @@ import {
 } from 'lucide-react';
 import { compressImageFile } from '@/lib/imageCompress';
 import HoodChatMessageBubble from '@/components/chat/HoodChatMessageBubble';
+import AdminPagination from '@/components/admin/AdminPagination';
 import {
   playTune,
   unlockAudioContext,
@@ -123,6 +124,9 @@ export default function AdminDashboard({ user, onLogout }) {
   const [chatDeskPane, setChatDeskPane] = useState('inbox');
   const [threadPlayerDetail, setThreadPlayerDetail] = useState(null);
   const [usersList, setUsersList] = useState([]);
+  const [usersListTotal, setUsersListTotal] = useState(0);
+  const [playerDirectoryPage, setPlayerDirectoryPage] = useState(1);
+  const [playerDirectoryPageSize, setPlayerDirectoryPageSize] = useState(10);
   const [gateways, setGateways] = useState([]);
   const [cashbackReport, setCashbackReport] = useState(null);
   const [disbursingCashback, setDisbursingCashback] = useState(false);
@@ -647,25 +651,43 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   }, [activeTab, cashbackReport, loadCashbackReport]);
 
-  const loadPlayerDirectory = React.useCallback(async (search = '') => {
-    setUsersListLoading(true);
-    try {
-      const qs = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
-      const res = await fetch(`/api/users${qs}`, { cache: 'no-store' });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.users)) diffSet(setUsersList, data.users);
-    } catch {
-      /* ignore */
-    } finally {
-      setUsersListLoading(false);
-    }
-  }, []);
+  const loadPlayerDirectory = React.useCallback(
+    async (search = '', page = 1, pageSize = 10) => {
+      setUsersListLoading(true);
+      try {
+        const params = new URLSearchParams({
+          limit: String(pageSize),
+          page: String(page),
+        });
+        if (search.trim()) params.set('search', search.trim());
+        const res = await fetch(`/api/users?${params}`, { credentials: 'include', cache: 'no-store' });
+        const data = await res.json();
+        if (data.success && Array.isArray(data.users)) {
+          diffSet(setUsersList, data.users);
+          setUsersListTotal(Number(data.total) || data.users.length);
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        setUsersListLoading(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    setPlayerDirectoryPage(1);
+  }, [playerSearch]);
 
   useEffect(() => {
     if (activeTab !== 'users') return;
-    const t = setTimeout(() => loadPlayerDirectory(playerSearch), playerSearch ? 350 : 0);
+    const delay = playerSearch.trim() ? 350 : 0;
+    const t = setTimeout(
+      () => loadPlayerDirectory(playerSearch, playerDirectoryPage, playerDirectoryPageSize),
+      delay
+    );
     return () => clearTimeout(t);
-  }, [activeTab, playerSearch, loadPlayerDirectory]);
+  }, [activeTab, playerSearch, playerDirectoryPage, playerDirectoryPageSize, loadPlayerDirectory]);
 
   useEffect(() => {
     const bumpCtx = { activeTabRef, selectedThreadUserRef };
@@ -2804,9 +2826,11 @@ export default function AdminDashboard({ user, onLogout }) {
         {activeTab === 'users' && (
           <div className="space-y-4 pt-4 sm:pt-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <h3 className="text-base font-black text-white">
-                Registered Players ({usersList.length})
-                {usersListLoading ? <span className="text-gray-500 text-xs ml-2">Loading…</span> : null}
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                Registered Players ({usersListLoading && !usersList.length ? '…' : usersListTotal})
+                {usersListLoading ? (
+                  <RefreshCw size={14} className="animate-spin text-gray-500" aria-label="Loading" />
+                ) : null}
               </h3>
               <p className="text-[10px] text-gray-500 max-w-md">
                 Same as Player Paradise: open <strong className="text-[#2cb64e]">360° Profile</strong> for deposits, cashouts, game IDs, referrals &amp; ledger — loaded only when you click (fast desk).
@@ -2833,6 +2857,24 @@ export default function AdminDashboard({ user, onLogout }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#1a3363]">
+                  {usersListLoading && usersList.length === 0
+                    ? Array.from({ length: playerDirectoryPageSize }).map((_, i) => (
+                        <tr key={`sk-${i}`} className="animate-pulse">
+                          {Array.from({ length: 7 }).map((__, j) => (
+                            <td key={j} className="p-3">
+                              <div className="h-3 bg-[#1a3363]/60 rounded w-full max-w-[120px]" />
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    : null}
+                  {!usersListLoading && usersList.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-gray-500 text-sm">
+                        No players found.
+                      </td>
+                    </tr>
+                  ) : null}
                   {usersList.map((u) => (
                     <tr key={u._id} className="hover:bg-[#0e2042]/50">
                       <td className="p-3 font-bold text-white">{u.username}</td>
@@ -2883,6 +2925,18 @@ export default function AdminDashboard({ user, onLogout }) {
                 </tbody>
               </table>
             </div>
+
+            <AdminPagination
+              currentPage={playerDirectoryPage}
+              totalItems={usersListTotal}
+              pageSize={playerDirectoryPageSize}
+              onPageChange={setPlayerDirectoryPage}
+              onPageSizeChange={(size) => {
+                setPlayerDirectoryPageSize(size);
+                setPlayerDirectoryPage(1);
+              }}
+              itemLabel="players"
+            />
 
             {/* Direct Player Balance & Account Modal */}
             <HoodAdminModal
@@ -3041,7 +3095,7 @@ export default function AdminDashboard({ user, onLogout }) {
             userId={player360Id}
             onClose={() => setPlayer360Id(null)}
             onUserUpdated={() => {
-              loadPlayerDirectory(playerSearch);
+              loadPlayerDirectory(playerSearch, playerDirectoryPage, playerDirectoryPageSize);
               if (selectedThreadUser) loadConversation(selectedThreadUser, true);
             }}
             onOpenChat={(p) => {

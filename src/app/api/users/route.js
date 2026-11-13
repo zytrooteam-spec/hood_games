@@ -31,8 +31,16 @@ export async function GET(req) {
       return NextResponse.json({ success: true, ...payload });
     }
 
-    const users = await listPlayerDirectory(db, { search, limit: 120 });
-    return NextResponse.json({ success: true, users });
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '10', 10) || 10));
+    const directory = await listPlayerDirectory(db, { search, limit, page });
+    return NextResponse.json({
+      success: true,
+      users: directory.users,
+      total: directory.total,
+      page: directory.page,
+      limit: directory.limit,
+    });
   } catch (err) {
     console.error('Users GET:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

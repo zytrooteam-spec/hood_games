@@ -19,6 +19,7 @@ function scheduleIndexes(db) {
     db.collection('users').createIndex({ email: 1 }),
     db.collection('users').createIndex({ username: 1 }),
     db.collection('users').createIndex({ deviceId: 1 }),
+    db.collection('users').createIndex({ role: 1, createdAt: -1 }),
     db.collection('deposits').createIndex({ status: 1, createdAt: -1 }),
     db.collection('deposits').createIndex({ userId: 1, createdAt: -1 }),
     db.collection('redemptions').createIndex({ status: 1, createdAt: -1 }),

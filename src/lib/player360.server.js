@@ -186,7 +186,36 @@ export async function buildPlayer360(db, userId) {
   };
 }
 
-export async function listPlayerDirectory(db, { search = '', limit = 100 } = {}) {
+const PLAYER_DIR_PROJECTION = {
+  password: 0,
+  boundDevices: 0,
+  passwordHash: 0,
+  refreshTokens: 0,
+};
+
+function mapPlayerDirectoryRow(u) {
+  const uIdStr = u._id.toString();
+  return {
+    id: uIdStr,
+    _id: uIdStr,
+    username: u.username,
+    email: u.email,
+    balanceSC: Number(u.balanceSC || 0),
+    balanceGC: Number(u.balanceGC || 0),
+    role: u.role || 'player',
+    status: u.status || 'active',
+    isBanned: u.status === 'banned' || u.status === 'suspended',
+    referralCode: u.referralCode || '',
+    deviceId: u.deviceId || null,
+    createdAt: u.createdAt,
+  };
+}
+
+export async function listPlayerDirectory(db, { search = '', limit = 10, page = 1 } = {}) {
+  const safeLimit = Math.min(100, Math.max(1, Number(limit) || 10));
+  const safePage = Math.max(1, Number(page) || 1);
+  const skip = (safePage - 1) * safeLimit;
+
   const query = { role: { $in: ['player', null] } };
   if (search) {
     query.$or = [
@@ -196,30 +225,23 @@ export async function listPlayerDirectory(db, { search = '', limit = 100 } = {})
     ];
   }
 
-  const users = await db
-    .collection('users')
-    .find(query, { projection: { password: 0, boundDevices: 0 } })
-    .sort({ createdAt: -1 })
-    .limit(Math.min(200, limit))
-    .toArray();
+  const col = db.collection('users');
+  const [total, rows] = await Promise.all([
+    col.countDocuments(query),
+    col
+      .find(query, { projection: PLAYER_DIR_PROJECTION })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(safeLimit)
+      .toArray(),
+  ]);
 
-  return users.map((u) => {
-    const uIdStr = u._id.toString();
-    return {
-      id: uIdStr,
-      _id: uIdStr,
-      username: u.username,
-      email: u.email,
-      balanceSC: Number(u.balanceSC || 0),
-      balanceGC: Number(u.balanceGC || 0),
-      role: u.role || 'player',
-      status: u.status || 'active',
-      isBanned: u.status === 'banned' || u.status === 'suspended',
-      referralCode: u.referralCode || '',
-      deviceId: u.deviceId || null,
-      createdAt: u.createdAt,
-    };
-  });
+  return {
+    users: rows.map(mapPlayerDirectoryRow),
+    total,
+    page: safePage,
+    limit: safeLimit,
+  };
 }
 
 export async function applyStaffPlayerAction(db, session, { userId, action, reason, newPassword, balanceAdjustment }) {
