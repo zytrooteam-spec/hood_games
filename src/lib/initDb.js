@@ -37,6 +37,7 @@ function scheduleIndexes(db) {
     db.collection('ledger').createIndex({ userId: 1, createdAt: -1 }),
     db.collection('chat_messages').createIndex({ userId: 1, createdAt: -1 }),
     db.collection('chat_messages').createIndex({ senderRole: 1, read: 1 }),
+    db.collection('chat_messages').createIndex({ senderRole: 1, read: 1, userId: 1 }),
     db.collection('chat_threads').createIndex({ lastMessageAt: -1 }),
     db.collection('chat_threads').createIndex({ userId: 1 }, { unique: true }),
   ]).catch((idxErr) => {

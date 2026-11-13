@@ -16,7 +16,13 @@ import { Headphones } from 'lucide-react';
 import { diffSet, areEqual } from '@/lib/fastDiff';
 import { broadcastPlayerSession, subscribePlayerSession } from '@/lib/sessionClient';
 import { normalizePlayerUser, fetchPlayerSession } from '@/lib/playerSession';
-import { readSessionSnapshot, writeSessionSnapshot } from '@/lib/clientCache';
+import {
+  readSessionSnapshot,
+  writeSessionSnapshot,
+  readJson,
+  writeJson,
+  HOOD_SETTINGS_SNAPSHOT,
+} from '@/lib/clientCache';
 
 export const AppShellContext = createContext({
   user: null,
@@ -90,18 +96,30 @@ export default function AppShell({ children }) {
     unlockAudioContext();
     fetchUser(Boolean(readSessionSnapshot()));
     fetchUnreadNotifs();
-    const loadSiteSettings = () => {
+    const applySettings = (settings) => {
+      if (!settings) return;
+      setSiteSettings(settings);
+      if (settings.playerTouchTune) setPlayerTouchTune(settings.playerTouchTune);
+    };
+    const loadSiteSettings = (force = false) => {
+      const cached = readJson(HOOD_SETTINGS_SNAPSHOT);
+      if (!force && cached?.settings && Date.now() - (cached.t || 0) < 300000) {
+        applySettings(cached.settings);
+        return;
+      }
       fetch('/api/admin/settings', { cache: 'no-store' })
         .then((r) => r.json())
         .then((d) => {
           if (d?.success && d.settings) {
-            setSiteSettings(d.settings);
-            if (d.settings.playerTouchTune) setPlayerTouchTune(d.settings.playerTouchTune);
+            applySettings(d.settings);
+            writeJson(HOOD_SETTINGS_SNAPSHOT, { settings: d.settings, t: Date.now() });
           }
         })
         .catch(() => {});
     };
-    loadSiteSettings();
+    const cachedSettings = readJson(HOOD_SETTINGS_SNAPSHOT);
+    if (cachedSettings?.settings) applySettings(cachedSettings.settings);
+    loadSiteSettings(false);
     const onInstant = () => {
       fetchUser(true);
       fetchUnreadNotifs();

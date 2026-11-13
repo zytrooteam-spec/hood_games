@@ -4,7 +4,7 @@ import { computeAdminStats, STAFF_LIST_LIMIT } from '@/lib/adminStats.server';
 import { listStaffDeposits } from '@/lib/staffDeposits.server';
 
 export const ADMIN_BOOTSTRAP_HEAVY_LIMIT = 120;
-export const ADMIN_BOOTSTRAP_LITE_THREADS = 60;
+export const ADMIN_BOOTSTRAP_LITE_THREADS = 50;
 
 /** Fast first paint: stats + settings + badges only. */
 export async function buildAdminBootstrapLite(db) {

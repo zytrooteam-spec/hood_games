@@ -7,21 +7,29 @@ export function threadKey(t) {
 export function mergeChatThreadsPreservingUnread(local, remote, { exceptUserId = null } = {}) {
   const localMap = new Map((local || []).map((c) => [threadKey(c), c]));
   const remoteIds = new Set((remote || []).map((c) => threadKey(c)));
+
   const merged = (remote || []).map((c) => {
     const id = threadKey(c);
+    const remoteUnread = Math.max(0, Number(c.unreadCount || 0));
+
     if (exceptUserId && id === String(exceptUserId)) {
       return { ...c, unreadCount: 0 };
     }
+
     const loc = localMap.get(id);
-    if (!loc) return c;
-    const localUnread = Number(loc.unreadCount || 0);
-    const remoteUnread = Number(c.unreadCount || 0);
-    let unreadCount = Math.max(localUnread, remoteUnread);
-    if (remoteUnread > 0 && localUnread > remoteUnread) {
-      unreadCount = remoteUnread;
-    }
+    if (!loc) return { ...c, unreadCount: remoteUnread };
+
+    const localUnread = Math.max(0, Number(loc.unreadCount || 0));
     const locTs = new Date(loc.lastMessageAt || loc.updatedAt || 0).getTime();
     const remTs = new Date(c.lastMessageAt || c.updatedAt || 0).getTime();
+
+    // Server is source of truth; keep a local bump only if inbox updated via SSE before the server caught up.
+    const localNewer = locTs > remTs + 500;
+    let unreadCount = remoteUnread;
+    if (localNewer && localUnread > remoteUnread) {
+      unreadCount = localUnread;
+    }
+
     return {
       ...c,
       unreadCount,
@@ -30,6 +38,7 @@ export function mergeChatThreadsPreservingUnread(local, remote, { exceptUserId =
       username: loc.username && loc.username !== 'Player' ? loc.username : c.username,
     };
   });
+
   const orphanLocal = (local || []).filter((lc) => !remoteIds.has(threadKey(lc)));
   return [...orphanLocal, ...merged].sort(
     (a, b) =>
@@ -65,7 +74,7 @@ export function applyInboundChatThreadBump(setChatThreads, payload, ctx) {
       username: uName,
       lastMessage: snippet,
       lastMessageAt: new Date(ts).toISOString(),
-      unreadCount: viewingThread ? 0 : Number(idx >= 0 ? prev[idx].unreadCount || 0 : 0) + 1,
+      unreadCount: viewingThread ? 0 : Math.max(0, Number(idx >= 0 ? prev[idx].unreadCount || 0 : 0)) + 1,
     };
     const rest = idx >= 0 ? prev.filter((_, i) => i !== idx) : prev;
     return [next, ...rest];

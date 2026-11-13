@@ -70,6 +70,7 @@ import {
   createChatInboxDedup,
   applyInboundChatThreadBump,
   dedupeChatMessagesById,
+  threadKey,
 } from '@/lib/hoodAdminChatInbox';
 import {
   GamesLibraryTab,
@@ -186,23 +187,28 @@ export default function AdminDashboard({ user, onLogout }) {
     selectedThreadUserRef.current = selectedThreadUser;
   }, [selectedThreadUser]);
 
+  const refreshChatInbox = React.useCallback(async () => {
+    try {
+      const chatRes = await staffApiFetch(`/api/chat?limit=80&_t=${Date.now()}`);
+      const data = await chatRes.json();
+      if (data?.success && Array.isArray(data.threads)) {
+        setChatThreads((prev) =>
+          mergeChatThreadsPreservingUnread(prev, data.threads, {
+            exceptUserId: selectedThreadUserRef.current,
+          })
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const scheduleChatInboxRefresh = React.useCallback(() => {
     if (chatInboxRefreshTimerRef.current) clearTimeout(chatInboxRefreshTimerRef.current);
-    chatInboxRefreshTimerRef.current = setTimeout(async () => {
-      try {
-        const chatRes = await fetch('/api/chat', { cache: 'no-store' }).then((r) => r.json());
-        if (chatRes.success && Array.isArray(chatRes.threads)) {
-          setChatThreads((prev) =>
-            mergeChatThreadsPreservingUnread(prev, chatRes.threads, {
-              exceptUserId: selectedThreadUserRef.current,
-            })
-          );
-        }
-      } catch {
-        /* ignore */
-      }
+    chatInboxRefreshTimerRef.current = setTimeout(() => {
+      refreshChatInbox();
     }, 180);
-  }, []);
+  }, [refreshChatInbox]);
 
   const isPendingReq = (r) => String(r?.status || '').toUpperCase() === 'PENDING';
 
@@ -824,6 +830,9 @@ export default function AdminDashboard({ user, onLogout }) {
       setThreadMessages(messages);
       setThreadMeta(threadMeta);
       if (player) setThreadPlayerDetail(player);
+      setChatThreads((prev) =>
+        prev.map((t) => (threadKey(t) === uid ? { ...t, unreadCount: 0 } : t))
+      );
     } catch (e) {
       console.error(e);
       if (!isSilent && String(selectedThreadUserRef.current) === uid) {
@@ -842,9 +851,18 @@ export default function AdminDashboard({ user, onLogout }) {
     if (!selectedThreadUser) return;
     const interval = setInterval(() => {
       if (!document.hidden) loadConversation(selectedThreadUser, true);
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [selectedThreadUser]);
+
+  useEffect(() => {
+    if (activeTab !== 'chat') return;
+    refreshChatInbox();
+    const interval = setInterval(() => {
+      if (!document.hidden) refreshChatInbox();
+    }, 22000);
+    return () => clearInterval(interval);
+  }, [activeTab, refreshChatInbox]);
 
   // Stabilize admin chat scroll: only scroll when switching thread or new messages arrive
   useEffect(() => {
@@ -897,7 +915,7 @@ export default function AdminDashboard({ user, onLogout }) {
     setThreadMessages((prev) => [...prev, optimisticMsg]);
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await staffApiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, imageUrl, userId: selectedThreadUser }),
@@ -908,6 +926,7 @@ export default function AdminDashboard({ user, onLogout }) {
           prev.map((m) => (m.id === optimisticId || m._id === optimisticId ? data.message : m))
         );
         playTune('coin');
+        refreshChatInbox();
       } else {
         setThreadMessages((prev) => prev.filter((m) => m.id !== optimisticId && m._id !== optimisticId));
         hoodAlert.error(data.error || 'Failed to send reply', 'Reply failed');
@@ -927,7 +946,7 @@ export default function AdminDashboard({ user, onLogout }) {
     setNewLabelInput('');
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await staffApiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'add_label', label: labelToAdd, userId: selectedThreadUser }),
@@ -947,7 +966,7 @@ export default function AdminDashboard({ user, onLogout }) {
   const handleRemoveLabel = async (lbl) => {
     if (!selectedThreadUser) return;
     try {
-      const res = await fetch('/api/chat', {
+      const res = await staffApiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'remove_label', label: lbl, userId: selectedThreadUser }),
@@ -970,7 +989,7 @@ export default function AdminDashboard({ user, onLogout }) {
     setNewNoteInput('');
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await staffApiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'add_note', note: noteText, userId: selectedThreadUser }),
@@ -986,7 +1005,7 @@ export default function AdminDashboard({ user, onLogout }) {
   const handleDeleteNote = async (noteId) => {
     if (!selectedThreadUser) return;
     try {
-      const res = await fetch('/api/chat', {
+      const res = await staffApiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete_note', noteId, userId: selectedThreadUser }),
@@ -1355,6 +1374,7 @@ export default function AdminDashboard({ user, onLogout }) {
     playTune('click');
     if (tab === 'chat') {
       setChatDeskPane(selectedThreadUser ? 'conversation' : 'inbox');
+      refreshChatInbox();
     } else {
       setChatDeskPane('inbox');
     }

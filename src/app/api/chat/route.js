@@ -6,7 +6,7 @@ import { notifyPlayer, notifyStaff } from '@/lib/notify';
 import { compressDataUrlIfNeeded } from '@/lib/serverImageCompress';
 import { requirePlayerDbUser } from '@/lib/requirePlayerDbUser';
 import { publishChatRealtime } from '@/lib/realtimePublish';
-import { buildStaffChatThreads, touchChatThreadOnMessage } from '@/lib/chatThreads.server';
+import { buildStaffChatThreads, touchChatThreadOnMessage, clearStaffThreadUnread } from '@/lib/chatThreads.server';
 
 function previewText(text, imageUrl) {
   const t = (text || '').trim();
@@ -29,13 +29,14 @@ export async function GET(req) {
       }
 
       const uid = String(targetUserId);
+      const msgLimit = Math.min(200, Math.max(20, parseInt(searchParams.get('limit') || '100', 10) || 100));
 
       const [messages, threadMeta, player] = await Promise.all([
         db
           .collection('chat_messages')
           .find({ userId: uid })
           .sort({ createdAt: -1 })
-          .limit(200)
+          .limit(msgLimit)
           .toArray()
           .then((rows) => rows.reverse()),
         db.collection('chat_threads').findOne(
@@ -47,10 +48,12 @@ export async function GET(req) {
         }),
       ]);
 
-      void db
-        .collection('chat_messages')
-        .updateMany({ userId: uid, senderRole: 'player', read: { $ne: true } }, { $set: { read: true } })
-        .catch(() => {});
+      await Promise.all([
+        db
+          .collection('chat_messages')
+          .updateMany({ userId: uid, senderRole: 'player', read: { $ne: true } }, { $set: { read: true } }),
+        clearStaffThreadUnread(db, uid),
+      ]);
 
       return NextResponse.json(
         {
@@ -75,7 +78,8 @@ export async function GET(req) {
     const isStaff = user && isStaffRole(user.role);
 
     if (isStaff) {
-      const threads = await buildStaffChatThreads(db);
+      const threadLimit = Math.min(200, Math.max(20, parseInt(searchParams.get('limit') || '80', 10) || 80));
+      const threads = await buildStaffChatThreads(db, { limit: threadLimit });
       return NextResponse.json({ success: true, threads });
     }
 
