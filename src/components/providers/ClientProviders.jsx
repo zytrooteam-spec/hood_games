@@ -9,8 +9,7 @@ import AppShell from '@/components/layout/AppShell';
 export default function ClientProviders({ children }) {
   const pathname = usePathname() || '';
   const isAdmin = pathname.startsWith('/admin');
-  const isHome = pathname === '/' || pathname === '';
-  const usePlayerShell = !isAdmin && !isHome;
+  const usePlayerShell = !isAdmin;
 
   const body = (
     <HoodAlertProvider>

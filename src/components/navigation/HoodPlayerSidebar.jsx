@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Home,
@@ -18,6 +19,53 @@ import {
   X
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
+
+const PLAYER_NAV_ITEMS = [
+  { id: 'home', label: 'Home', icon: Home, path: '/' },
+  { id: 'games', label: 'Games', icon: Gamepad2, path: '/games', badge: 'HOT' },
+  {
+    id: 'game-ids',
+    label: 'Game Id',
+    icon: Key,
+    path: '/game-ids',
+    badge: 'PIN',
+    badgeClass: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+  },
+  {
+    id: 'deposit-redeem',
+    label: 'Deposit / Redeem',
+    icon: Wallet,
+    path: '/wallet',
+    highlight: true,
+    badge: '1-TAP',
+  },
+  {
+    id: 'vip',
+    label: 'VIP Privilege',
+    icon: Crown,
+    path: '/vip',
+    isCrown: true,
+    badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  },
+  {
+    id: 'referral',
+    label: 'Refer and Earn',
+    icon: Users,
+    path: '/referral',
+    badge: '20%',
+    badgeClass: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+  },
+  { id: 'wheel-spin', label: 'Wheel Spin', icon: Gift, path: '/wheel-spin', glow: true },
+  {
+    id: 'cashback',
+    label: 'Cashback',
+    icon: Coins,
+    path: '/cashback',
+    badge: '10% NET',
+    badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+  },
+  { id: 'download-app', label: 'Download App', icon: Download, path: '/download-app' },
+];
 
 export default function HoodPlayerSidebar({
   user,
@@ -36,89 +84,19 @@ export default function HoodPlayerSidebar({
   const router = useRouter();
   const pathname = usePathname();
 
-  // Exactly matching the user's handwritten list:
-  // 1. Home
-  // 2. Games
-  // 3. Game Id
-  // 4. Deposit / Redeem
-  // 5. VIP Privilege 👑
-  // 6. Refer and Earn
-  // 7. Wheel Spin
-  // 8. Cashback
-  // 9. Download App
-  const navItems = [
-    {
-      id: 'home',
-      label: 'Home',
-      icon: Home,
-      path: '/',
-    },
-    {
-      id: 'games',
-      label: 'Games',
-      icon: Gamepad2,
-      path: '/games',
-      badge: 'HOT',
-    },
-    {
-      id: 'game-ids',
-      label: 'Game Id',
-      icon: Key,
-      path: '/game-ids',
-      badge: 'PIN',
-      badgeClass: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
-    },
-    {
-      id: 'deposit-redeem',
-      label: 'Deposit / Redeem',
-      icon: Wallet,
-      path: '/wallet',
-      highlight: true,
-      badge: '1-TAP',
-    },
-    {
-      id: 'vip',
-      label: 'VIP Privilege',
-      icon: Crown,
-      path: '/vip',
-      isCrown: true,
-      badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-    },
-    {
-      id: 'referral',
-      label: 'Refer and Earn',
-      icon: Users,
-      path: '/referral',
-      badge: '20%',
-      badgeClass: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
-    },
-    {
-      id: 'wheel-spin',
-      label: 'Wheel Spin',
-      icon: Gift,
-      path: '/wheel-spin',
-      glow: true,
-    },
-    {
-      id: 'cashback',
-      label: 'Cashback',
-      icon: Coins,
-      path: '/cashback',
-      badge: '10% NET',
-      badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-    },
-    {
-      id: 'download-app',
-      label: 'Download App',
-      icon: Download,
-      path: '/download-app',
-    },
-  ];
+  useEffect(() => {
+    PLAYER_NAV_ITEMS.forEach((item) => {
+      try {
+        router.prefetch(item.path);
+      } catch {
+        /* ignore */
+      }
+    });
+  }, [router]);
 
-  const handleNav = (path) => {
+  const onNavClick = () => {
     playTune('click');
     setMobileOpen(false);
-    router.push(path);
   };
 
   return (
@@ -145,8 +123,10 @@ export default function HoodPlayerSidebar({
         <div className="space-y-2.5 flex flex-col min-h-0 flex-1">
           {/* Header Brand */}
           <div className="flex items-center justify-between px-4 py-3.5 border-b border-[#1a3363]/80 shrink-0">
-            <div
-              onClick={() => handleNav('/')}
+            <Link
+              href="/"
+              prefetch
+              onClick={onNavClick}
               className="flex items-center gap-3 cursor-pointer overflow-hidden"
             >
               <div className="relative w-11 h-11 shrink-0 rounded-2xl overflow-hidden border-2 border-[#2cb64e]/50 shadow-[0_0_18px_rgba(44,182,78,0.35)] bg-[#070d1e] flex items-center justify-center">
@@ -175,7 +155,7 @@ export default function HoodPlayerSidebar({
                   </span>
                 </div>
               )}
-            </div>
+            </Link>
 
             {/* Desktop Collapse Button */}
             <button
@@ -237,14 +217,16 @@ export default function HoodPlayerSidebar({
 
           {/* Navigation Items (Scrollable if needed) */}
           <div className="px-3 space-y-1 overflow-y-auto flex-1 min-h-0 overscroll-contain">
-            {navItems.map((item) => {
+            {PLAYER_NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.path;
 
               return (
-                <div
+                <Link
                   key={item.id}
-                  onClick={() => handleNav(item.path)}
+                  href={item.path}
+                  prefetch
+                  onClick={onNavClick}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer group ${
                     isActive
                       ? 'btn-hood-green text-white shadow-[0_4px_18px_rgba(44,182,78,0.35)]'
@@ -290,21 +272,22 @@ export default function HoodPlayerSidebar({
                       )}
                     </div>
                   )}
-                </div>
+                </Link>
               );
             })}
           </div>
 
           {/* Deposit CTA — inside scroll column on mobile so it is never clipped by bottom nav */}
           <div className="px-3 pt-2 pb-1 shrink-0 space-y-1.5 lg:hidden">
-            <button
-              type="button"
-              onClick={() => handleNav('/wallet')}
+            <Link
+              href="/wallet"
+              prefetch
+              onClick={onNavClick}
               className="w-full btn-hood-green py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg"
             >
               <Wallet size={14} />
               <span>Deposit / Redeem</span>
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -312,14 +295,15 @@ export default function HoodPlayerSidebar({
         <div className="hidden lg:block p-3 border-t border-[#1a3363]/80 bg-[#070d1e]/50 shrink-0 space-y-1.5">
           {(!collapsed || mobileOpen) ? (
             <>
-              <button
-                type="button"
-                onClick={() => handleNav('/wallet')}
+              <Link
+                href="/wallet"
+                prefetch
+                onClick={onNavClick}
                 className="w-full btn-hood-green py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg"
               >
                 <Wallet size={14} />
                 <span>Deposit / Redeem</span>
-              </button>
+              </Link>
 
               <div className="text-[9.5px] text-center text-gray-500 font-mono">
                 HOOD GAMES • USA 2026
@@ -327,14 +311,15 @@ export default function HoodPlayerSidebar({
             </>
           ) : (
             <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => handleNav('/wallet')}
+              <Link
+                href="/wallet"
+                prefetch
+                onClick={onNavClick}
                 className="w-10 h-10 rounded-xl btn-hood-green flex items-center justify-center shadow-lg"
                 title="Deposit / Redeem"
               >
                 <Wallet size={18} />
-              </button>
+              </Link>
             </div>
           )}
         </div>

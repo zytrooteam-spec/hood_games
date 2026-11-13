@@ -1,14 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { diffSet, sanitizeGameTitle } from '@/lib/fastDiff';
-
-// Navigation Components
-import HoodNavbar from '@/components/navigation/HoodNavbar';
-import HoodPlayerSidebar from '@/components/navigation/HoodPlayerSidebar';
-import HoodMobileBottomNav from '@/components/navigation/HoodMobileBottomNav';
+import { useAppShell } from '@/components/layout/AppShell';
 
 // Home Hub Sections
 import HoodHeroSection from '@/components/home/HoodHeroSection';
@@ -20,16 +14,11 @@ import HoodCashbackCalculator from '@/components/games/HoodCashbackCalculator';
 import HoodGameGrid from '@/components/games/HoodGameGrid';
 
 // Modals
-import UnifiedCashierModal from '@/components/modals/UnifiedCashierModal';
-import AuthModal from '@/components/modals/AuthModal';
 import HoodDailySpinModal from '@/components/games/HoodDailySpinModal';
 import HoodAppModal from '@/components/modals/HoodAppModal';
 import GameRequestModal from '@/components/modals/GameRequestModal';
 import LoadCoinsModal from '@/components/modals/LoadCoinsModal';
 import { readGamesCache, writeGamesCache } from '@/lib/gameAssets';
-import HoodNotificationsModal from '@/components/modals/HoodNotificationsModal';
-import FreeplayTaskModal from '@/components/modals/FreeplayTaskModal';
-import { unlockAudioContext } from '@/lib/soundAlerts';
 import { startSseBackedPoll } from '@/lib/sseBackedPoll';
 
 import {
@@ -42,18 +31,14 @@ import {
   Trophy,
   CheckCircle2,
   Lock,
-  Headphones,
   Download,
   Coins
 } from 'lucide-react';
 import { playTune } from '@/lib/soundAlerts';
-import { broadcastPlayerSession, subscribePlayerSession } from '@/lib/sessionClient';
 import { playerApiFetch } from '@/lib/playerApiFetch';
-import { normalizePlayerUser, fetchPlayerSession } from '@/lib/playerSession';
-import { readSessionSnapshot, writeSessionSnapshot } from '@/lib/clientCache';
 
 export default function HomePage() {
-  const router = useRouter();
+  const { user, fetchUser, openAuth, openCashier, openFreeplay } = useAppShell();
 
   // Navigation view: 'home' or 'games'
   const [activeView, setActiveView] = useState('home');
@@ -67,53 +52,16 @@ export default function HomePage() {
     return () => mq.removeEventListener('change', update);
   }, []);
 
-  // Sidebar state
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-
-  // User state
-  const [user, setUser] = useState(() => readSessionSnapshot());
-  const [sessionReady, setSessionReady] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return Boolean(readSessionSnapshot());
-  });
   const [settings, setSettings] = useState(null);
   const [games, setGames] = useState(() => readGamesCache() || []);
   const [loadingGames, setLoadingGames] = useState(() => !(readGamesCache()?.length > 0));
   const [userGameAccounts, setUserGameAccounts] = useState([]);
   const [pendingAccountRequests, setPendingAccountRequests] = useState([]);
 
-  // Modals state
-  const [cashierModal, setCashierModal] = useState({ open: false, tab: 'deposit' });
-  const [authModal, setAuthModal] = useState({ open: false, tab: 'login' });
   const [spinModalOpen, setSpinModalOpen] = useState(false);
   const [appModalOpen, setAppModalOpen] = useState(false);
   const [requestModal, setRequestModal] = useState({ open: false, game: null });
   const [loadCoinsModal, setLoadCoinsModal] = useState({ open: false, game: null, userAccount: null });
-  const [notifsOpen, setNotifsOpen] = useState(false);
-  const [unreadNotifs, setUnreadNotifs] = useState(0);
-  const [freeplayOpen, setFreeplayOpen] = useState(false);
-
-  // Load Session User
-  const fetchUser = async (isSilent = false) => {
-    try {
-      const player = await fetchPlayerSession();
-      if (player) {
-        diffSet(setUser, player);
-        writeSessionSnapshot(player);
-        if (player.email) loadUserAccounts(player.email);
-        return;
-      }
-      if (!isSilent) {
-        diffSet(setUser, null);
-        writeSessionSnapshot(null);
-      }
-    } catch {
-      if (!isSilent && !readSessionSnapshot()) diffSet(setUser, null);
-    } finally {
-      setSessionReady(true);
-    }
-  };
 
   // Load User Game Accounts
   const loadUserAccounts = async (email) => {
@@ -154,21 +102,7 @@ export default function HomePage() {
     }
   };
 
-  const fetchUnreadNotifs = async () => {
-    try {
-      const res = await fetch('/api/notifications', { cache: 'no-store' });
-      const data = await res.json();
-      if (data?.success && Array.isArray(data.notifications) && !notifsOpen) {
-        setUnreadNotifs(data.notifications.filter((n) => !n.read).length);
-      }
-    } catch {
-      /* ignore */
-    }
-  };
-
   useEffect(() => {
-    unlockAudioContext();
-    fetchUser(Boolean(readSessionSnapshot()));
     const cached = readGamesCache();
     if (cached?.length) {
       diffSet(
@@ -177,108 +111,25 @@ export default function HomePage() {
       );
     }
     fetchSiteData(Boolean(cached?.length));
-    fetchUnreadNotifs();
-
-    const handleUserSync = (e) => {
-      if (e.detail) diffSet(setUser, normalizePlayerUser(e.detail));
-      else {
-        diffSet(setUser, null);
-        diffSet(setUserGameAccounts, []);
-        diffSet(setPendingAccountRequests, []);
-      }
-    };
-    window.addEventListener('user-sync', handleUserSync);
-    window.addEventListener('hood-user-sync', handleUserSync);
-    const unsubPlayer = subscribePlayerSession((detail) => {
-      if (detail === undefined) fetchUser(true);
-      else {
-        const player = normalizePlayerUser(detail);
-        diffSet(setUser, player);
-        if (player?.email) loadUserAccounts(player.email);
-        else diffSet(setUserGameAccounts, []);
-      }
+    const stopPoll = startSseBackedPoll(() => fetchSiteData(true), {
+      whenDisconnected: 35_000,
+      whenConnected: 180_000,
+      runOnStart: false,
     });
-
-    const stopPoll = startSseBackedPoll(
-      () => {
-        fetchUser(true);
-        fetchSiteData(true);
-        fetchUnreadNotifs();
-      },
-      { whenDisconnected: 35_000, whenConnected: 180_000, runOnStart: false }
-    );
-
-    return () => {
-      stopPoll();
-      window.removeEventListener('user-sync', handleUserSync);
-      window.removeEventListener('hood-user-sync', handleUserSync);
-      unsubPlayer();
-    };
+    return () => stopPoll();
   }, []);
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ isAdminLogout: false }),
-    });
-    diffSet(setUser, null);
-    diffSet(setUserGameAccounts, []);
-    if (typeof window !== 'undefined') {
-      broadcastPlayerSession(null);
+  useEffect(() => {
+    if (user?.email) loadUserAccounts(user.email);
+    else {
+      diffSet(setUserGameAccounts, []);
+      diffSet(setPendingAccountRequests, []);
     }
-    playTune('click');
-  };
+  }, [user?.email]);
 
   return (
-    <div className="min-h-screen bg-[#0a1628] text-slate-100 flex flex-col">
-      {/* 1. Player Side Navigation Sidebar (Desktop collapsible & Mobile drawer) */}
-      <HoodPlayerSidebar
-        user={user}
-        logoUrl={settings?.logoUrl || '/logo.png'}
-        collapsed={sidebarCollapsed}
-        setCollapsed={setSidebarCollapsed}
-        mobileOpen={mobileSidebarOpen}
-        setMobileOpen={setMobileSidebarOpen}
-        activeView={activeView}
-        setActiveView={setActiveView}
-        onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
-        onOpenSpinWheel={() => setSpinModalOpen(true)}
-        onOpenApp={() => setAppModalOpen(true)}
-        onOpenChat={() => router.push('/chat')}
-        onOpenAuth={(tab) => setAuthModal({ open: true, tab })}
-        onLogout={handleLogout}
-      />
-
-      {/* Main Page Layout Wrapper with Responsive Left Padding for Sidebar */}
-      <div
-        className={`flex-1 flex flex-col transition-all duration-300 ${
-          sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'
-        }`}
-      >
-        {/* Top Navbar */}
-        <HoodNavbar
-          user={user}
-          sessionReady={sessionReady}
-          unreadNotifications={unreadNotifs}
-          onOpenNotifications={() => setNotifsOpen(true)}
-          activeView={activeView}
-          setActiveView={setActiveView}
-          onOpenAuth={(tab) => setAuthModal({ open: true, tab })}
-          onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
-          onOpenSpinWheel={() => setSpinModalOpen(true)}
-          onOpenChat={() => router.push('/chat')}
-          onOpenApp={() => setAppModalOpen(true)}
-          onLogout={handleLogout}
-          onToggleSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-          onOpenFreeplay={() =>
-            user ? setFreeplayOpen(true) : setAuthModal({ open: true, tab: 'register' })
-          }
-        />
-
-        {/* Page Inner Container with refined spacing and paddings */}
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-7 pb-24 md:pb-12">
+    <>
+      <div className="space-y-7">
           {/* ======================================================== */}
           {/* VIEW 1: HOME (Landing Page / Explanations Only)          */}
           {/* ======================================================== */}
@@ -287,9 +138,9 @@ export default function HomePage() {
               {/* Hero Banner with Casino Atmosphere */}
               <HoodHeroSection
                 user={user}
-                onOpenAuth={(tab) => setAuthModal({ open: true, tab })}
-                onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
-                onOpenFreeplay={() => (user ? setFreeplayOpen(true) : setAuthModal({ open: true, tab: 'register' }))}
+                onOpenAuth={(tab) => openAuth(tab)}
+                onOpenCashier={(tab) => openCashier(tab)}
+                onOpenFreeplay={() => (user ? openFreeplay() : openAuth('register'))}
                 setActiveView={setActiveView}
                 freeplayAmountSC={Number(settings?.freeplayAmountSC ?? 5)}
                 isMobileOnlyHome={isMobile && activeView === 'home'}
@@ -301,7 +152,7 @@ export default function HomePage() {
               <HoodQuickActionCards
                 customCards={settings?.quickActionCards || []}
                 landingMode={isMobile && activeView === 'home'}
-                onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
+                onOpenCashier={(tab) => openCashier(tab)}
                 onOpenSpinWheel={() => setSpinModalOpen(true)}
                 setActiveView={setActiveView}
               />
@@ -432,7 +283,7 @@ export default function HomePage() {
               <HoodCashbackCalculator
                 user={user}
                 cashbackPercent={settings?.cashbackPercent || 10}
-                onOpenCashier={(tab) => setCashierModal({ open: true, tab })}
+                onOpenCashier={(tab) => openCashier(tab)}
               />
 
               {/* 3. Games Catalog Grid */}
@@ -453,81 +304,18 @@ export default function HomePage() {
                   userGameAccounts={userGameAccounts}
                   pendingAccountRequests={pendingAccountRequests}
                   onRequestGame={(game) => {
-                    if (!user) setAuthModal({ open: true, tab: 'login' });
+                    if (!user) openAuth('login');
                     else setRequestModal({ open: true, game });
                   }}
                   onLoadCoins={(game, userAccount) => {
-                    if (!user) setAuthModal({ open: true, tab: 'login' });
+                    if (!user) openAuth('login');
                     else setLoadCoinsModal({ open: true, game, userAccount });
                   }}
                 />
               </div>
             </div>
           )}
-        </main>
-
-        {/* Footer */}
-        <footer className="mt-auto border-t border-[#1a3363] bg-[#09142a] py-8 text-center text-xs text-gray-400">
-          <div className="max-w-7xl mx-auto px-4 space-y-3">
-            <div className="flex items-center justify-center gap-2">
-              <span className="font-black text-white text-sm">HOOD GAMES</span>
-              <span>•</span>
-              <span>Official Sweepstakes Concierge</span>
-            </div>
-            <p className="text-[11px] text-gray-500 max-w-xl mx-auto">
-              NO PURCHASE NECESSARY TO ENTER OR WIN. Sweepstakes are void where prohibited by law. 18+ only.
-            </p>
-            <p className="text-[10px] text-gray-600">
-              © 2026 Hood Games Inc. All rights reserved.
-            </p>
-          </div>
-        </footer>
       </div>
-
-      {/* 2. Mobile Bottom Navigation Bar (Requirement #3) */}
-      <HoodMobileBottomNav
-        sidebarOpen={mobileSidebarOpen}
-        onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'deposit' })}
-        onOpenApp={() => setAppModalOpen(true)}
-        onOpenChat={() => router.push('/chat')}
-      />
-
-      {/* Floating Support Chat Trigger for Desktop */}
-      <button
-        type="button"
-        onClick={() => {
-          router.push('/chat');
-          playTune('click');
-        }}
-        className="hidden md:flex fixed bottom-6 right-6 z-40 p-4 rounded-full btn-hood-green text-white shadow-[0_6px_25px_rgba(44,182,78,0.5)] items-center gap-2 hover:scale-105 transition-transform"
-        title="Live Support Chat"
-      >
-        <Headphones size={20} />
-        <span className="text-xs font-black uppercase tracking-wider">Live Concierge</span>
-      </button>
-
-      {/* ======================================================== */}
-      {/* GLOBAL MODALS                                            */}
-      {/* ======================================================== */}
-      <UnifiedCashierModal
-        isOpen={cashierModal.open}
-        initialTab={cashierModal.tab}
-        user={user}
-        onClose={() => setCashierModal({ open: false, tab: 'deposit' })}
-        onBalanceUpdated={fetchUser}
-      />
-
-      <AuthModal
-        isOpen={authModal.open}
-        initialTab={authModal.tab}
-        onClose={() => setAuthModal({ open: false, tab: 'login' })}
-        onOpenCashier={(tab) => setCashierModal({ open: true, tab: tab || 'withdraw' })}
-        onSuccess={(u) => {
-          const player = normalizePlayerUser(u);
-          if (player) diffSet(setUser, player);
-          fetchUser();
-        }}
-      />
 
       <HoodDailySpinModal
         isOpen={spinModalOpen}
@@ -539,21 +327,6 @@ export default function HomePage() {
       <HoodAppModal
         isOpen={appModalOpen}
         onClose={() => setAppModalOpen(false)}
-      />
-
-      <FreeplayTaskModal
-        isOpen={freeplayOpen}
-        onClose={() => setFreeplayOpen(false)}
-        user={user}
-        freeplayAmount={Number(settings?.freeplayAmountSC ?? 5)}
-        onSuccess={fetchUser}
-      />
-
-      <HoodNotificationsModal
-        isOpen={notifsOpen}
-        onClose={() => setNotifsOpen(false)}
-        user={user}
-        onAllRead={() => setUnreadNotifs(0)}
       />
 
       <GameRequestModal
@@ -578,6 +351,6 @@ export default function HomePage() {
           if (user?.email) loadUserAccounts(user.email);
         }}
       />
-    </div>
+    </>
   );
 }

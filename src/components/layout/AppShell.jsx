@@ -34,6 +34,7 @@ export const AppShellContext = createContext({
   openChat: () => {},
   openSpin: () => {},
   openApp: () => {},
+  openFreeplay: () => {},
 });
 
 export const useAppShell = () => useContext(AppShellContext);
@@ -45,10 +46,8 @@ export default function AppShell({ children }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [user, setUser] = useState(() => readSessionSnapshot());
-  const [sessionReady, setSessionReady] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return Boolean(readSessionSnapshot());
-  });
+  // Never block page paint on /api/auth/me — show shell + routes immediately (guest or cached user).
+  const [sessionReady, setSessionReady] = useState(true);
 
   // Global modals (Auth & Chat can still be triggered when needed, while all 9 items have dedicated pages)
   const [cashierModal, setCashierModal] = useState({ open: false, tab: 'deposit' });
@@ -199,10 +198,15 @@ export default function AppShell({ children }) {
     sessionReady,
     fetchUser,
     openAuth: (tab) => setAuthModal({ open: true, tab: tab || 'login' }),
-    openCashier: (tab) => router.push('/wallet'),
+    openCashier: (tab) =>
+      router.push(tab ? `/wallet?tab=${encodeURIComponent(tab || 'deposit')}` : '/wallet'),
     openChat: () => router.push('/chat'),
     openSpin: () => router.push('/wheel-spin'),
     openApp: () => router.push('/download-app'),
+    openFreeplay: () => {
+      if (user) setFreeplayOpen(true);
+      else setAuthModal({ open: true, tab: 'register' });
+    },
   };
 
   return (
@@ -211,6 +215,7 @@ export default function AppShell({ children }) {
         {/* 1. Player Navigation Sidebar with All Handwritten Items Navigating to Dedicated Routes */}
         <HoodPlayerSidebar
           user={user}
+          logoUrl={siteSettings?.logoUrl || '/logo.png'}
           collapsed={sidebarCollapsed}
           setCollapsed={setSidebarCollapsed}
           mobileOpen={mobileSidebarOpen}
